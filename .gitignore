@@ -1,0 +1,12 @@
+.workbuddy/
+node_modules/
+*.log
+*.tmp
+*.genie
+_g.txt
+.run/
+.DS_Store
+Thumbs.db
+
+# 发布产物（仅含 index.html，与 outputs/ 主文件字节一致，不入版本库）
+publish_water/index.html
