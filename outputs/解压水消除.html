@@ -88,8 +88,10 @@ var SFX={
 };
 
 /* ================= 布局常量 ================= */
-var UH=36;            // 水层单元高（上限；高关卡水量大时会自动变薄，见 G.uh）
+var UH=36;            // 水层单元高（上限；高关卡水量大时会自动变薄，见 G.uh；下限 28，再薄就难看）
 var BOTT_Y=470;       // 水管底部基准线（底对齐；水多时向上溢出屏幕顶部）
+var TUBE_CUT_Y=110;   // 水柱顶到这条线以上 = 顶部出画面：管口改平口，超出部分交给顶部渐隐
+var TUBE_FADE_H=160;  // 顶部渐隐遮罩的高度（0 → 160 由不透明渐变到全透明）
 var TUBE_W=92; // 兼容保留（实际用 G.tubeW）
 var SLOT_Y=700;       // 台面表面（瓶底）
 var GRID_Y0=745;      // 底部货架起始 y（实际用 G.gridY0，会按行数垂直居中）
@@ -145,12 +147,14 @@ function shuffle(a){for(var i=a.length-1;i>0;i--){var j=(Math.random()*(i+1))|0,
       于是会自然出现 3行4列 / 4行3列 / 4行5列 / 5行4列 / 5行6列 这些不同组合。
    ③ 峰值和放水要让玩家「感觉得到」：格子数、颜色数、门洞数、冰冻数、台面槽一起动。 */
 function levelPlan(lv){
-  if(lv<=2)return {cells:9,rows:3,colors:3,gates:0,ice:0,slots:5,peak:false,breathe:true,era:0};
+  if(lv<=2)return {cells:9,rows:3,colors:3,gates:0,ice:0,slots:5,tubes:3,peak:false,breathe:true,era:0};
   var era=Math.floor((lv-1)/5);                    // 0:3-5  1:6-10  2:11-15  3:16-20  4:21-25  5+:26+
   var phase=(lv-1)%5;                              // 4 = 周期峰值（第 5/10/15/20… 关）
   var peak=(phase===4), breathe=(phase===0||phase===1);
-  var CAP=[12,16,20,24,28,28];
-  var cap=CAP[Math.min(era,CAP.length-1)];
+  /* 格子数用公式递增（原来是写死的 CAP 数组，最后一个值 28 导致第 26 关起
+     每关都一模一样 —— 玩家玩到第 90 关看到的还是 28 格 / 6 根管）。
+     35 是屏幕能装下的极限（5 行 × 7 列，格子 74、瓶子 55 宽），再大瓶子就小到看不清。 */
+  var cap=Math.min(12+era*5,35);
   var cells=peak?cap:(breathe?cap-3:cap-1-(phase===2?1:0));
   if(cells<6)cells=6;
   /* 行数 3~5，且列数 ≤7（7 列时格子还有 ~82px，再多就小到看不清）。
@@ -168,15 +172,23 @@ function levelPlan(lv){
   if(lv<4)gates=0; else if(gates<1)gates=1;
   var ice=Math.min(1+era+(peak?1:0)-(breathe?1:0),4);          // 0..4 个冰冻瓶
   if(lv<3)ice=0; else if(ice<0)ice=0;
-  var slots=Math.min(5+(era>=2?1:0),6);                        // 台面槽 5~6（其中 1 个广告解锁）
-  if(breathe)slots=6;
-  if(peak)slots=5;
-  return {cells:cells,rows:rows,colors:colors,gates:gates,ice:ice,slots:slots,peak:peak,breathe:breathe,era:era};
+  var slots=Math.min(5+(era>=2?1:0)+(era>=5?1:0),7);           // 台面槽 5~7（其中最右 1 个广告解锁）
+  if(breathe)slots=Math.min(slots+1,7);                        // 放水关多给一个槽
+  if(peak)slots=(era>=6?4:5);                                  // 峰值关收紧；后期峰值只给 4 个
+  /* 水管根数由关卡驱动（不再是「水太多才加管」）：3 → 9，第 25 关起 9 根封顶。
+     管多 = 选择多 = 更像真·水柱矩阵，同时每根管的水层随关卡变多 → 水柱顶出屏幕。 */
+  var tubes=Math.min(3+Math.floor((lv-1)*2/7),9);   // 3→9：第 15 关 7 根，第 22 关起 9 根封顶
+  return {cells:cells,rows:rows,colors:colors,gates:gates,ice:ice,slots:slots,tubes:tubes,peak:peak,breathe:breathe,era:era};
 }
-/* 水管根数：保证「水量最多的那根管」不超过 18 层，否则高关卡管子会顶出屏幕 */
-function tubeCountFor(units){
-  for(var n=3;n<=7;n++)if(Math.ceil(units/n)<=18)return n;
-  return 7;
+/* 水管根数：以关卡给的「目标根数 want」为主，只做两道合法性剪裁 ——
+   ① 每根管至少 5 层（水太少时减管，否则管子短短一截很丑）
+   ② 单管最多 26 层（水太多时加管，否则大半根管在屏幕外，连角标都救不回来）
+   注意：这里【不再】保证管子不出屏 —— 高关卡水柱就是要顶出屏幕顶部（见 drawTube 的平口 + 渐隐）。 */
+function tubeCountFor(units,want){
+  var n=Math.max(3,Math.min(9,want||3));
+  while(n>3&&Math.floor(units/n)<5)n--;
+  while(n<9&&Math.ceil(units/n)>26)n++;
+  return n;
 }
 function genLevel(lv){
   G.level=lv; G.anim=null; G.history=[]; G.mode=null; G.swapFirst=-1;
@@ -348,7 +360,7 @@ function genLevel(lv){
   var pool=[];
   for(var b=0;b<bottles.length;b++)for(var u=0;u<bottles[b].cap;u++)pool.push(bottles[b].col);
   shuffle(pool);
-  var nt=tubeCountFor(pool.length);              // 管数自适应：水量大就多给一根，保证管子不出屏
+  var nt=tubeCountFor(pool.length,plan.tubes);    // 管数由关卡决定，只做上下界剪裁
   var base=Math.floor(pool.length/nt), sizes=[];
   for(var z=0;z<nt;z++)sizes.push(base);
   for(var r=0;r<pool.length%nt;r++)sizes[r]++;
@@ -356,8 +368,14 @@ function genLevel(lv){
      顶部留 118px 安全区（HUD 在 28~88，必须完全避开，否则高关卡管子会撞到「关卡 N」）。
      按「水最多的那根管」反算每层高度：最高 36（UH 上限），最低 14。 */
   var maxLayers=sizes.length?Math.max.apply(null,sizes):1;
+  /* 层高下限从 14 提到 28：原来为了「管子不出屏」会把每层压到 14~19px，
+     结果水柱永远顶在 y≈108，玩家看到的是「被压扁的水」，完全没有压迫感。
+     现在低于 28 就不再压了 —— 多出来的水柱直接顶出屏幕顶部（drawTube 平口 + 顶部渐隐）。 */
+  /* 层高下限随大档抬高（28 → 34）：越到后期越不肯把水柱压扁，
+     于是水柱从「刚好顶到画面上沿」一路长到「真的冲出屏幕顶部」——压迫感是跟着关卡走的。 */
+  var uhMin=28+Math.min(6,plan.era);
   var uh=Math.min(UH,Math.floor((BOTT_Y-118)/maxLayers));
-  if(uh<14)uh=14;
+  if(uh<uhMin)uh=uhMin;
   G.uh=uh;
   var tubes=[],p=0;
   for(var t=0;t<nt;t++){
@@ -384,7 +402,7 @@ function layoutAll(){
   G.junctionY=BOTT_Y+46;
   // 台面槽位（数量随关卡变化，居中排布）
   var nS=G.slots.length;
-  var step=nS<=4?140:(nS===5?124:112);
+  var step=nS<=4?140:(nS===5?124:(nS===6?112:100));   // 7 槽（后期放水关）再收紧一点，别顶出画面
   var sx0=(VW-(nS-1)*step)/2;
   G.slotX=[];
   for(var s=0;s<nS;s++)G.slotX.push(sx0+s*step);
@@ -1114,13 +1132,28 @@ var bg=document.createElement('canvas');bg.width=VW;bg.height=VH;
 
 /* ================= 绘制 ================= */
 var tubeHover=-1;
+/* 顶部被截断的管子：两条竖边一直伸进画面外，上方【不封口】。
+   —— 抖音版那个观感就是这么来的：水柱冲破屏幕顶部，而不是顶着一个圆弧盖子。 */
+function tubeOpenPath(c,x,topY,botY,w,close){
+  c.beginPath();
+  c.moveTo(x,topY-14);
+  c.lineTo(x,botY-10);
+  c.quadraticCurveTo(x,botY,x+10,botY);
+  c.lineTo(x+w-10,botY);
+  c.quadraticCurveTo(x+w,botY,x+w,botY-10);
+  c.lineTo(x+w,topY-14);
+  if(close)c.closePath();
+}
 function drawTube(t,idx,time){
   var x=t.x, topY=BOTT_Y-t.h, h=t.h;
-  var UH=G.uh||36;      // 局部遮蔽全局：水层高随关卡自适应（高关卡水多→层薄，管子不出屏）
+  var UH=G.uh||36;      // 局部遮蔽全局：水层高随关卡自适应（上限 36，下限 28 → 高关卡水柱顶出屏幕）
   var dropOff=t.drop*UH;
-  rr(ctx,x,topY,G.tubeW,h,24);
+  var cut=(topY<TUBE_CUT_Y);               // 顶出可视区：管口改平口
+  if(cut)tubeOpenPath(ctx,x,topY,BOTT_Y,G.tubeW,true); else rr(ctx,x,topY,G.tubeW,h,24);
   ctx.fillStyle='rgba(255,255,255,0.38)';ctx.fill();
-  ctx.save();rr(ctx,x,topY,G.tubeW,h,24);ctx.clip();
+  ctx.save();
+  if(cut)tubeOpenPath(ctx,x,topY,BOTT_Y,G.tubeW,true); else rr(ctx,x,topY,G.tubeW,h,24);
+  ctx.clip();
   var by=topY+h-14;
   var nU=t.units.length;
   var drinkF=(G.anim&&G.anim.type==='drink'&&G.anim.tube===idx)?(G.anim.t/G.anim.dur):0;
@@ -1147,20 +1180,46 @@ function drawTube(t,idx,time){
   }
   ctx.restore();
   ctx.fillStyle='rgba(255,255,255,0.5)';
-  rr(ctx,x+7,topY+8,7,h-24,4);ctx.fill();
-  rr(ctx,x,topY,G.tubeW,h,24);
+  var hy=(cut?TUBE_CUT_Y:topY)+8, hh2=BOTT_Y-14-hy;
+  if(hh2>10){rr(ctx,x+7,hy,7,hh2,4);ctx.fill();}
+  if(cut)tubeOpenPath(ctx,x,topY,BOTT_Y,G.tubeW,false); else rr(ctx,x,topY,G.tubeW,h,24);
   ctx.strokeStyle='rgba(105,140,175,0.9)';ctx.lineWidth=4;ctx.stroke();
   rr(ctx,x-8,topY+h-12,G.tubeW+16,22,10);
   ctx.fillStyle='#9fb4c8';ctx.fill();
   ctx.strokeStyle='rgba(70,95,120,0.8)';ctx.lineWidth=3;ctx.stroke();
+  /* 顶出画面的层数要告诉玩家，否则「这管到底还有多少水」就成了黑箱。
+     注意：喝水永远是从管底取 units[0]，所以看不见的最顶层【不影响任何决策】，纯粹是压迫感。 */
+  if(cut){
+    var hidden=Math.max(0,t.units.length-Math.floor((BOTT_Y-TUBE_CUT_Y)/UH));
+    if(hidden>0){
+      ctx.font='bold 20px '+FONT;ctx.textAlign='center';
+      ctx.fillStyle='rgba(255,255,255,0.95)';
+      ctx.fillText('+'+hidden,x+G.tubeW/2,TUBE_FADE_H+22);
+    }
+  }
+  var hiY=(cut?TUBE_CUT_Y:topY)-6, hiH=BOTT_Y+12-hiY;
   if(G.mode==='swap'&&G.swapFirst===idx){
-    rr(ctx,x-6,topY-6,G.tubeW+12,h+12,28);
+    rr(ctx,x-6,hiY,G.tubeW+12,hiH,28);
     ctx.strokeStyle='#ffb648';ctx.lineWidth=5;ctx.stroke();
   }
   if((G.mode==='clear'||G.mode==='swap')&&tubeHover===idx){
-    rr(ctx,x-6,topY-6,G.tubeW+12,h+12,28);
+    rr(ctx,x-6,hiY,G.tubeW+12,hiH,28);
     ctx.strokeStyle='rgba(255,182,72,0.6)';ctx.lineWidth=4;ctx.stroke();
   }
+}
+/* 顶部渐隐：水柱顶出画面的部分不能硬切（硬切看着像 bug，像被谁砍了一刀）。
+   用一层「背景色 → 透明」的渐变把顶部收掉，水柱就自然「淡进」画面里，
+   同时这块遮罩正好压在 HUD 底下，水柱不会和「关卡 N」打架（HUD 在它之后画）。 */
+function drawTubeFade(){
+  var any=false;
+  for(var i=0;i<G.tubes.length;i++)if(BOTT_Y-G.tubes[i].h<TUBE_CUT_Y){any=true;break;}
+  if(!any)return;
+  var g=ctx.createLinearGradient(0,0,0,TUBE_FADE_H);
+  g.addColorStop(0,'rgba(219,238,251,1)');
+  g.addColorStop(0.5,'rgba(212,233,248,0.72)');
+  g.addColorStop(1,'rgba(198,226,246,0)');
+  ctx.fillStyle=g;
+  ctx.fillRect(0,0,VW,TUBE_FADE_H);
 }
 function drawManifold(time){
   // 没有瓶子在台面上时，整条汇流管道隐藏
@@ -1382,10 +1441,19 @@ function drawJarCounter(b,time){
   }
   ctx.restore();
   if(!b.done){
-    var pc=Math.round(b.fill/b.cap*100);
-    ctx.font='bold 26px '+FONT;ctx.textAlign='center';
-    ctx.fillStyle='#4a6a88';
-    ctx.fillText(pc+'%',x,y+34);
+    /* 接了几口就点亮几格。原来这里是 33% / 67% / 100%，三个毛病：
+       ① 1/3 实际是 33.33%，显示 33% 玩家会嘀咕「33×3=99，那第三口到底满不满」；
+       ② 百分比要读还要算，可瓶子自己已经画了水位，信息重复；
+       ③ 以后瓶子改成 4 口 / 5 口，百分比整套要重来，刻度格天然支持任意口数。 */
+    var n=b.cap||3;
+    ctx.font='bold 26px '+FONT;ctx.textAlign='center';ctx.fillStyle='#4a6a88';
+    var cw=Math.min(18,Math.max(12,(jw-10)/n-3)), chh=Math.max(7,Math.min(10,cw*0.55));
+    var tw2=n*cw+(n-1)*3, sx0=x-tw2/2;
+    for(var k=0;k<n;k++){
+      rr(ctx,sx0+k*(cw+3),y+28,cw,chh,3);
+      ctx.fillStyle=(k<b.fill)?COLORS[b.col]:'rgba(96,130,160,0.30)';ctx.fill();
+      ctx.strokeStyle='rgba(74,106,136,0.75)';ctx.lineWidth=1.5;ctx.stroke();
+    }
     rr(ctx,x-34,y+44,68,10,5);
     ctx.fillStyle='rgba(255,255,255,0.7)';ctx.fill();
     if(b.fill>0){rr(ctx,x-34,y+44,Math.max(10,68*(b.fill/b.cap)),10,5);ctx.fillStyle=COLORS[b.col];ctx.fill();}
@@ -1627,6 +1695,7 @@ function render(time){
   }
   drawManifold(time);
   for(var i=0;i<G.tubes.length;i++)drawTube(G.tubes[i],i,time);
+  drawTubeFade();                       // 顶出画面的水柱在这里淡出（必须在 HUD 之前）
   for(var s=0;s<G.slots.length;s++)drawSlot(s);
   drawGrid();
   // 门洞里的瓶子：叠着画出来，每个都露出自己的颜色

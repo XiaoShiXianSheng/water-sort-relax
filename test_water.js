@@ -55,7 +55,7 @@ code = code.slice(0, i)
   + 'gateBlocked:gateBlocked,gateFront:gateFront,gateMouthCell:gateMouthCell,gateRest:gateRest,gateAt:gateAt,'
   + 'gridPlayable:gridPlayable,neighborEmpty:neighborEmpty,neighborCell:neighborCell,cellOccupied:cellOccupied,'
   + 'cellRect:cellRect,cellAt:cellAt,checkStuck:checkStuck,'
-  + 'layoutSolvable:layoutSolvable,iceAt:iceAt,'
+  + 'layoutSolvable:layoutSolvable,iceAt:iceAt,drawJarCounter:drawJarCounter,get fatal(){return fatalShown;},'
   + 'plan:levelPlan,snapAnim:snapAnim,lvPickTap:lvPickTap,LV_PANEL:LV_PANEL,tubeCountFor:tubeCountFor,'
   + 'adj:function(a,b){return cellsAdjacent(a,b);}};\n  '
   + code.slice(i);
@@ -431,12 +431,52 @@ try {
   chk('整体递增：第 30 关格子数 ≥ 第 20 关', c30 >= c20);
   chk('不会倒退：第 3 关格子数 ≥ 第 1 关', c3 >= c1);
   DBG.gen(8); frames(8);
-  chk('水管数在 3~7 之间（自适应，保证管子不出屏）', DBG.G.tubes.length >= 3 && DBG.G.tubes.length <= 7);
-  chk('台面槽 5~6 个', DBG.G.slots.length >= 5 && DBG.G.slots.length <= 6);
+  chk('水管数在 3~9 之间（关卡驱动，不再只有 5~6 根）', DBG.G.tubes.length >= 3 && DBG.G.tubes.length <= 9);
+  chk('台面槽 5~7 个', DBG.G.slots.length >= 5 && DBG.G.slots.length <= 7);
   chk('第 8 关出现门洞', DBG.G.gates.length > 0);
   const usedCells = new Set(DBG.G.bottles.map(b => b.cell)).size;
   chk('高关卡格子仍能装下所有瓶子（门洞里的共用一格）', DBG.G.cellCount >= usedCells);
 } catch (e) { console.error(e); chk('难度递增套件执行', false); }
+
+// ============ 测试 3.26：水管数量曲线 + 水柱顶出屏幕（用户反馈：第 90 关还是 6 根管） ============
+try {
+  const TUBE_CUT_Y = 110;                 // 与游戏里 TUBE_CUT_Y 保持一致：管顶高过这条线 = 顶出画面
+  const snap = (lv) => {
+    DBG.gen(lv); frames(8);
+    const G = DBG.G;
+    const maxL = Math.max.apply(null, G.tubes.map(t => t.units.length));
+    return { tubes: G.tubes.length, layers: maxL, uh: G.uh, topY: BOTT_Y - (maxL * G.uh + 20), cells: G.cellCount };
+  };
+  const s1 = snap(1), s15 = snap(15), s25 = snap(25), s30 = snap(30), s30b = snap(30);
+  chk('第 1 关 3 根管（新手关保持清爽）', s1.tubes === 3);
+  chk('第 15 关至少 6 根管（原版这里只有 4 根）', s15.tubes >= 6);
+  chk('第 25 关至少 8 根管', s25.tubes >= 8);
+  chk('管数封顶 9 根（再多屏幕上排不开）', s30.tubes <= 9);
+  chk('水层高度下限 28（不再为了不出屏把水柱压扁到 14~19）', s1.uh >= 28 && s30.uh >= 28);
+  chk('低关卡水柱不顶出画面（第 1 关看得见全貌）', s1.topY > TUBE_CUT_Y);
+  chk('高关卡水柱真的顶出画面（第 30 关管顶越过 ' + TUBE_CUT_Y + '）', s30.topY < TUBE_CUT_Y);
+  chk('水柱没有夸张到整根消失（管顶不低于 -150，还能看见大半截）', s30.topY > -150);
+  // 老 bug 回归：CAP 数组写死 28，导致第 26 关起每关完全一样
+  chk('第 30 关比第 25 关更大（不再从第 26 关起永久封顶 28 格）', s30.cells > s25.cells);
+  chk('后期封顶后规模稳定（第 30 关两次生成格数一致）', s30.cells === s30b.cells);
+} catch (e) { console.error(e); chk('水管曲线与水柱套件执行', false); }
+
+// ============ 测试 3.27：瓶子进度改成刻度格，不再画 33% / 67% ============
+try {
+  DBG.gen(6); frames(10);
+  const G = DBG.G;
+  /* 进度文字画在【台面上的瓶子】（drawJarCounter），不是货架上的瓶子 ——
+     第一版断言找错了对象（找的是 grid 上的瓶子），结果恒真，等于没测。 */
+  const bb = G.bottles.find(b => b.place === 'grid');
+  bb.place = 'counter'; bb.slot = 0; bb.fill = 1; bb.done = false;
+  texts.length = 0;
+  DBG.drawJarCounter(bb, 1);              // 直接调一次画瓶子，不经过 update，避免被自动喝水带偏
+  chk('台面瓶子上不再出现百分比文字（改成刻度格）', texts.filter(s => s.indexOf('%') >= 0).length === 0);
+  chk('刻度格绘制不触发致命错误（函数内变量名没写错）', DBG.fatal === false);
+  bb.fill = 2; texts.length = 0; DBG.drawJarCounter(bb, 1);
+  chk('接了两口时同样不出现百分比', texts.filter(s => s.indexOf('%') >= 0).length === 0);
+  chk('进度文字改动后仍无 NaN/undefined', textsClean());
+} catch (e) { console.error(e); chk('瓶子进度显示套件执行', false); }
 
 // ============ 测试 3.12：瓶子固定 3 口（不是 1/4） ============
 try {

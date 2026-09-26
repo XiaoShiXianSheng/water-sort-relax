@@ -14,7 +14,7 @@ let html = fs.readFileSync(GAME, 'utf8');
 const A = 'requestAnimationFrame(loop);';
 const i = html.lastIndexOf(A);
 html = html.slice(0, i)
-  + 'window.__DBG={get G(){return G;},gen:genLevel,plan:levelPlan};'
+  + 'window.__DBG={get G(){return G;},gen:genLevel,plan:levelPlan,startPlace:startPlace};'
   + html.slice(i);
 
 let setup = '';
@@ -32,6 +32,17 @@ if (MODE === 'picker') {
   G.warn={msg:'台面满了！点「撤销」把一个瓶子放回格子',t:0.4};
   var gb=G.bottles.filter(function(b){return b.place==='grid'&&b.gate<0;})[0];
   if(gb)gb.shake=0.5;
+})();
+</script>`;
+} else if (MODE === 'jar') {
+  // 台面瓶子特写：真的走正常流程放两瓶上台面并让它们接到水（看进度刻度）
+  setup = `
+<script>
+(function(){ var D=window.__DBG; if(!D)return; D.gen(${LV}); var G=D.G;
+  var list=G.bottles.filter(function(b){return b.place==='grid'&&b.gate<0;});
+  setTimeout(function(){ D.startPlace(list[0]); },80);
+  var keep=list[0];
+  setInterval(function(){ if(keep&&keep.place==='counter'&&!keep.done)keep.fill=2; },60);
 })();
 </script>`;
 } else if (MODE === 'hint') {
