@@ -3,7 +3,7 @@ node_modules/
 *.log
 *.tmp
 *.genie
-_g.txt
+_*.txt
 .run/
 .DS_Store
 Thumbs.db
