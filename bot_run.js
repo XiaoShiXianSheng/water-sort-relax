@@ -71,7 +71,8 @@ function isStuck(G) {
   return true;
 }
 function botStep(G) {
-  if (G.stuck) { click(360, 759); frames(6); return true; }
+  if (G.failOpen) { click(360, 700); frames(6); return true; }  // 重新开始
+  if (G.stuck && !G.failOpen) { frames(20); return true; }
   const bs = bottoms(G);
   for (const b of G.bottles) {
     if (DBG.gridPlayable(b) && bs.includes(b.col) && DBG.freeSlot() >= 0) { click(b.x, b.y); return true; }

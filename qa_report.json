@@ -1,19 +1,19 @@
 {
-  "at": "2026-09-27T05:41:09.340Z",
+  "at": "2026-09-27T14:22:17.663Z",
   "green": true,
   "total": {
-    "pass": 248,
+    "pass": 271,
     "fail": 0,
-    "warn": 0
+    "warn": 1
   },
   "suites": [
     {
       "key": "func",
       "name": "功能测试（点击级回归用例）",
-      "pass": 143,
+      "pass": 167,
       "fail": 0,
       "warn": 0,
-      "ms": 3876,
+      "ms": 1174,
       "fails": [],
       "warns": [],
       "unstable": false
@@ -24,7 +24,7 @@
       "pass": 31,
       "fail": 0,
       "warn": 0,
-      "ms": 521,
+      "ms": 117,
       "fails": [],
       "warns": [],
       "unstable": false
@@ -32,12 +32,14 @@
     {
       "key": "design",
       "name": "设计测试（关卡与布局不变量）",
-      "pass": 27,
+      "pass": 26,
       "fail": 0,
-      "warn": 0,
-      "ms": 631,
+      "warn": 1,
+      "ms": 139,
       "fails": [],
-      "warns": [],
+      "warns": [
+        "水柱能真的顶出屏幕顶部（有压迫感）  → 最大出屏仅 0px（第 0 关）"
+      ],
       "unstable": false
     },
     {
@@ -46,7 +48,7 @@
       "pass": 17,
       "fail": 0,
       "warn": 0,
-      "ms": 1204,
+      "ms": 315,
       "fails": [],
       "warns": [],
       "unstable": false
@@ -57,7 +59,7 @@
       "pass": 30,
       "fail": 0,
       "warn": 0,
-      "ms": 65433,
+      "ms": 9750,
       "fails": [],
       "warns": [],
       "unstable": false

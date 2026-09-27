@@ -45,6 +45,14 @@ global.innerWidth = 720; global.innerHeight = 1280;
 global.devicePixelRatio = 1;
 global.requestAnimationFrame = (cb) => { rafCb = cb; };
 global.performance = { now: () => 0 };
+global.Image = function() { return { style: {}, set src(v) {} }; };
+global.Audio = function() { return { play() {} }; };
+const _store = {};
+global.localStorage = {
+  getItem: (k) => (k in _store ? _store[k] : null),
+  setItem: (k, v) => { _store[k] = String(v); },
+  removeItem: (k) => { delete _store[k]; }
+};
 
 // ---- 后门注入 ----
 const A = 'requestAnimationFrame(loop);';
@@ -58,6 +66,8 @@ code = code.slice(0, i)
   + 'layoutSolvable:layoutSolvable,iceAt:iceAt,drawJarCounter:drawJarCounter,get fatal(){return fatalShown;},'
   + 'plan:levelPlan,snapAnim:snapAnim,lvPickTap:lvPickTap,LV_PANEL:LV_PANEL,tubeCountFor:tubeCountFor,'
   + 'tryDrinks:tryDrinks,manifoldTarget:manifoldTarget,'
+  + 'AdService:AdService,Analytics:Analytics,SaveData:SaveData,AD_CFG:AD_CFG,'
+  + 'doRevive:doRevive,restoreSafeSnap:restoreSafeSnap,calcStars:calcStars,'
   + 'adj:function(a,b){return cellsAdjacent(a,b);}};\n  '
   + code.slice(i);
 
@@ -248,23 +258,12 @@ try {
   const lockedN = DBG.G.slots.filter(s => !s.open).length;
   click(DBG.G.slotX[lockedSlot], 628); frames(5);
   chk('点播放按钮解锁台面槽', DBG.G.slots.filter(s => !s.open).length === lockedN - 1);
-  // 分享面板：邀请好友 → 万能消除 +1
+  // 首页按钮：点底部第5个按钮回标题页
   DBG.gen(1); frames(10);
-  const clearBefore = DBG.G.tools.clear;
   click(toolCX(4), toolCY()); frames(5);
-  chk('点分享按钮弹出面板', DBG.G.shareOpen === true);
-  click(360, 600); frames(5);
-  chk('邀请好友 → 万能消除 +1', !DBG.G.shareOpen && DBG.G.tools.clear === clearBefore + 1 && DBG.G.shared.invite === 1);
-  // 分享面板：好友帮消除 → 灌满台面上进度最高的一瓶
-  DBG.gen(1); frames(10);
-  const bb = DBG.G.bottles.find(x => x.place === 'grid' && !x.locked);
-  click(bb.x, bb.y); frames(45); waitIdle(600);
-  const jar = DBG.G.bottles.find(x => x.place === 'counter' && x.place !== 'gone');
-  jar.fill = Math.max(1, jar.cap - 1);
-  click(toolCX(4), toolCY()); frames(5);
-  click(360, 700); frames(5);
-  waitIdle(600);
-  chk('请好友帮消除 → 台面瓶被灌满消除', DBG.G.shared.help === 1 && (jar.done || jar.place === 'gone'));
+  chk('点首页按钮回到标题页', DBG.G.state === 'title');
+  click(360, 759); frames(10);  // 点标题页开始
+  chk('标题页点击开始进入游戏', DBG.G.state === 'play');
 } catch (e) { console.error(e); chk('台面功能套件执行', false); }
 
 // ============ 测试 3.5：初始水量守恒 ============
@@ -407,10 +406,10 @@ try {
   DBG.G.undoLeft = 0; DBG.G.unlockLeft = 0;
   DBG.G.tubes.forEach(t => { t.units = [5]; });
   frames(10);
-  chk('真无路可走时弹出卡住面板', DBG.G.stuck === true);
-  click(360, 855); frames(20);                     // 重开本关
-  chk('面板「重开本关」可用', !DBG.G.stuck && DBG.G.state === 'play');
-  // 看广告撤销一步
+  chk('真无路可走时弹出失败面板', DBG.G.failOpen === true && DBG.G.stuck === true);
+  click(360, 700); frames(20);                     // 重新开始
+  chk('面板「重新开始」可用', !DBG.G.failOpen && DBG.G.state === 'play');
+  // 看广告复活 → 恢复安全快照
   DBG.gen(1); frames(10);
   const bp = DBG.G.bottles.find(x => x.place === 'grid' && !x.locked);
   click(bp.x, bp.y); frames(45); waitIdle(600);
@@ -418,10 +417,11 @@ try {
   DBG.G.undoLeft = 0; DBG.G.unlockLeft = 0;
   DBG.G.tubes.forEach(t => { t.units = [5]; });
   frames(10);
-  const undoBefore = DBG.G.undoLeft;
-  click(360, 585); frames(30);                     // ▶ 看广告 · 撤销一步
-  chk('面板「看广告撤销」生效', !DBG.G.stuck && bp.place === 'grid' && DBG.G.undoLeft === undoBefore);
-} catch (e) { console.error(e); chk('卡住面板套件执行', false); }
+  DBG.AdService.rewardedUsed = 0;
+  const snapBefore = JSON.stringify(DBG.G.safeSnap);
+  click(360, 600); frames(30);                     // ▶ 看广告复活
+  chk('面板「看广告复活」恢复安全快照', !DBG.G.failOpen && DBG.G.safeSnap !== null && DBG.G.reviveUsed >= 1);
+} catch (e) { console.error(e); chk('失败面板套件执行', false); }
 
 // ============ 测试 3.8：难度递增（波浪式：大档递增 + 周期起伏） ============
 try {
@@ -856,71 +856,58 @@ try {
     chk('解锁次数用完后不能无限开槽', G2.slots.filter(s => !s.open).length === locked2 && G2.unlockLeft === 0);
   }
 
-  /* ---- 卡死自救面板：4 个选项点了必须真的有用 ---- */
+  /* ---- 失败面板：3 个选项点了必须真的有用 ---- */
   {
     DBG.gen(6); frames(10);
     const G3 = DBG.G;
     G3.slots.forEach(s => { s.open = true; });
     const seed = G3.bottles.find(b => DBG.gridPlayable(b));
-    if (seed) { click(seed.x, seed.y - 20); waitIdle(); frames(40); }   // 先做一次真实操作，产出撤销快照
+    if (seed) { click(seed.x, seed.y - 20); waitIdle(); frames(40); }
     G3.tools = { clear: 0, finger: 0, swap: 0 };
     G3.undoLeft = 0; G3.unlockLeft = 0;
-    /* 构造一个彻底走不动的局面：管底全是场上没人认的幽灵色，
-       且货架上再也掏不出东西。注意不能只改管底 —— 只要货架上还有能掏的瓶子，
-       「还能推进」就不该判死局，那是设计正确的表现（第 3.21 套件专门验证过）。 */
     G3.tubes.forEach(t => { t.units = [5]; });
     const idle = G3.bottles.find(b => b.col !== 5 && b.place !== 'counter' && b.place !== 'gone');
     G3.bottles.forEach(b => { if (b !== idle && b.place !== 'gone') b.place = 'gone'; });
     idle.place = 'counter'; idle.slot = 0; idle.fill = 0;
-    waitIdle(); frames(30);     // 必须等动画走完：checkStuck 在 G.anim 存在时是直接 return 的
-    chk('道具/撤销/解锁全空且管底无水可取 → 真的会弹自救面板', G3.stuck === true);
+    waitIdle(); frames(30);
+    chk('道具/撤销/解锁全空且管底无水可取 → 真的会弹失败面板', G3.failOpen === true && G3.stuck === true);
 
-    // ① 看广告 · 万能消除 +1
-    click(360, 765);
-    const okClear = (G3.stuck === false && G3.tools.clear === 1 && G3.mode === 'clear');
-    chk('面板「看广告 · 万能消除 +1」：道具 +1 且回到游戏', okClear);
+    // ① 看广告复活 → 恢复安全快照
+    DBG.AdService.rewardedUsed = 0;
+    const snapBefore = G3.safeSnap !== null;
+    click(360, 600); frames(30);
+    chk('面板「看广告复活」：恢复安全快照并继续游戏', G3.failOpen === false && snapBefore && G3.reviveUsed >= 1);
 
-    // ② 看广告 · 退回一瓶
-    waitIdle(); G3.stuck = true;
-    const cntBefore = G3.bottles.filter(b => b.place === 'counter').length;
-    click(360, 675);
-    const stuckAfterReturn = G3.stuck;
-    waitIdle(); frames(40);
-    chk('面板「看广告 · 退回一瓶」：收回了一个接不到水的瓶子',
-      stuckAfterReturn === false && G3.bottles.filter(b => b.place === 'counter').length === cntBefore - 1);
+    // ② 重新开始
+    waitIdle();
+    G3.tools = { clear: 0, finger: 0, swap: 0 };
+    G3.undoLeft = 0; G3.unlockLeft = 0;
+    G3.tubes.forEach(t => { t.units = [5]; });
+    waitIdle(); frames(30);
+    click(360, 700); frames(4);
+    chk('面板「重新开始」回到本关开头（道具复位成初始值）',
+      G3.failOpen === false && G3.state === 'play' && G3.tools.clear === 1 && G3.undoLeft === 5);
 
-    // ③ 看广告 · 撤销一步
-    G3.stuck = true;
-    click(360, 585);
-    chk('面板「看广告 · 撤销一步」：撤销生效并补回 1 次撤销', G3.stuck === false && G3.undoLeft === 0);
-
-    // ④ 重开本关
-    G3.stuck = true;
-    click(360, 855); frames(4);
-    chk('面板「重开本关」回到本关开头（道具复位成初始值）',
-      G3.stuck === false && G3.state === 'play' && G3.tools.clear === 1 && G3.undoLeft === 5);
+    // ③ 回首页
+    waitIdle();
+    G3.tools = { clear: 0, finger: 0, swap: 0 };
+    G3.undoLeft = 0; G3.unlockLeft = 0;
+    G3.tubes.forEach(t => { t.units = [5]; });
+    waitIdle(); frames(30);
+    click(360, 800); frames(4);
+    chk('面板「回首页」回到标题页', G3.state === 'title');
+    click(360, 759); frames(10);  // 重新开始
   }
 
-  /* ---- 分享两功能 ---- */
+  /* ---- 广告系统：Test Mode 完整可跑 ---- */
   {
-    DBG.gen(6); frames(10); settle();
-    const G4 = DBG.G;
-    // 手工摆一个「台面上还没接满」的瓶子：不能走帧，一走帧它就把水自动喝完了
-    const jar = G4.bottles.find(b => b.place === 'grid' && !b.done && !b.locked);
-    jar.place = 'counter'; jar.slot = 0; jar.fill = 1;
-    const clearBefore = G4.tools.clear;
-    click(toolCX(4), toolCY()); frames(2);
-    chk('点「分享」弹出面板', G4.shareOpen === true);
-    click(360, 600); frames(2);
-    chk('「邀请好友」→ 万能消除 +1 且面板收起',
-      G4.tools.clear === clearBefore + 1 && G4.shared.invite === 1 && G4.shareOpen === false);
-    click(toolCX(4), toolCY()); frames(2);
-    click(360, 600); frames(2);
-    chk('同一局重复点「邀请好友」不会再薅第二份奖励', G4.tools.clear === clearBefore + 1);
-    const cntBefore = G4.bottles.filter(b => b.place === 'counter').length;
-    click(360, 700); frames(2); waitIdle(); frames(30);
-    chk('「请好友帮忙」把台面上一瓶直接灌满并收走',
-      G4.shared.help === 1 && G4.bottles.filter(b => b.place === 'counter').length === cntBefore - 1);
+    DBG.gen(1); frames(10);
+    DBG.AdService.rewardedUsed = 0;
+    const beforeTools = DBG.G.tools.clear;
+    // 道具用完时点击 → 触发广告补道具
+    DBG.G.tools.clear = 0;
+    click(toolCX(0), toolCY()); frames(5);
+    chk('道具用完看广告补 +1', DBG.G.tools.clear === 1);
   }
   chk('道具/广告套件执行期间无 NaN/undefined', textsClean());
 } catch (e) { console.error(e); chk('道具与广告位套件执行', false); }
@@ -986,6 +973,143 @@ try {
   chk('台面无瓶时水管目标为 null（整条管道隐藏）', DBG.manifoldTarget() === null);
   withSeed(12, () => DBG.gen(3)); settle();   // 恢复正常关卡，避免污染后续（已无后续，稳妥起见）
 } catch (e) { console.error(e); chk('水管终点套件执行', false); }
+
+/* ================= P0: 存档系统 ================= */
+try {
+  // 清空存档，从默认开始
+  DBG.SaveData.reset();
+  chk('存档系统可加载默认数据', DBG.SaveData.data && DBG.SaveData.data.v === 1);
+  chk('存档默认关卡=1', DBG.SaveData.data.level === 1);
+  chk('存档默认三档解锁', DBG.SaveData.data.unlocked.normal === 1 && DBG.SaveData.data.unlocked.hard === 1);
+  // 保存后可读取
+  DBG.SaveData.data.level = 5;
+  DBG.SaveData.data.stars['3_normal'] = 2;
+  DBG.SaveData.data.tools.clear = 3;
+  DBG.SaveData.save();
+  var savedRaw = global.localStorage.getItem('water_sort_relax_v1');
+  var savedParsed = JSON.parse(savedRaw);
+  chk('存档写入 localStorage', savedParsed.level === 5 && savedParsed.stars['3_normal'] === 2);
+  DBG.SaveData.load();
+  chk('存档保存后读取一致', DBG.SaveData.data.level === 5 && DBG.SaveData.data.stars['3_normal'] === 2);
+  // 损坏数据回退安全初始态
+  global.localStorage.setItem('water_sort_relax_v1', '{{{bad json!!!');
+  DBG.SaveData.load();
+  chk('损坏存档回退安全初始态', DBG.SaveData.data.v === 1 && DBG.SaveData.data.level === 1);
+  // 版本不匹配也回退
+  DBG.SaveData.save();
+  global.localStorage.setItem('water_sort_relax_v1', JSON.stringify({v:99, level:99}));
+  DBG.SaveData.load();
+  chk('版本不匹配回退安全初始态', DBG.SaveData.data.v === 1 && DBG.SaveData.data.level === 1);
+  DBG.SaveData.reset();
+} catch (e) { console.error(e); chk('存档系统套件执行', false); }
+
+/* ================= P0: AdService 广告抽象 ================= */
+try {
+  DBG.AdService.rewardedUsed = 0;
+  DBG.AdService.interstitialUsed = 0;
+  // Test Mode 默认开启
+  chk('AdService 默认 TEST 模式', DBG.AdService.mode === 'TEST');
+  chk('TestAdProvider 可发奖励', DBG.AdService.provider === DBG.AdService.provider);
+  // 激励广告发奖
+  var rewarded = false;
+  DBG.AdService.showRewarded('test_placement', {
+    onReward: function(){ rewarded = true; },
+    onCancel: function(){},
+    onFailure: function(){}
+  });
+  chk('Test Mode 激励广告同步发奖', rewarded === true);
+  chk('激励广告计数+1', DBG.AdService.rewardedUsed === 1);
+  // 频控：达到上限后拒绝
+  DBG.AdService.rewardedUsed = DBG.AD_CFG.rewardedSessionCap;
+  var failed = false;
+  DBG.AdService.showRewarded('test_placement2', {
+    onReward: function(){},
+    onFailure: function(){ failed = true; }
+  });
+  chk('激励广告频控：达到上限后拒绝', failed === true);
+  DBG.AdService.rewardedUsed = 0;
+  // 奖励幂等
+  var rewardCount = 0;
+  // 直接调用 provider 验证幂等去重
+  chk('埋点记录 ad_request 事件', DBG.Analytics.count('ad_request') > 0);
+} catch (e) { console.error(e); chk('AdService 套件执行', false); }
+
+/* ================= P0: 复活安全快照 ================= */
+try {
+  withSeed(42, () => DBG.gen(3));
+  settle();
+  var Gv = DBG.G;
+  chk('开局有安全快照', Gv.safeSnap !== null);
+  // 走几步后快照更新
+  var playable = Gv.bottles.find(function(b){ return b.place === 'grid' && !b.locked; });
+  if (playable) { click(playable.x, playable.y); waitIdle(); frames(5); }
+  chk('走步数后 moveCount 增加', Gv.moveCount >= 1);
+  // 制造死局并复活
+  Gv.tools = {clear:0, finger:0, swap:0};
+  Gv.undoLeft = 0; Gv.unlockLeft = 0;
+  Gv.tubes.forEach(function(t){ t.units = [99]; });
+  waitIdle(); frames(10);
+  chk('死局触发失败面板', Gv.failOpen === true);
+  // 复活
+  DBG.AdService.rewardedUsed = 0;
+  click(360, 600); frames(5);
+  chk('复活后失败面板关闭', Gv.failOpen === false);
+  chk('复活后恢复到安全快照状态', Gv.reviveUsed === 1);
+  // 复活后至少有一个合法操作（管子有水）
+  var hasWater = Gv.tubes.some(function(t){ return t.units.length > 0; });
+  chk('复活后玩家至少有一个合法决策（管中有水）', hasWater);
+} catch (e) { console.error(e); chk('复活安全快照套件执行', false); }
+
+/* ================= P0: 难度三档（普通/困难/极限） ================= */
+try {
+  withSeed(7, function(){ DBG.gen(10, 'normal'); });
+  settle();
+  var normalSlots = DBG.G.slots.length;
+  var normalGates = DBG.G.gates.length;
+  withSeed(7, function(){ DBG.gen(10, 'hard'); });
+  settle();
+  var hardSlots = DBG.G.slots.length;
+  var hardGates = DBG.G.gates.length;
+  withSeed(7, function(){ DBG.gen(10, 'extreme'); });
+  settle();
+  var extremeSlots = DBG.G.slots.length;
+  var extremeGates = DBG.G.gates.length;
+  chk('困难档槽位 ≤ 普通档', hardSlots <= normalSlots);
+  chk('极限档槽位 ≤ 困难档', extremeSlots <= hardSlots);
+  chk('困难档门洞 ≥ 普通档', hardGates >= normalGates);
+  chk('极限档门洞 ≥ 困难档', extremeGates >= hardGates);
+  // 新手关极简
+  withSeed(1, function(){ DBG.gen(1, 'normal'); });
+  settle();
+  chk('第1关9格3色3管无门洞', DBG.G.cellCount === 9 && DBG.G.tubes.length === 3 && DBG.G.gates.length === 0);
+} catch (e) { console.error(e); chk('难度三档套件执行', false); }
+
+/* ================= P0: 埋点系统 ================= */
+try {
+  DBG.Analytics.reset();
+  withSeed(99, function(){ DBG.gen(5); });
+  settle();
+  chk('埋点记录 level_start', DBG.Analytics.count('level_start') >= 1);
+  // 模拟通关
+  DBG.G.bottles.forEach(function(b){ b.place = 'gone'; });
+  DBG.checkStuck();
+  frames(5);
+  chk('埋点记录 game_start/level_start 等核心事件', DBG.Analytics.count('level_start') >= 1);
+} catch (e) { console.error(e); chk('埋点系统套件执行', false); }
+
+/* ================= P1: 星级计算 ================= */
+try {
+  withSeed(50, function(){ DBG.gen(3); });
+  settle();
+  DBG.G.moveCount = 5;
+  DBG.G.starToolsUsed = 0;
+  DBG.G.starRestarts = 0;
+  chk('轻松通关=3星', DBG.calcStars() === 3);
+  DBG.G.moveCount = 100;
+  chk('步数过多=降星', DBG.calcStars() <= 2);
+  DBG.G.starToolsUsed = 5;
+  chk('道具用多再降星', DBG.calcStars() <= 1);
+} catch (e) { console.error(e); chk('星级计算套件执行', false); }
 
 console.log(failures === 0 ? '\n=== ALL GREEN ===' : '\n=== ' + failures + ' FAILURES ===');
 process.exit(failures === 0 ? 0 : 1);

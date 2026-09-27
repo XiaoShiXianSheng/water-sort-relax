@@ -41,6 +41,9 @@ const INJECT = `window.__DBG={
   unlockBadgeAt:unlockBadgeAt, tubeAt:tubeAt, toVirtual:toVirtual,
   rowX0:rowX0, slotPos:slotPos, layoutAll:layoutAll,
   snapAnim:snapAnim, lvPickTap:lvPickTap, LV_PANEL:LV_PANEL,
+  AdService:AdService, Analytics:Analytics, SaveData:SaveData, AD_CFG:AD_CFG,
+  doRevive:doRevive, adRefillTool:adRefillTool, restoreSafeSnap:restoreSafeSnap, saveSafeSnap:saveSafeSnap,
+  calcStars:calcStars, nextLevel:nextLevel,
   drawBottle:drawBottle, drawJarCounter:drawJarCounter, drawGrid:drawGrid, drawSlot:drawSlot,
   setView:function(w,h){ cw=w; ch=h; dpr=1;
     scale=Math.min(cw/VW,ch/VH); if(!isFinite(scale)||scale<=0)scale=1;

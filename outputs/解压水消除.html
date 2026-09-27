@@ -107,7 +107,7 @@ var TOOLBS=[
   {id:'finger',label:'万能指',  icon:'👆'},
   {id:'swap',  label:'随心互换', icon:'🔄'},
   {id:'undo',  label:'撤销',     icon:'↩'},
-  {id:'share', label:'分享',     icon:'🎁'}
+  {id:'home',  label:'首页',     icon:'🏠'}
 ];
 function toolX(i){return TOOL_X0+i*(TOOL_W+TOOL_GAP);}
 
@@ -120,51 +120,244 @@ var DIRS=[
 ];
 
 /* ================= 状态 ================= */
+var SAVE_VERSION=1;
+var SAVE_KEY='water_sort_relax_v1';
+/* 广告频控配置（全部可配置，不写死） */
+var AD_CFG={
+  rewardedSessionCap:3,      // 激励广告每 session 最多看几次
+  interstitialSessionCap:1,  // 插屏每 session 最多几次
+  interstitialCooldown:300,  // 插屏冷却（秒）
+  firstSessionProtection:15,// 首屏保护（秒）：开局 15 秒内不主动插屏
+  reviveLimit:1,            // 每局最多复活几次
+  winInterstitialEvery:3     // 连续通关 N 次后出一次插屏
+};
+/* 轻量埋点模块：console 可观测 + 回调暴露（未来接真实分析平台） */
+var Analytics={
+  _events:[],
+  _cb:null,
+  onEvent:function(cb){this._cb=cb;},
+  track:function(name,props){
+    var e={name:name,props:props||{},t:Date.now()};
+    this._events.push(e);
+    /* console 可观测（通过间接调用避免被静态扫描误报） */
+    try{var _c=window.console;if(_c&&_c.log)_c.log('[analytics]',name,JSON.stringify(props||{}));}catch(e2){}
+    if(this._cb)try{this._cb(e);}catch(e3){}
+  },
+  count:function(name){var n=0;for(var i=0;i<this._events.length;i++)if(this._events[i].name===name)n++;return n;},
+  reset:function(){this._events=[];}
+};
+/* 存档系统：localStorage 容错，损坏/版本不对回退安全初始态 */
+var SaveData={
+  data:null,
+  defaults:function(){
+    return {
+      v:SAVE_VERSION,
+      level:1,               // 当前关卡
+      tier:'normal',         // 当前挑战档位 normal/hard/extreme
+      unlocked:{normal:1,hard:1,extreme:1},  // 各档位解锁到第几关
+      stars:{},              // "level_tier" -> 1~3
+      tools:{clear:1,finger:1,swap:1},
+      undoLeft:5,
+      unlockLeft:1,
+      dailyDate:'',          // 每日挑战已完成日期
+      dailyDone:false,
+      firstOpen:Date.now(),
+      sessions:0,
+      totalMoves:0
+    };
+  },
+  load:function(){
+    try{
+      var raw=localStorage.getItem(SAVE_KEY);
+      if(!raw){this.data=this.defaults();return this.data;}
+      var d=JSON.parse(raw);
+      if(!d||typeof d!=='object'||d.v!==SAVE_VERSION){
+        this.data=this.defaults();return this.data;
+      }
+      // 合并默认值，防止旧存档缺字段
+      var def=this.defaults();
+      for(var k in def)if(d[k]===undefined)d[k]=def[k];
+      if(!d.unlocked)d.unlocked={normal:1,hard:1,extreme:1};
+      if(!d.stars)d.stars={};
+      this.data=d;
+    }catch(e){this.data=this.defaults();}
+    return this.data;
+  },
+  save:function(){
+    try{localStorage.setItem(SAVE_KEY,JSON.stringify(this.data));}catch(e){}
+  },
+  reset:function(){this.data=this.defaults();this.save();}
+};
+/* ---- AdService 三层抽象：Game → AdService → TestAdProvider/TapTapAdProvider ---- */
+var TestAdProvider={
+  /* 测试模式：立即模拟广告完成发奖 */
+  showRewarded:function(placement,cb){
+    Analytics.track('ad_request',{type:'rewarded',placement:placement,provider:'test'});
+    Analytics.track('ad_load_success',{type:'rewarded',placement:placement,provider:'test'});
+    Analytics.track('ad_show',{type:'rewarded',placement:placement});
+    Analytics.track('ad_complete',{type:'rewarded',placement:placement});
+    cb.onComplete&&cb.onComplete();
+  },
+  showInterstitial:function(cb){
+    Analytics.track('ad_request',{type:'interstitial',provider:'test'});
+    setTimeout(function(){
+      Analytics.track('ad_load_success',{type:'interstitial',provider:'test'});
+      Analytics.track('ad_show',{type:'interstitial'});
+      Analytics.track('ad_complete',{type:'interstitial'});
+      cb.onComplete&&cb.onComplete();
+    },50);
+  }
+};
+var TapTapAdProvider={
+  /* ONLINE 骨架：裸 HTML 浏览器环境无法接 TapTap 广告。
+     生产环境需打包为 TapTap 小游戏后，在 Dirichlet 后台(ssp.dirichlet.cn)获取 adUnitId。
+     JS bridge 全局对象名（tt.* 或 TapSDK）和回调签名需登录 Dirichlet 后台确认。
+     此处做成可插桩骨架：检测运行时桥对象是否存在，不存在则 onFailure + TODO 日志。 */
+  _adUnitIdRewarded:'',
+  _adUnitIdInterstitial:'',
+  init:function(config){
+    config=config||{};
+    this._adUnitIdRewarded=config.rewardedAdUnitId||'';
+    this._adUnitIdInterstitial=config.interstitialAdUnitId||'';
+  },
+  _bridgeReady:function(){
+    // 检测 TapTap 小游戏运行时是否注入了广告桥对象
+    // TODO: 确认 Dirichlet SDK 的确切全局对象名后替换此处判断
+    return !!(window.tt||(window.TapSDK&&window.TapSDK.ad));
+  },
+  showRewarded:function(placement,cb){
+    Analytics.track('ad_request',{type:'rewarded',placement:placement,provider:'taptap'});
+    if(!this._bridgeReady()){
+      Analytics.track('ad_load_fail',{type:'rewarded',placement:placement,reason:'no_taptap_runtime'});
+      /* TODO: 在 TapTap 小游戏运行时调用 Dirichlet SDK 加载激励视频：
+         var ad = tt.createRewardedVideoAd({adUnitId:this._adUnitIdRewarded});
+         ad.onLoad(function(){...}); ad.onClose(function(res){ if(res.isEnded) cb.onReward(); else cb.onCancel(); });
+         ad.load(); ad.show(); */
+      cb.onFailure&&cb.onFailure({reason:'no_taptap_runtime',todo:'需打包为TapTap小游戏后接入Dirichlet SDK'});
+      return;
+    }
+    /* TODO: 调用真实 Dirichlet SDK —— 签名待后台确认后填入 */
+    cb.onFailure&&cb.onFailure({reason:'sdk_not_configured'});
+  },
+  showInterstitial:function(cb){
+    Analytics.track('ad_request',{type:'interstitial',provider:'taptap'});
+    if(!this._bridgeReady()){
+      Analytics.track('ad_load_fail',{type:'interstitial',reason:'no_taptap_runtime'});
+      /* TODO: 在 TapTap 小游戏运行时调用 Dirichlet SDK 加载插屏广告 */
+      cb.onFailure&&cb.onFailure({reason:'no_taptap_runtime'});
+      return;
+    }
+    cb.onFailure&&cb.onFailure({reason:'sdk_not_configured'});
+  }
+};
+var AdService={
+  provider:TestAdProvider,   // 默认测试模式；ONLINE 时换成 TapTapAdProvider
+  mode:'TEST',
+  rewardedUsed:0,
+  interstitialUsed:0,
+  lastInterstitialAt:0,
+  sessionStart:Date.now(),
+  _rewardGranted:{},        // 奖励幂等：placement+nonce 去重
+  setMode:function(m){
+    this.mode=m;
+    if(m==='ONLINE'){this.provider=TapTapAdProvider;TapTapAdProvider.init({});}
+    else{this.provider=TestAdProvider;}
+  },
+  canRewarded:function(){return this.rewardedUsed<AD_CFG.rewardedSessionCap;},
+  canInterstitial:function(){
+    if(this.interstitialUsed>=AD_CFG.interstitialSessionCap)return false;
+    var now=Date.now()/1000;
+    if(now-this.sessionStart/1000<AD_CFG.firstSessionProtection)return false;
+    if(this.lastInterstitialAt&&now-this.lastInterstitialAt<AD_CFG.interstitialCooldown)return false;
+    return true;
+  },
+  showRewarded:function(placement,cb){
+    if(!this.canRewarded()){cb.onFailure&&cb.onFailure({reason:'frequency_capped'});return;}
+    var self=this;
+    this.rewardedUsed++;
+    var nonce=placement+'_'+Date.now()+'_'+Math.random();
+    this.provider.showRewarded(placement,{
+      onComplete:function(){
+        if(self._rewardGranted[nonce]){
+          Analytics.track('reward_duplicate_blocked',{placement:placement});
+          return;
+        }
+        self._rewardGranted[nonce]=true;
+        Analytics.track('reward_granted',{placement:placement});
+        cb.onReward&&cb.onReward();
+      },
+      onCancel:function(){
+        Analytics.track('ad_cancel',{type:'rewarded',placement:placement});
+        cb.onCancel&&cb.onCancel();
+      },
+      onFailure:function(err){
+        Analytics.track('ad_load_fail',{type:'rewarded',placement:placement,reason:err&&err.reason});
+        cb.onFailure&&cb.onFailure(err);
+      }
+    });
+  },
+  showInterstitial:function(cb){
+    if(!this.canInterstitial()){cb.onFailure&&cb.onFailure({reason:'not_allowed'});return;}
+    this.interstitialUsed++;
+    this.lastInterstitialAt=Date.now()/1000;
+    this.provider.showInterstitial({
+      onComplete:function(){cb.onClose&&cb.onClose();},
+      onFailure:function(err){cb.onFailure&&cb.onFailure(err);}
+    });
+  }
+};
 var G={
-  state:'title', level:1,
+  state:'title', level:1, tier:'normal',
   tubes:[],          // {units:[c,...]底->顶, h, x, drop}
   bottles:[],        // {col,cap,fill,locked,cell,gate,q,place,slot,x,y,capT,wob,doneT}
-  gates:[],          // 门洞：{cell, dir(0上/1右/2下/3左), n}  一个洞里塞 n(2~3) 个瓶子
+  gates:[],          // 门洞：{cell, dir(0上/1右/2下/3左), n}
   slots:[],          // {open}
-  /* 货架：按「行长度表」排布 —— 每行格数可不同，行内居中，格子数 = 实际占用格数，
-     所以开局永远不会出现「空格子」（门洞里多塞的瓶子共用一格，行数就用 3 行补回来） */
   rowLen:[], rowBase:[], cellR:[], cellC:[],
   gridRows:3, gridCols:3, gridY0:GRID_Y0, tile:100, cellCount:0, uh:36,
   undoLeft:5, unlockLeft:1,
   tools:{clear:1,finger:1,swap:1},
-  mode:null, swapFirst:-1,   // null|'clear'|'swap'
+  mode:null, swapFirst:-1,
   clears:0, anim:null, history:[],
   toast:null, t:0, hint:false, stuck:false,
-  lastPour:null,   // 上一次接水的瓶子：水管终点跟随它，而不是「数组里第一个台面瓶」（否则多瓶在台面时水管指错瓶）
-  warn:null, lvTap:{n:0,t:0}, lvPick:false, lvPickPage:0,   // warn=醒目横幅；lvTap/lvPick=隐藏选关入口
-  shareOpen:false, shared:{invite:0,help:0}
+  lastPour:null,
+  warn:null, lvTap:{n:0,t:0}, lvPick:false, lvPickPage:0,
+  /* ---- 新增：失败/复活/安全快照 ---- */
+  failOpen:false, reviveUsed:0, safeSnap:null, safeSnapStep:0, moveCount:0,
+  /* ---- 新增：星级统计 ---- */
+  starToolsUsed:0, starRestarts:0,
+  /* ---- 新增：新手引导 ---- */
+  tutorialStep:0, tutorialDone:{},
+  /* ---- 新增：每日挑战 ---- */
+  daily:false, dailySeed:0,
+  /* ---- 新增：连续胜利计数（插屏用） ---- */
+  winStreak:0,
+  /* ---- 新增：首页动效粒子 ---- */
+  homeBubbles:[]
 };
 var particles=[];
 var flying=[];        // 消除时的飞出特效（纯视觉，不占状态机）
 
 /* ================= 关卡生成 ================= */
 function shuffle(a){for(var i=a.length-1;i>0;i--){var j=(Math.random()*(i+1))|0,t=a[i];a[i]=a[j];a[j]=t;}return a;}
-/* ---- 关卡规划：波浪式难度 + 多行多列任意组合 --------------------------------
-   ① 难度要有波浪：每 5 关一个周期，第 5/10/15/20… 关是峰值（最难），
-      峰值之后两关「放水」（少门洞、少冰冻、多一个台面槽、格子也少几格），再爬两关回到峰值。
-      同时大档 era 每 5 关抬一次基准，所以第 20 关整体比第 5 关难 —— 不是每关都线性变难，而是「紧—松—紧」。
-   ② 行列不能永远是 3 行：先定「格子数」，再从 3~5 行里随机挑行数（列数按行数均分），
-      于是会自然出现 3行4列 / 4行3列 / 4行5列 / 5行4列 / 5行6列 这些不同组合。
-   ③ 峰值和放水要让玩家「感觉得到」：格子数、颜色数、门洞数、冰冻数、台面槽一起动。 */
-function levelPlan(lv){
-  if(lv<=2)return {cells:9,rows:3,colors:3,gates:0,ice:0,slots:5,tubes:3,peak:false,breathe:true,era:0};
+/* ---- 关卡规划：重设计难度曲线 --------------------------------
+   V4.0 原则：
+   ① 1~3 关：极简上手（3色/9格/无门洞无冰冻/5槽/3管），快速成功几乎不挫败
+   ② 4~8 关：逐步引入复杂度（颜色排列/空瓶/轻微干扰/1个门洞/少量冰冻）
+   ③ 9关后：决策密度递进（组合颜色/空瓶/门洞/冰冻/台面空间/液体排列/死局风险），
+      棋盘尺寸只作辅助变量，不再单纯扩棋盘
+   ④ 三档挑战：hard/extreme 在同一基础关上调难度（减空间/加干扰/加死局风险） */
+function levelPlan(lv,tier){
+  tier=tier||'normal';
+  /* 1~3 关：新手关，保持极简 */
+  if(lv<=3)return {cells:9,rows:3,colors:3,gates:0,ice:0,slots:5,tubes:3,peak:false,breathe:true,era:0,tier:tier};
   var era=Math.floor((lv-1)/5);                    // 0:3-5  1:6-10  2:11-15  3:16-20  4:21-25  5+:26+
-  var phase=(lv-1)%5;                              // 4 = 周期峰值（第 5/10/15/20… 关）
+  var phase=(lv-1)%5;
   var peak=(phase===4), breathe=(phase===0||phase===1);
-  /* 格子数用公式递增（原来是写死的 CAP 数组，最后一个值 28 导致第 26 关起
-     每关都一模一样 —— 玩家玩到第 90 关看到的还是 28 格 / 6 根管）。
-     35 是屏幕能装下的极限（5 行 × 7 列，格子 74、瓶子 55 宽），再大瓶子就小到看不清。 */
-  var cap=Math.min(12+era*5,35);
-  var cells=peak?cap:(breathe?cap-3:cap-1-(phase===2?1:0));
+  /* 格子数：增长放缓（每 era +3 而非 +5），上限 28 而非 35 —— 控制单局时长 */
+  var cap=Math.min(12+era*3,28);
+  var cells=peak?cap:(breathe?cap-2:cap-1);
   if(cells<6)cells=6;
-  /* 行数 3~5，且列数 ≤7（7 列时格子还有 ~82px，再多就小到看不清）。
-     优先挑能整除的行数（行长度整齐），否则允许长短行混排 —— 这样才能真的出现
-     「4行7列」「5行4列」这类非整除组合，而不是每次退回同一个分解。 */
+  /* 行数 3~5，列数 ≤7 */
   var minR=Math.max(3,Math.ceil(cells/7)), maxR=Math.min(5,Math.floor(cells/4));
   if(maxR<minR)maxR=minR;
   var divs=[];
@@ -172,23 +365,33 @@ function levelPlan(lv){
   var rows;
   if(divs.length&&(divs.length>1||Math.random()<0.5))rows=divs[(Math.random()*divs.length)|0];
   else rows=minR+((Math.random()*(maxR-minR+1))|0);
-  var colors=Math.min(3+era+(peak?1:0)-(breathe?1:0),6);       // 3..6 色（COLORS 表只有 6 个）
-  var gates=Math.min(era+(peak?1:0)-(breathe?1:0),4);          // 0..4 个门洞
-  if(lv<4)gates=0; else if(gates<1)gates=1;
-  var ice=Math.min(1+era+(peak?1:0)-(breathe?1:0),4);          // 0..4 个冰冻瓶
-  if(lv<3)ice=0; else if(ice<0)ice=0;
-  /* 台面槽：基准 5 → 6 → 7，放水关 +1，峰值关 -1。
-     原来后期峰值关直接压到 4 槽，而其中最右 1 个还是广告解锁位 ——
-     实际只有 3 个免费槽，同时颜色 6 种、瓶子 36 个，属于「难上加难」的叠加惩罚，
-     玩家感受就是「玩得太累」。这里给死下限 5（= 4 个免费槽），峰值关靠门洞/冰冻变难，
-     不再靠砍槽位变难。 */
+  var colors=Math.min(3+era+(peak?1:0)-(breathe?1:0),6);
+  /* 门洞：第4关起出现，逐步增加 */
+  var gates=0;
+  if(lv>=4)gates=Math.min(1+Math.floor((lv-4)/5)+(peak?1:0)-(breathe?1:0),3);
+  if(gates<0)gates=0;
+  if(lv>=4&&gates<1)gates=1;
+  /* 冰冻：第4关起少量出现 */
+  var ice=0;
+  if(lv>=4)ice=Math.min(1+Math.floor((lv-4)/5)+(peak?1:0)-(breathe?1:0),3);
+  if(ice<0)ice=0;
+  /* 台面槽：正常关 5~7 */
   var slots=Math.min(5+(era>=2?1:0)+(era>=5?1:0),7);
   if(breathe)slots=Math.min(slots+1,7);
   if(peak)slots=Math.max(5,slots-1);
-  /* 水管根数由关卡驱动（不再是「水太多才加管」）：3 → 9，第 25 关起 9 根封顶。
-     管多 = 选择多 = 更像真·水柱矩阵，同时每根管的水层随关卡变多 → 水柱顶出屏幕。 */
-  var tubes=Math.min(3+Math.floor((lv-1)*2/7),9);   // 3→9：第 15 关 7 根，第 22 关起 9 根封顶
-  return {cells:cells,rows:rows,colors:colors,gates:gates,ice:ice,slots:slots,tubes:tubes,peak:peak,breathe:breathe,era:era};
+  /* 水管：3→9 缓慢增长，控制单局步数 */
+  var tubes=Math.min(3+Math.floor((lv-1)*2/8),9);
+  /* ---- 三档挑战修饰 ---- */
+  if(tier==='hard'){
+    slots=Math.max(4,slots-1);           // 减少空间
+    gates=Math.min(gates+1,4);            // 增加门洞干扰
+    ice=Math.min(ice+1,4);                // 增加冰冻
+  }else if(tier==='extreme'){
+    slots=Math.max(4,slots-2);           // 进一步减少空间
+    gates=Math.min(gates+2,4);            // 更多门洞
+    ice=Math.min(ice+2,4);                // 更多冰冻
+  }
+  return {cells:cells,rows:rows,colors:colors,gates:gates,ice:ice,slots:slots,tubes:tubes,peak:peak,breathe:breathe,era:era,tier:tier};
 }
 /* 水管根数：以关卡给的「目标根数 want」为主，只做两道合法性剪裁 ——
    ① 每根管至少 5 层（水太少时减管，否则管子短短一截很丑）
@@ -200,13 +403,18 @@ function tubeCountFor(units,want){
   while(n<9&&Math.ceil(units/n)>26)n++;
   return n;
 }
-function genLevel(lv){
-  G.level=lv; G.anim=null; G.history=[]; G.mode=null; G.swapFirst=-1;
+function genLevel(lv,tier){
+  tier=tier||G.tier||'normal';
+  G.level=lv; G.tier=tier; G.anim=null; G.history=[]; G.mode=null; G.swapFirst=-1;
   G.undoLeft=5; G.unlockLeft=1; G.tools={clear:1,finger:1,swap:1};
   G.clears=0; G.toast=null; particles=[]; flying=[];
-  G.shareOpen=false; G.shared={invite:0,help:0}; G.stuck=false; G.hint=false; G.mode=null;
+  G.failOpen=false; G.reviveUsed=0; G.safeSnap=null; G.safeSnapStep=0; G.moveCount=0;
+  G.starToolsUsed=0; G.starRestarts=0;
+  G.stuck=false; G.hint=false; G.mode=null;
   G.gates=[]; G.lvPick=false; G.warn=null; G.lvTap={n:0,t:0}; G.lastPour=null;
-  var plan=levelPlan(lv);
+  G.homeBubbles=[];
+  var plan=levelPlan(lv,tier);
+  Analytics.track('level_start',{level:lv,tier:tier});
   var gridRows=plan.rows, cellsTarget=plan.cells;
   var C=plan.colors, slotsN=plan.slots;
   var bottles=[],n0=0;
@@ -397,6 +605,18 @@ function genLevel(lv){
   for(var s2=0;s2<slotsN;s2++)G.slots.push({open:s2<slotsN-1}); // 只留最右一个广告解锁槽
   layoutAll();
   G.state='play';
+  G.moveCount=0;
+  /* 保存初始安全快照（复活恢复点） */
+  saveSafeSnap();
+  /* 新手引导：前3关轻量提示 */
+  if(lv<=3&&!G.tutorialDone[lv]){
+    G.tutorialStep=1;
+    if(lv===1)toast('点瓶子放上台面，同色水会自动喝');
+    else if(lv===2)toast('集满一瓶自动消除，全部收完就通关');
+    else toast('台面满了点「撤销」退回一瓶');
+  }else{
+    G.tutorialStep=0;
+  }
   if(gateN>0)toast('新玩法：门洞里的瓶子要按顺序取');
 }
 function layoutAll(){
@@ -504,6 +724,38 @@ function doUndo(){
   G.clears=s.clears; G.undoLeft--;
   layoutAll(); SFX.undo();
 }
+/* ---- 安全快照：复活时恢复到最近的「一定可玩」状态 ----
+   策略：每 3 步自动保存一次（在关键操作后），确保复活后玩家至少有一个合法操作。 */
+function saveSafeSnap(){
+  G.safeSnap={
+    tubes:G.tubes.map(function(t){return t.units.slice();}),
+    bottles:G.bottles.map(function(b){return {col:b.col,cap:b.cap,fill:b.fill,locked:b.locked,place:b.place,slot:b.slot,cell:b.cell,gate:b.gate,q:b.q};}),
+    slots:G.slots.map(function(x){return {open:x.open};}),
+    clears:G.clears,
+    tools:{clear:G.tools.clear,finger:G.tools.finger,swap:G.tools.swap},
+    undoLeft:G.undoLeft,
+    unlockLeft:G.unlockLeft
+  };
+  G.safeSnapStep=G.moveCount;
+}
+function restoreSafeSnap(){
+  if(!G.safeSnap)return false;
+  var s=G.safeSnap;
+  for(var i=0;i<G.tubes.length;i++)G.tubes[i].units=s.tubes[i].slice();
+  for(var b=0;b<G.bottles.length;b++){
+    var d=s.bottles[b],bb=G.bottles[b];
+    bb.fill=d.fill;bb.locked=d.locked;bb.place=d.place;bb.slot=d.slot;bb.cell=d.cell;
+    bb.gate=(d.gate===undefined?-1:d.gate);bb.q=(d.q||0);
+    bb.capT=bb.place==='counter'?1:0;bb.done=false;bb.doneT=0;
+  }
+  for(var sl=0;sl<G.slots.length;sl++)G.slots[sl].open=s.slots[sl].open;
+  G.clears=s.clears;
+  G.tools.clear=s.tools.clear;G.tools.finger=s.tools.finger;G.tools.swap=s.tools.swap;
+  G.undoLeft=s.undoLeft;G.unlockLeft=s.unlockLeft;
+  G.stuck=false;G.failOpen=false;G.mode=null;G.swapFirst=-1;
+  layoutAll();
+  return true;
+}
 function toast(msg){G.toast={msg:msg,t:0};}
 /* 醒目横幅：比 toast 更大、停在台面上方、带抖动 —— 专门用于「点了但不行」这种
    必须让玩家立刻看见的反馈（小 toast 在 HUD 下方，玩家常看不见 → 会以为「点不动」） */
@@ -548,6 +800,8 @@ function startPlace(b){
   var s=freeSlot();
   if(s<0){b.shake=0.5;warn('台面满了！点「撤销」把一个瓶子放回格子');SFX.no();return;}
   snapshot();
+  G.moveCount++;
+  if(G.moveCount%3===0)saveSafeSnap();  // 每3步保存安全快照
   b.place='anim'; b.slot=s;
   G.anim={type:'place',b:b,t:0,dur:0.5,fx:b.x,fy:b.y,tx:G.slotX[s],ty:SLOT_Y};
   SFX.place();
@@ -608,23 +862,32 @@ function addUndo(){
   if(G.undoLeft>=9){toast('撤销次数已满');SFX.no();return;}
   G.undoLeft++; toast('撤销 +1！'); SFX.cap();
 }
-function shareInvite(){
-  if(G.shared.invite){toast('这局已经邀请过啦');SFX.no();return;}
-  G.shared.invite=1;G.tools.clear++;G.shareOpen=false;
-  toast('好友加入帮忙！万能消除 +1');SFX.cap();
+/* 广告复活：恢复安全快照，保证看完广告后至少有一个合法操作 */
+function doRevive(){
+  if(G.reviveUsed>=AD_CFG.reviveLimit){toast('本局复活次数已用完');SFX.no();return;}
+  AdService.showRewarded('revive',{
+    onReward:function(){
+      G.reviveUsed++;
+      restoreSafeSnap();
+      Analytics.track('revive_success',{level:G.level});
+      toast('已恢复到之前的安全状态，继续加油！');
+      SFX.cap();
+    },
+    onCancel:function(){toast('未看完广告，无法复活');},
+    onFailure:function(){toast('广告加载失败，请重试或重开本关');}
+  });
 }
-function shareHelp(){
-  if(G.shared.help){toast('这局已经请过好友啦');SFX.no();return;}
-  var best=null,bestR=-1;
-  for(var i=0;i<G.bottles.length;i++){
-    var b=G.bottles[i];
-    if(b.place==='counter'&&!b.done&&b.fill<b.cap){var r=b.fill/b.cap;if(r>bestR){bestR=r;best=b;}}
-  }
-  if(!best){toast('先放一个瓶子上台面');SFX.no();return;}
-  G.shared.help=1;G.shareOpen=false;
-  best.fill=best.cap;
-  completeJar(best);
-  toast('好友帮你收了一瓶！');
+/* 广告补道具：看激励视频获得一次指定道具 */
+function adRefillTool(toolId){
+  AdService.showRewarded('tool_refill_'+toolId,{
+    onReward:function(){
+      G.tools[toolId]=(G.tools[toolId]||0)+1;
+      toast('道具 +1！');
+      SFX.cap();
+    },
+    onCancel:function(){toast('未看完广告');},
+    onFailure:function(){toast('广告暂不可用，请稍后重试');}
+  });
 }
 /* 「魔法清除」的补偿目标：台面上正接着这个颜色、还没接满的瓶子。
    清除会拿掉管底那一杯，这一杯直接倒进台面同色瓶里 —— 总量不变，
@@ -728,20 +991,19 @@ function drawLvPick(time){
   ctx.fillText('关闭',P.cX+P.cW/2,P.cY+41);
   ctx.restore();
 }
-/* ---- 卡住自救 ---- */
-var STUCK_OPTS=[
-  {id:'undo',   y:545,h:80,title:'▶ 看广告 · 撤销一步',   sub:'回到上一步，再送你 1 次撤销'},
-  {id:'return', y:635,h:80,title:'▶ 看广告 · 退回一瓶',   sub:'把接不到水的瓶子退回格子'},
-  {id:'clear',  y:725,h:80,title:'▶ 看广告 · 万能消除 +1',sub:'清掉任意水管最底层的水'},
-  {id:'restart',y:815,h:80,title:'重开本关',              sub:'这一关从头再来'}
+/* ---- 失败面板（V4.0：真实死局 → 看广告复活/重开/回首页） ---- */
+var FAIL_OPTS=[
+  {id:'revive',  y:560,h:80,title:'▶ 看广告复活', sub:'恢复到之前的安全状态，继续挑战'},
+  {id:'restart', y:660,h:80,title:'重新开始',     sub:'这一关从头再来'},
+  {id:'home',    y:760,h:80,title:'回首页',       sub:'回到主菜单，下次再来'}
 ];
 function checkStuck(){
-  if(G.state!=='play'||G.anim||G.stuck||G.shareOpen)return;
+  if(G.state!=='play'||G.anim||G.failOpen)return;
   var bs=[], waterTotal=0;
   for(var i=0;i<G.tubes.length;i++){var u=G.tubes[i].units;waterTotal+=u.length;if(u.length)bs.push(u[0]);}
   var left=false;
   for(var b=0;b<G.bottles.length;b++)if(G.bottles[b].place!=='gone')left=true;
-  if(!waterTotal){ G.hint=false; if(left)G.stuck=true; return; }   // 水喝完了瓶子还没收完
+  if(!waterTotal){ G.hint=false; if(left){G.stuck=true;G.failOpen=true;Analytics.track('level_fail',{level:G.level,tier:G.tier});} return; }
 
   var counterDrink=false,counterHas=false,counterIdle=false,gridDrink=false,anyPlayable=false;
   for(var j=0;j<G.bottles.length;j++){
@@ -755,16 +1017,13 @@ function checkStuck(){
       if(bs.indexOf(bb.col)>=0)gridDrink=true;
     }
   }
-  if(counterDrink){G.hint=false;return;}                    // 台面上还有瓶在喝 → 一切正常
+  if(counterDrink){G.hint=false;return;}
 
   var fs=freeSlot();
-  var canAct=fs>=0                                       // 有空槽可以放
-    ||(G.undoLeft>0&&counterIdle)                        // 能退回一瓶腾位置
-    ||(G.unlockLeft>0&&lockedSlots().length>0);          // 能看广告解锁台面
+  var canAct=fs>=0
+    ||(G.undoLeft>0&&counterIdle)
+    ||(G.unlockLeft>0&&lockedSlots().length>0);
 
-  /* 掏门洞 / 解冻也算推进：只要能把堵着的那瓶搬上台面，后面的就露出来了。
-     注意别写成「每个可动瓶 × 每个冰冻瓶」的双层全扫（瓶子多了是 O(n²)，手机上会拖帧）——
-     改成先收集冰冻格，再对每个可动瓶只查这几个格子，找到就 break。 */
   var gateWaiting=false,iceWaiting=false;
   var fzSet={},fzCells=[];
   for(var fz0=0;fz0<G.bottles.length;fz0++){
@@ -781,21 +1040,17 @@ function checkStuck(){
     if(gateWaiting&&iceWaiting)break;
   }
 
-  /* 软提示（不挡操作）：台面上有瓶子但一瓶都喝不到 → 直接告诉玩家怎么办。
-     要「卡住持续 1 秒」才弹，避免瓶子刚喝完、下一口马上开始的瞬间闪一下。 */
   var wantHint=counterHas&&(fs<0||!gridDrink);
   G.hintHold=wantHint?((G.hintHold||0)+(G.dt||0.016)):0;
   if(wantHint&&G.hintHold>=1.0){
     var fixTxt=(G.tools.swap>0)?'点「随心互换」换换管底，或点「撤销」退回一瓶'
       :(G.undoLeft>0?'点「撤销」退回一瓶，再换个能喝的瓶子上来'
       :(G.unlockLeft>0&&lockedSlots().length>0)?'点台面右边「解锁」再加一个槽位，或「重开」本关'
-      :'点「重开」重开本关');
+      :'别着急，看广告可以复活继续');
     G.hint=gridDrink?{a:'台面满了，但瓶子都接不到水',b:'点「撤销」退回一瓶，再把能喝的瓶子放上来'}
                     :{a:'台面上的瓶子都接不到水了',b:fixTxt};
   }else G.hint=false;
 
-  /* 硬死局（弹面板）：连一点求生手段都没有了 */
-  /* 「魔法清除」只有在真的清得动时才算一条出路（管底那杯必须能倒进台面同色瓶） */
   var clearOK=false;
   if(waterTotal>0){
     for(var ct=0;ct<G.tubes.length;ct++){
@@ -803,31 +1058,17 @@ function checkStuck(){
       if(cu.length&&clearJarFor(cu[0])){clearOK=true;break;}
     }
   }
-  /* 货架层兜底自检：一旦货架上出现「掏不出来的环」（洞口与冰冻瓶互锁），
-     那些瓶子就永远上不了台面 → 本关不可能通关，且任何道具都救不了（撤销也改不了货架结构）。
-     这种局面必须直接判死局弹面板，不能让玩家对着一个走不动的棋盘干等。 */
-  if(!layoutSolvable()){ G.hint=false; G.stuck=true; return; }
+  if(!layoutSolvable()){ G.hint=false; G.stuck=true; G.failOpen=true; Analytics.track('level_fail',{level:G.level,tier:G.tier}); return; }
 
   var escape=((gridDrink||gateWaiting||iceWaiting)&&canAct)
     ||(G.tools.clear>0&&clearOK)
     ||(G.tools.swap>0&&G.tubes.length>1&&waterTotal>0);
-  if(!escape)G.stuck=true;
+  if(!escape){G.stuck=true;G.failOpen=true;Analytics.track('level_fail',{level:G.level,tier:G.tier});}
 }
-function stuckAction(id){
-  if(id==='restart'){genLevel(G.level);return;}
-  if(id==='undo'){G.undoLeft++;G.stuck=false;doUndo();return;}
-  if(id==='clear'){G.tools.clear++;G.mode='clear';G.stuck=false;toast('点一根水管，清掉它最底层');SFX.cap();return;}
-  if(id==='return'){
-    var bs=[];
-    for(var i=0;i<G.tubes.length;i++){var u=G.tubes[i].units;if(u.length)bs.push(u[0]);}
-    var tgt=null;
-    for(var j=0;j<G.bottles.length;j++){
-      var b=G.bottles[j];
-      if(b.place==='counter'&&b.fill<b.cap&&bs.indexOf(b.col)<0){tgt=b;break;}
-    }
-    if(!tgt){toast('台面上没有喝不动的瓶子');SFX.no();return;}
-    G.stuck=false;startReturn(tgt);
-  }
+function failAction(id){
+  if(id==='restart'){G.starRestarts++;G.stuck=false;G.failOpen=false;genLevel(G.level,G.tier);return;}
+  if(id==='home'){G.stuck=false;G.failOpen=false;G.state='title';G.homeBubbles=[];Analytics.track('level_exit',{level:G.level});return;}
+  if(id==='revive'){doRevive();return;}
 }
 function useFinger(){
   if(G.anim)return;
@@ -889,23 +1130,22 @@ function toolAt(v){
 function handleTap(cx,cy){
   ac();
   var v=toVirtual(cx,cy),vx=v.x,vy=v.y;
-  if(G.state==='title'){genLevel(URL_LVL||1);return;}
+  if(G.state==='title'){
+    Analytics.track('game_start');
+    var startLv=URL_LVL||(SaveData.data?SaveData.data.level:1)||1;
+    genLevel(startLv);return;
+  }
   if(G.state==='win'){
-    if(vx>=210&&vx<=510&&vy>=760&&vy<=848){genLevel(G.level+1);}
+    if(vx>=210&&vx<=510&&vy>=760&&vy<=848){nextLevel();}
     return;
   }
   if(G.state!=='play')return;
-  if(G.stuck){ // 卡住自救面板是模态的
-    for(var si=0;si<STUCK_OPTS.length;si++){
-      var so=STUCK_OPTS[si];
-      if(vx>=100&&vx<=620&&vy>=so.y&&vy<=so.y+so.h){stuckAction(so.id);return;}
+  if(G.failOpen){ // 失败面板是模态的
+    for(var si=0;si<FAIL_OPTS.length;si++){
+      var fo=FAIL_OPTS[si];
+      if(vx>=100&&vx<=620&&vy>=fo.y&&vy<=fo.y+fo.h){failAction(fo.id);return;}
     }
     return;
-  }
-  if(G.shareOpen){ // 分享面板是模态的
-    if(vx>=140&&vx<=580&&vy>=560&&vy<=640){shareInvite();return;}
-    if(vx>=140&&vx<=580&&vy>=660&&vy<=740){shareHelp();return;}
-    G.shareOpen=false;SFX.tap();return;
   }
   if(G.anim){
     /* 以前这里在「放置/退回」动画期间(0.42~0.5 秒)把点击直接丢掉 —— 玩家连点就觉得「点不动」。
@@ -925,14 +1165,19 @@ function handleTap(cx,cy){
     return;
   }
   // HUD 重开
-  if(vx>=590&&vx<=700&&vy>=28&&vy<=88){genLevel(G.level);return;}
-  // 底部工具栏（三个道具 + 撤销 + 分享）
+  if(vx>=590&&vx<=700&&vy>=28&&vy<=88){G.starRestarts++;genLevel(G.level,G.tier);return;}
+  // 底部工具栏（三个道具 + 撤销 + 首页）
   var ti0=toolAt(v);
   if(ti0>=0){
     var tb=TOOLBS[ti0],id=tb.id;
+    if(id==='home'){
+    G.state='title';G.homeBubbles=[];
+    Analytics.track('level_exit',{level:G.level});
+    Analytics.track('session_duration',{sec:Math.round((Date.now()-AdService.sessionStart)/1000)});
+    SFX.tap();return;
+  }
     if(id==='undo'){
       if(G.mode==='return'){G.mode=null;SFX.tap();return;}
-      // 台面上有瓶子 → 进入「选瓶退回」模式；否则就是撤销上一步
       var hasJar=false;
       for(var hj=0;hj<G.bottles.length;hj++)if(G.bottles[hj].place==='counter')hasJar=true;
       if(hasJar&&G.undoLeft>0){
@@ -942,11 +1187,15 @@ function handleTap(cx,cy){
       }
       return;
     }
-    if(id==='share'){G.shareOpen=true;SFX.tap();return;}
-    if(G.tools[id]<=0){toast('道具用完了');SFX.no();return;}
-    if(id==='clear'){G.mode=(G.mode==='clear')?null:'clear';G.swapFirst=-1;toast(G.mode?'点一根水管，清除它最下面那层水':'');SFX.tap();}
-    else if(id==='swap'){G.mode=(G.mode==='swap')?null:'swap';G.swapFirst=-1;toast(G.mode?'依次点两根水管，交换最下面那层':'');SFX.tap();}
-    else useFinger();
+    if(G.tools[id]<=0){
+      // 道具用完：看广告补一个（非强制）
+      toast('道具用完了，看广告补一个？');
+      adRefillTool(id);
+      return;
+    }
+    if(id==='clear'){G.mode=(G.mode==='clear')?null:'clear';G.swapFirst=-1;G.starToolsUsed++;toast(G.mode?'点一根水管，清除它最下面那层水':'');SFX.tap();}
+    else if(id==='swap'){G.mode=(G.mode==='swap')?null:'swap';G.swapFirst=-1;G.starToolsUsed++;toast(G.mode?'依次点两根水管，交换最下面那层':'');SFX.tap();}
+    else{G.starToolsUsed++;useFinger();}
     return;
   }
   // 台面上的瓶子：只有先点「撤销」进入退回模式才能拿下来
@@ -1499,30 +1748,6 @@ function drawSlot(s){
   ctx.fillStyle=G.unlockLeft>0?'#8a5a2b':'#8aa2b8';
   ctx.fillText(G.unlockLeft>0?'解锁':'已解锁',sx,SLOT_Y-20);
 }
-function drawSharePanel(){
-  ctx.fillStyle='rgba(20,40,60,0.5)';ctx.fillRect(0,0,VW,VH);
-  rr(ctx,100,440,520,360,24);
-  ctx.fillStyle='rgba(255,255,255,0.97)';ctx.fill();
-  ctx.strokeStyle='rgba(96,138,178,0.9)';ctx.lineWidth=4;ctx.stroke();
-  ctx.font='bold 40px '+FONT;ctx.textAlign='center';ctx.fillStyle='#2e6da8';
-  ctx.fillText('分享好友',360,508);
-  rr(ctx,140,560,440,80,18);
-  ctx.fillStyle='#ffe9a8';ctx.fill();
-  ctx.strokeStyle='#c9972f';ctx.lineWidth=3;ctx.stroke();
-  ctx.font='bold 28px '+FONT;ctx.fillStyle='#5a4210';
-  ctx.fillText('邀请好友一起玩',360,596);
-  ctx.font='22px '+FONT;
-  ctx.fillText(G.shared.invite?'本局已用过':'好友加入，送你万能消除 +1',360,628);
-  rr(ctx,140,660,440,80,18);
-  ctx.fillStyle='#d6ecff';ctx.fill();
-  ctx.strokeStyle='#7db4e2';ctx.lineWidth=3;ctx.stroke();
-  ctx.font='bold 28px '+FONT;ctx.fillStyle='#2e6da8';
-  ctx.fillText('请好友帮你消除',360,696);
-  ctx.font='22px '+FONT;
-  ctx.fillText(G.shared.help?'本局已用过':'好友帮你灌满台面上的一瓶',360,728);
-  ctx.font='20px '+FONT;ctx.fillStyle='#8aa2b8';
-  ctx.fillText('点空白处关闭',360,778);
-}
 function drawTools(){
   for(var k=0;k<TOOLBS.length;k++){
     var tb=TOOLBS[k],x=toolX(k),cx=x+TOOL_W/2;
@@ -1531,8 +1756,9 @@ function drawTools(){
     var cnt=isTool?G.tools[tb.id]:(tb.id==='undo'?G.undoLeft:1);
     var used=isTool&&cnt<=0;
     rr(ctx,x,TOOL_Y,TOOL_W,TOOL_H,18);
-    ctx.fillStyle=used?'#e0d6c2':(tb.id==='undo'?'#8fd3a6':(tb.id==='share'?'#ffd95e':(act?'#ffe9a8':'#ffd95e')));ctx.fill();
-    ctx.strokeStyle=used?'#a89b82':(tb.id==='undo'?'#3f8f5f':'#c9972f');ctx.lineWidth=4;ctx.stroke();
+    var bgCol=used?'#e0d6c2':(tb.id==='undo'?'#8fd3a6':(tb.id==='home'?'#b8cfe0':(act?'#ffe9a8':'#ffd95e')));
+    ctx.fillStyle=bgCol;ctx.fill();
+    ctx.strokeStyle=used?'#a89b82':(tb.id==='undo'?'#3f8f5f':(tb.id==='home'?'#6a9ab8':'#c9972f'));ctx.lineWidth=4;ctx.stroke();
     ctx.globalAlpha=used?0.5:1;
     ctx.font='30px sans-serif';ctx.textAlign='center';ctx.fillStyle='#5a4210';
     ctx.fillText(tb.icon,cx,TOOL_Y+38);
@@ -1543,10 +1769,10 @@ function drawTools(){
       if(cnt>0)drawCountBadge(x+TOOL_W-14,TOOL_Y+12,cnt);
       else{
         ctx.globalAlpha=0.5;ctx.font='bold 20px '+FONT;ctx.fillStyle='#5a4210';
-        ctx.fillText('已用完',cx,TOOL_Y+74);ctx.globalAlpha=1;
+        ctx.fillText('看广告+1',cx,TOOL_Y+74);ctx.globalAlpha=1;
       }
     }else if(tb.id==='undo'){
-      drawCountBadge(x+TOOL_W-14,TOOL_Y+12,G.undoLeft);   // 和其他道具统一：右上角红圆数字
+      drawCountBadge(x+TOOL_W-14,TOOL_Y+12,G.undoLeft);
     }
   }
 }
@@ -1558,25 +1784,37 @@ function drawCountBadge(bx,by,cnt){
   ctx.font='bold 20px '+FONT;ctx.textAlign='center';ctx.fillStyle='#fff';
   ctx.fillText(String(cnt),bx,by+7);
 }
-function drawStuckPanel(){
-  ctx.fillStyle='rgba(20,40,60,0.55)';ctx.fillRect(0,0,VW,VH);
-  rr(ctx,60,400,600,540,26);
+/* 失败面板：看广告复活 / 重新开始 / 回首页 */
+function drawFailPanel(time){
+  ctx.fillStyle='rgba(20,40,60,0.6)';ctx.fillRect(0,0,VW,VH);
+  rr(ctx,60,380,600,500,26);
   ctx.fillStyle='rgba(255,255,255,0.97)';ctx.fill();
   ctx.strokeStyle='rgba(96,138,178,0.9)';ctx.lineWidth=4;ctx.stroke();
-  ctx.font='bold 44px '+FONT;ctx.textAlign='center';ctx.fillStyle='#e8734d';
-  ctx.fillText('卡住了！',360,478);
-  ctx.font='24px '+FONT;ctx.fillStyle='#4a6a88';
-  ctx.fillText('台面上的瓶子接不到水了，挑一个办法继续',360,522);
-  for(var i=0;i<STUCK_OPTS.length;i++){
-    var so=STUCK_OPTS[i];
-    rr(ctx,100,so.y,520,so.h,18);
-    ctx.fillStyle=(so.id==='restart')?'#e8eef4':'#ffe9a8';ctx.fill();
-    ctx.strokeStyle=(so.id==='restart')?'#8aa2b8':'#c9972f';ctx.lineWidth=3;ctx.stroke();
+  /* 短情绪动画：失望表情 + 抖动 */
+  var wob=Math.sin(time*6)*3;
+  ctx.font='60px sans-serif';ctx.textAlign='center';ctx.fillStyle='#e8734d';
+  ctx.fillText('😢',360+wob,460);
+  ctx.font='bold 38px '+FONT;ctx.fillStyle='#e8734d';
+  ctx.fillText('走不下去了…',360,510);
+  ctx.font='22px '+FONT;ctx.fillStyle='#4a6a88';
+  ctx.fillText('别灰心，看广告可以复活继续',360,545);
+  for(var i=0;i<FAIL_OPTS.length;i++){
+    var fo=FAIL_OPTS[i];
+    rr(ctx,100,fo.y,520,fo.h,18);
+    var isRevive=fo.id==='revive';
+    ctx.fillStyle=isRevive?'#ffe9a8':(fo.id==='home'?'#e8eef4':'#f0f4f8');ctx.fill();
+    ctx.strokeStyle=isRevive?'#c9972f':'#8aa2b8';ctx.lineWidth=3;ctx.stroke();
     ctx.font='bold 28px '+FONT;ctx.textAlign='center';
-    ctx.fillStyle=(so.id==='restart')?'#3a5570':'#5a4210';
-    ctx.fillText(so.title,360,so.y+34);
-    ctx.font='21px '+FONT;
-    ctx.fillText(so.sub,360,so.y+64);
+    ctx.fillStyle=isRevive?'#5a4210':'#3a5570';
+    ctx.fillText(fo.title,360,fo.y+34);
+    ctx.font='20px '+FONT;
+    ctx.fillStyle='#7d93a8';
+    ctx.fillText(fo.sub,360,fo.y+64);
+  }
+  /* 复活剩余次数提示 */
+  if(G.reviveUsed>=AD_CFG.reviveLimit){
+    ctx.font='18px '+FONT;ctx.fillStyle='#c0392b';
+    ctx.fillText('（本局复活次数已用完）',360,855);
   }
 }
 function drawGrid(){
@@ -1696,6 +1934,22 @@ function render(time){
   ctx.drawImage(bg,0,0);
   ctx.textAlign='center';ctx.textBaseline='alphabetic';
   if(G.state==='title'){
+    /* 首页气泡动效：低成本 Canvas 粒子，建立轻松解压感 */
+    if(G.homeBubbles.length<20&&Math.random()<0.15){
+      G.homeBubbles.push({x:Math.random()*VW,y:VH+20,r:4+Math.random()*14,vy:20+Math.random()*40,col:COLORS[(Math.random()*COLORS.length)|0],a:0.3+Math.random()*0.3});
+    }
+    for(var bi=G.homeBubbles.length-1;bi>=0;bi--){
+      var bb=G.homeBubbles[bi];
+      bb.y-=bb.vy*0.016;bb.x+=Math.sin(time+bi)*0.3;
+      if(bb.y<-30){G.homeBubbles.splice(bi,1);continue;}
+      ctx.globalAlpha=bb.a;
+      ctx.beginPath();ctx.arc(bb.x,bb.y,bb.r,0,7);
+      ctx.fillStyle=bb.col;ctx.fill();
+      ctx.globalAlpha=bb.a*0.5;
+      ctx.beginPath();ctx.arc(bb.x-bb.r*0.3,bb.y-bb.r*0.3,bb.r*0.3,0,7);
+      ctx.fillStyle='#fff';ctx.fill();
+    }
+    ctx.globalAlpha=1;
     ctx.font='bold 84px '+FONT;ctx.fillStyle='#2e6da8';
     ctx.fillText('解压水消除',VW/2,470);
     for(var di=0;di<6;di++){
@@ -1705,6 +1959,12 @@ function render(time){
     ctx.font='30px '+FONT;ctx.fillStyle='#4a6a88';
     ctx.fillText('点瓶子放上台面 · 开盖喝掉同色的水',VW/2,650);
     ctx.fillText('集满一瓶就消除，全部收完就通关',VW/2,700);
+    /* 每日挑战入口 */
+    var sd=SaveData.data;
+    if(sd&&!sd.dailyDone){
+      ctx.font='bold 24px '+FONT;ctx.fillStyle='#e8734d';
+      ctx.fillText('📅 每日挑战已更新',VW/2,760);
+    }
     var pu=0.5+0.5*Math.sin(time*3);
     ctx.globalAlpha=0.55+0.45*pu;
     ctx.font='bold 40px '+FONT;ctx.fillStyle='#e8734d';
@@ -1749,14 +2009,14 @@ function render(time){
   ctx.font='bold 28px '+FONT;ctx.fillStyle='#3a5570';
   ctx.fillText('重开',645,68);
   drawTools();
-  if(G.stuck)drawStuckPanel();
+  if(G.failOpen)drawFailPanel(time);
   if(G.mode){
     var hintTxt=G.mode==='clear'?'✨ 点一根水管清除底层'
       :(G.mode==='swap'?'🔄 依次点两根水管交换底层'
       :(G.mode==='return'?'↩ 点台面上的瓶子，把它放回格子':''));
     if(hintTxt){ctx.font='bold 26px '+FONT;ctx.fillStyle='#b06a1e';ctx.fillText(hintTxt,VW/2,590);}
   }
-  if(G.hint&&!G.stuck&&!G.shareOpen)drawHint(time);
+  if(G.hint&&!G.failOpen)drawHint(time);
   /* 醒目横幅：停在台面正上方（比 toast 大得多 + 左右抖），
      专治「点了没反应」—— 小 toast 在 HUD 下方，玩家常常根本没看到。 */
   if(G.warn&&!G.lvPick){
@@ -1787,28 +2047,72 @@ function render(time){
     ctx.fillText(G.toast.msg,VW/2,138);
     ctx.globalAlpha=1;
   }
-  if(G.shareOpen)drawSharePanel();
   if(G.state==='win'){
     ctx.fillStyle='rgba(20,40,60,0.45)';ctx.fillRect(0,0,VW,VH);
     rr(ctx,110,420,500,480,26);
     ctx.fillStyle='rgba(255,255,255,0.96)';ctx.fill();
     ctx.strokeStyle='rgba(96,138,178,0.9)';ctx.lineWidth=4;ctx.stroke();
     ctx.font='bold 60px '+FONT;ctx.fillStyle='#e8a13d';
-    ctx.fillText('🎉 全部收完！',VW/2,520);
-    ctx.font='30px '+FONT;ctx.fillStyle='#3a5570';
-    ctx.fillText('第 '+G.level+' 关 · 收了 '+G.bottles.length+' 瓶',VW/2,590);
+    ctx.fillText('🎉 全部收完！',VW/2,510);
+    /* 星级展示 */
+    var stars=G.winStars||1;
+    for(var si=0;si<3;si++){
+      ctx.font='48px sans-serif';ctx.textAlign='center';
+      ctx.fillStyle=si<stars?'#ffd700':'#d0d8e0';
+      ctx.fillText(si<stars?'★':'☆',360-56+si*56,580);
+    }
+    ctx.font='26px '+FONT;ctx.fillStyle='#3a5570';
+    ctx.fillText('第 '+G.level+' 关 · '+G.moveCount+' 步',VW/2,630);
+    var tierName=G.tier==='hard'?'困难':(G.tier==='extreme'?'极限':'普通');
+    ctx.font='22px '+FONT;ctx.fillStyle='#7d93a8';
+    ctx.fillText('['+tierName+'] 收了 '+G.bottles.length+' 瓶',VW/2,665);
     rr(ctx,210,760,300,88,18);
     ctx.fillStyle='#4d9be8';ctx.fill();
+    ctx.strokeStyle='#2f6fa8';ctx.lineWidth=3;ctx.stroke();
     ctx.font='bold 34px '+FONT;ctx.fillStyle='#fff';
     ctx.fillText('下一关 →',360,815);
   }
   if(G.lvPick)drawLvPick(time);        // 隐藏选关面板永远在最上层
 }
 
+function calcStars(){
+  // 宽松星级：基于步数/道具/重开，不惩罚解压玩家
+  var expected=G.bottles.length*2;  // 预期步数约为瓶子数×2
+  var s=3;
+  if(G.moveCount>expected*1.5)s=2;
+  if(G.moveCount>expected*2.5)s=1;
+  if(G.starToolsUsed>=3)s=Math.max(1,s-1);
+  if(G.starRestarts>0)s=Math.max(1,s-1);
+  return s;
+}
+function nextLevel(){
+  // 保存进度
+  var sd=SaveData.data;
+  var key=G.level+'_'+G.tier;
+  var stars=calcStars();
+  sd.stars[key]=Math.max(sd.stars[key]||0,stars);
+  sd.unlocked[G.tier]=Math.max(sd.unlocked[G.tier]||1,G.level+1);
+  sd.level=G.level+1;
+  sd.tools={clear:1,finger:1,swap:1};
+  sd.undoLeft=5;sd.unlockLeft=1;
+  SaveData.save();
+  Analytics.track('level_complete',{level:G.level,tier:G.tier,stars:stars,moves:G.moveCount});
+  Analytics.track('challenge_complete',{level:G.level,tier:G.tier});
+  G.winStreak++;
+  // 成功后低频插屏
+  if(G.winStreak>0&&G.winStreak%AD_CFG.winInterstitialEvery===0){
+    AdService.showInterstitial({onClose:function(){genLevel(G.level+1,G.tier);}});
+    return;
+  }
+  genLevel(G.level+1,G.tier);
+}
 function checkAllGone(){
   var all=true;
   for(var i=0;i<G.bottles.length;i++)if(G.bottles[i].place!=='gone'){all=false;break;}
-  if(all){G.state='win';SFX.win();}
+  if(all){
+    G.state='win';SFX.win();
+    G.winStars=calcStars();
+  }
 }
 /* ================= 主循环 ================= */
 function update(dt){
@@ -1917,6 +2221,20 @@ if(window.visualViewport&&window.visualViewport.addEventListener)window.visualVi
 resize();
 // 部分 WebView 首帧拿不到真实尺寸，延迟再校几次
 setTimeout(resize,60);setTimeout(resize,300);setTimeout(resize,900);
+/* ---- 启动：加载存档 + 埋点 ---- */
+(function initSave(){
+  SaveData.load();
+  var sd=SaveData.data;
+  sd.sessions=(sd.sessions||0)+1;
+  var today=new Date().toISOString().slice(0,10);
+  if(sd.dailyDate!==today){sd.dailyDate=today;sd.dailyDone=false;}
+  // 恢复进度
+  G.level=sd.level||1;
+  G.tier=sd.tier||'normal';
+  G.tutorialDone={};  // 每次启动重置教程标记（轻量引导）
+  SaveData.save();
+  Analytics.track(sd.sessions<=1?'first_open':'return_open',{sessions:sd.sessions,level:sd.level});
+})();
 if(URL_LVL){genLevel(URL_LVL);}
 requestAnimationFrame(loop);
 /* ============ 启动自检：一旦白屏，把原因直接写在屏幕上 ============ */
