@@ -94,7 +94,11 @@ var TUBE_CUT_Y=110;   // 水柱顶到这条线以上 = 顶部出画面：管口�
 var TUBE_FADE_H=160;  // 顶部渐隐遮罩的高度（0 → 160 由不透明渐变到全透明）
 var TUBE_W=92; // 兼容保留（实际用 G.tubeW）
 var SLOT_Y=700;       // 台面表面（瓶底）
-var GRID_Y0=745;      // 底部货架起始 y（实际用 G.gridY0，会按行数垂直居中）
+var GRID_Y0=766;      // 底部货架起始 y（实际用 G.gridY0，会按行数垂直居中）
+                      // 766 不是拍脑袋：货架瓶子的**瓶盖**画在「格子上沿上方约 17px」
+                      // （瓶盖顶 = 格子上沿 + tile/2 + 11 - bh），而台面瓶子的刻度格下沿在
+                      // SLOT_Y+38 = 738。766 让所有 3~5 行的组合都留出 ≥7px 空隙，
+                      // 不会出现「货架瓶盖顶到台面刻度」这种层叠感。
 var GX=10, GY=12;     // 货架格子间距（压小间距，把省下的空间让给格子本身）
 var GRID_ROWS=3;      // 货架固定 3 行（列数按瓶子数自算）
 var TOOL_Y=1176, TOOL_H=96, TOOL_W=130, TOOL_GAP=10, TOOL_X0=15;
@@ -172,9 +176,14 @@ function levelPlan(lv){
   if(lv<4)gates=0; else if(gates<1)gates=1;
   var ice=Math.min(1+era+(peak?1:0)-(breathe?1:0),4);          // 0..4 个冰冻瓶
   if(lv<3)ice=0; else if(ice<0)ice=0;
-  var slots=Math.min(5+(era>=2?1:0)+(era>=5?1:0),7);           // 台面槽 5~7（其中最右 1 个广告解锁）
-  if(breathe)slots=Math.min(slots+1,7);                        // 放水关多给一个槽
-  if(peak)slots=(era>=6?4:5);                                  // 峰值关收紧；后期峰值只给 4 个
+  /* 台面槽：基准 5 → 6 → 7，放水关 +1，峰值关 -1。
+     原来后期峰值关直接压到 4 槽，而其中最右 1 个还是广告解锁位 ——
+     实际只有 3 个免费槽，同时颜色 6 种、瓶子 36 个，属于「难上加难」的叠加惩罚，
+     玩家感受就是「玩得太累」。这里给死下限 5（= 4 个免费槽），峰值关靠门洞/冰冻变难，
+     不再靠砍槽位变难。 */
+  var slots=Math.min(5+(era>=2?1:0)+(era>=5?1:0),7);
+  if(breathe)slots=Math.min(slots+1,7);
+  if(peak)slots=Math.max(5,slots-1);
   /* 水管根数由关卡驱动（不再是「水太多才加管」）：3 → 9，第 25 关起 9 根封顶。
      管多 = 选择多 = 更像真·水柱矩阵，同时每根管的水层随关卡变多 → 水柱顶出屏幕。 */
   var tubes=Math.min(3+Math.floor((lv-1)*2/7),9);   // 3→9：第 15 关 7 根，第 22 关起 9 根封顶
@@ -1454,9 +1463,9 @@ function drawJarCounter(b,time){
       ctx.fillStyle=(k<b.fill)?COLORS[b.col]:'rgba(96,130,160,0.30)';ctx.fill();
       ctx.strokeStyle='rgba(74,106,136,0.75)';ctx.lineWidth=1.5;ctx.stroke();
     }
-    rr(ctx,x-34,y+44,68,10,5);
-    ctx.fillStyle='rgba(255,255,255,0.7)';ctx.fill();
-    if(b.fill>0){rr(ctx,x-34,y+44,Math.max(10,68*(b.fill/b.cap)),10,5);ctx.fillStyle=COLORS[b.col];ctx.fill();}
+    /* 这里原来还画一条 68×10 的进度条，和上面的刻度格是**同一份信息**（重复），
+       而且它的下沿到 y+54，比刻度格低 16px —— 正是它把底部货架挤下去、
+       让货架瓶子顶到台面刻度上。去掉后：信息不丢，货架能多留 20px 呼吸空间。 */
   }
 }
 function drawSlot(s){

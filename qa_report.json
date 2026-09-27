@@ -1,0 +1,66 @@
+{
+  "at": "2026-09-27T01:45:13.989Z",
+  "green": true,
+  "total": {
+    "pass": 243,
+    "fail": 0,
+    "warn": 0
+  },
+  "suites": [
+    {
+      "key": "func",
+      "name": "功能测试（点击级回归用例）",
+      "pass": 138,
+      "fail": 0,
+      "warn": 0,
+      "ms": 4419,
+      "fails": [],
+      "warns": [],
+      "unstable": false
+    },
+    {
+      "key": "arch",
+      "name": "架构测试（单文件 / ES5 / 零依赖 / 兜底）",
+      "pass": 31,
+      "fail": 0,
+      "warn": 0,
+      "ms": 644,
+      "fails": [],
+      "warns": [],
+      "unstable": false
+    },
+    {
+      "key": "design",
+      "name": "设计测试（关卡与布局不变量）",
+      "pass": 27,
+      "fail": 0,
+      "warn": 0,
+      "ms": 786,
+      "fails": [],
+      "warns": [],
+      "unstable": false
+    },
+    {
+      "key": "ui",
+      "name": "UI 测试（命中回转 / 拒绝反馈 / 多分辨率）",
+      "pass": 17,
+      "fail": 0,
+      "warn": 0,
+      "ms": 1264,
+      "fails": [],
+      "warns": [],
+      "unstable": false
+    },
+    {
+      "key": "bot",
+      "name": "合理性测试（机器人贪心通关 1~30 关）",
+      "pass": 30,
+      "fail": 0,
+      "warn": 0,
+      "ms": 56493,
+      "fails": [],
+      "warns": [],
+      "unstable": false
+    }
+  ]
+}
