@@ -1,17 +1,17 @@
 # 《解压水消除》自动测试报告
 
-> 生成时间：2026-09-27 01:45:13　|　命令：`node qa_run.js`
+> 生成时间：2026-09-27 05:41:09　|　命令：`node qa_run.js`
 
 ## 结论：✅ 全部通过
 
 | 套件 | 通过 | 失败 | 提醒 | 耗时 |
 |---|---|---|---|---|
-| 功能测试（点击级回归用例） | 138 | 0 | 0 | 4419ms |
-| 架构测试（单文件 / ES5 / 零依赖 / 兜底） | 31 | 0 | 0 | 644ms |
-| 设计测试（关卡与布局不变量） | 27 | 0 | 0 | 786ms |
-| UI 测试（命中回转 / 拒绝反馈 / 多分辨率） | 17 | 0 | 0 | 1264ms |
-| 合理性测试（机器人贪心通关 1~30 关） | 30 | 0 | 0 | 56493ms |
-| **合计** | **243** | **0** | **0** | |
+| 功能测试（点击级回归用例） | 143 | 0 | 0 | 3876ms |
+| 架构测试（单文件 / ES5 / 零依赖 / 兜底） | 31 | 0 | 0 | 521ms |
+| 设计测试（关卡与布局不变量） | 27 | 0 | 0 | 631ms |
+| UI 测试（命中回转 / 拒绝反馈 / 多分辨率） | 17 | 0 | 0 | 1204ms |
+| 合理性测试（机器人贪心通关 1~30 关） | 30 | 0 | 0 | 65433ms |
+| **合计** | **248** | **0** | **0** | |
 
 ## 这套测试在保护什么
 
@@ -166,6 +166,11 @@ PASS  每个 5 关周期都是「峰谷—爬坡—峰值」的波浪（峰值�
 PASS  整体递增：第 30 关格子数 > 第 5 关
 PASS  行列组合多样：1~30 关至少出现 6 种不同的「行×列」
 PASS  文本无 NaN/undefined（终检）
+PASS  续接规则：台面有半瓶时优先接半瓶（不是空瓶）
+PASS  水管终点=正在接水的瓶（不是数组第一个台面瓶）
+PASS  lastPour 记录了接水瓶
+PASS  空闲时水管终点停在刚接完的瓶（不跳回数组第一个）
+PASS  台面无瓶时水管目标为 null（整条管道隐藏）
 
 === ALL GREEN ===
 
@@ -185,7 +190,7 @@ PASS  零外部依赖：不含 XMLHttpRequest
 PASS  零外部依赖：不含 WebSocket
 PASS  零外部依赖：不含 importScripts
 PASS  零外部依赖：不含 外部 http 引用
-PASS  体积可控（≤ 200 KB，当前 88.5 KB / 90642 B）
+PASS  体积可控（≤ 200 KB，当前 89.2 KB / 91383 B）
 PASS  ES5 兼容：未使用 箭头函数 =>
 PASS  ES5 兼容：未使用 let 声明
 PASS  ES5 兼容：未使用 const 声明
@@ -208,8 +213,8 @@ PASS  默认无渲染崩溃
 PASS  带 ?lvl=15 时才跳关（调试后门可控）
 PASS  连续 3 次全新加载 + 渲染 10 帧，无一次崩溃
 
-=== SUITE arch: 31 PASS / 0 FAIL / 0 WARN  (102ms) ===
-__QA__ {"suite":"arch","pass":31,"fail":0,"warn":0,"ms":102,"fails":[],"warns":[]}
+=== SUITE arch: 31 PASS / 0 FAIL / 0 WARN  (86ms) ===
+__QA__ {"suite":"arch","pass":31,"fail":0,"warn":0,"ms":86,"fails":[],"warns":[]}
 
 ```
 
@@ -247,8 +252,8 @@ PASS  管数确实涨到 9 根（第 90 关不再是 6 根的 bug 已修）
 PASS  水柱能真的顶出屏幕顶部（有压迫感）
   （40 关指标已写入 qa_design_table.tsv）
 
-=== SUITE design: 27 PASS / 0 FAIL / 0 WARN  (247ms) ===
-__QA__ {"suite":"design","pass":27,"fail":0,"warn":0,"ms":247,"fails":[],"warns":[]}
+=== SUITE design: 27 PASS / 0 FAIL / 0 WARN  (197ms) ===
+__QA__ {"suite":"design","pass":27,"fail":0,"warn":0,"ms":197,"fails":[],"warns":[]}
 
 ```
 
@@ -275,8 +280,8 @@ PASS  3 种分辨率 × 4 个关卡：绘制文字无 NaN / undefined / Infinity
 PASS  触屏（touchstart）与鼠标（mousedown）走同一条输入路径，结果一致
 PASS  点空白处不会误触发任何瓶子动作
 
-=== SUITE ui: 17 PASS / 0 FAIL / 0 WARN  (723ms) ===
-__QA__ {"suite":"ui","pass":17,"fail":0,"warn":0,"ms":723,"fails":[],"warns":[]}
+=== SUITE ui: 17 PASS / 0 FAIL / 0 WARN  (551ms) ===
+__QA__ {"suite":"ui","pass":17,"fail":0,"warn":0,"ms":551,"fails":[],"warns":[]}
 
 ```
 

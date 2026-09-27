@@ -1,8 +1,8 @@
 {
-  "at": "2026-09-27T01:45:13.989Z",
+  "at": "2026-09-27T05:41:09.340Z",
   "green": true,
   "total": {
-    "pass": 243,
+    "pass": 248,
     "fail": 0,
     "warn": 0
   },
@@ -10,10 +10,10 @@
     {
       "key": "func",
       "name": "功能测试（点击级回归用例）",
-      "pass": 138,
+      "pass": 143,
       "fail": 0,
       "warn": 0,
-      "ms": 4419,
+      "ms": 3876,
       "fails": [],
       "warns": [],
       "unstable": false
@@ -24,7 +24,7 @@
       "pass": 31,
       "fail": 0,
       "warn": 0,
-      "ms": 644,
+      "ms": 521,
       "fails": [],
       "warns": [],
       "unstable": false
@@ -35,7 +35,7 @@
       "pass": 27,
       "fail": 0,
       "warn": 0,
-      "ms": 786,
+      "ms": 631,
       "fails": [],
       "warns": [],
       "unstable": false
@@ -46,7 +46,7 @@
       "pass": 17,
       "fail": 0,
       "warn": 0,
-      "ms": 1264,
+      "ms": 1204,
       "fails": [],
       "warns": [],
       "unstable": false
@@ -57,7 +57,7 @@
       "pass": 30,
       "fail": 0,
       "warn": 0,
-      "ms": 56493,
+      "ms": 65433,
       "fails": [],
       "warns": [],
       "unstable": false
