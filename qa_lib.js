@@ -41,6 +41,7 @@ const INJECT = `window.__DBG={
   unlockBadgeAt:unlockBadgeAt, tubeAt:tubeAt, toVirtual:toVirtual,
   rowX0:rowX0, slotPos:slotPos, layoutAll:layoutAll,
   snapAnim:snapAnim, lvPickTap:lvPickTap, LV_PANEL:LV_PANEL,
+  WIN_UI:WIN_UI, TIER_UI:TIER_UI, TIER_NAME:TIER_NAME, checkAllGone:checkAllGone,
   drawBottle:drawBottle, drawJarCounter:drawJarCounter, drawGrid:drawGrid, drawSlot:drawSlot,
   CFG:CFG, Store:Store, AdService:AdService, Track:Track, SAVE_KEY:SAVE_KEY, SAVE_VER:SAVE_VER,
   levelDone:levelDone, saveProgress:saveProgress, bootSession:bootSession,

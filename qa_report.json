@@ -1,8 +1,73 @@
 {
-  "at": "2026-09-27T18:12:30.594Z",
+  "at": "2026-09-27T21:30:08.142Z",
   "green": true,
+  "gate": {
+    "ok": true,
+    "items": [
+      {
+        "id": "G1",
+        "name": "全部套件 0 FAIL",
+        "ok": true,
+        "detail": "399 项断言全过"
+      },
+      {
+        "id": "G2",
+        "name": "无 flaky（快速套件重跑 2 遍结果一致）",
+        "ok": true,
+        "detail": "2 遍重跑全部一致"
+      },
+      {
+        "id": "G2b",
+        "name": "没有套件崩溃 / 静默跳过",
+        "ok": true,
+        "detail": "7 个套件全部产出结论"
+      },
+      {
+        "id": "G3",
+        "name": "单文件体积 < 200KB（零依赖交付形态没退化）",
+        "ok": true,
+        "detail": "133.5KB / 上限 200KB"
+      },
+      {
+        "id": "G4",
+        "name": "ES5 合规（剥掉注释/字符串/正则后无 ES6+ 语法）",
+        "ok": true,
+        "detail": "扫过 88KB 纯代码，0 命中"
+      },
+      {
+        "id": "G5",
+        "name": "无外部依赖（自包含单文件）",
+        "ok": true,
+        "detail": "1 个内联 <script>，0 个 src/link/@import/url(http)"
+      },
+      {
+        "id": "G6",
+        "name": "1~40 关全部可解（每关 3 次生成）+ 水量守恒",
+        "ok": true,
+        "detail": "40 关 × 3 次，全部通过剥落式自检且水量守恒"
+      },
+      {
+        "id": "G7",
+        "name": "机器人 1~40 关全通（固定种子，可复现）",
+        "ok": true,
+        "detail": "40/40 通关；其中 1~30 关 30/30"
+      },
+      {
+        "id": "G8a",
+        "name": "发布件与主文件字节一致（改了主文件必须同步发布目录）",
+        "ok": true,
+        "detail": "md5 b27e82d4b2c8f9f78919ea0f152e7c56（136672B）"
+      },
+      {
+        "id": "G8b",
+        "name": "线上字节与本地一致（带 ?t= 破 CDN 缓存）",
+        "ok": true,
+        "detail": "线上 136672B / md5 b27e82d4b2c8f9f78919ea0f152e7c56 与发布件逐字节相同"
+      }
+    ]
+  },
   "total": {
-    "pass": 334,
+    "pass": 399,
     "fail": 0,
     "warn": 0
   },
@@ -10,10 +75,10 @@
     {
       "key": "func",
       "name": "功能测试（点击级回归用例）",
-      "pass": 164,
+      "pass": 165,
       "fail": 0,
       "warn": 0,
-      "ms": 1982,
+      "ms": 2390,
       "fails": [],
       "warns": [],
       "unstable": false
@@ -24,7 +89,7 @@
       "pass": 66,
       "fail": 0,
       "warn": 0,
-      "ms": 307,
+      "ms": 653,
       "fails": [],
       "warns": [],
       "unstable": false
@@ -35,7 +100,7 @@
       "pass": 31,
       "fail": 0,
       "warn": 0,
-      "ms": 243,
+      "ms": 425,
       "fails": [],
       "warns": [],
       "unstable": false
@@ -46,7 +111,7 @@
       "pass": 42,
       "fail": 0,
       "warn": 0,
-      "ms": 280,
+      "ms": 486,
       "fails": [],
       "warns": [],
       "unstable": false
@@ -54,10 +119,75 @@
     {
       "key": "ui",
       "name": "UI 测试（命中回转 / 拒绝反馈 / 多分辨率）",
-      "pass": 31,
+      "pass": 49,
       "fail": 0,
       "warn": 0,
-      "ms": 1133,
+      "ms": 2473,
+      "fails": [],
+      "warns": [],
+      "unstable": false
+    },
+    {
+      "key": "bot",
+      "name": "合理性测试（机器人贪心通关）",
+      "pass": 40,
+      "fail": 0,
+      "warn": 0,
+      "ms": 89665,
+      "fails": [],
+      "warns": [],
+      "unstable": false,
+      "botWon": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31,
+        32,
+        33,
+        34,
+        35,
+        36,
+        37,
+        38,
+        39,
+        40
+      ],
+      "botLost": []
+    },
+    {
+      "key": "gate",
+      "name": "上线门禁（体积 / ES5 / 依赖 / 可解性 / 线上一致）",
+      "pass": 6,
+      "fail": 0,
+      "warn": 0,
+      "ms": 978,
       "fails": [],
       "warns": [],
       "unstable": false

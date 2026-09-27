@@ -1455,6 +1455,21 @@ function startFromTitle(){
 function handleTap(cx,cy){
   ac();
   var v=toVirtual(cx,cy),vx=v.x,vy=v.y;
+  /* 选档面板：模态，最高优先级 —— 必须排在 G.state 的所有分支之前。
+     ⚠ 它由结算页的「再挑战本关」打开，而那一刻 G.state 仍是 'win'；
+     若放在 win 分支之后，点击会先在 win 分支被 return 掉，永远走不到这里（面板点不动）。 */
+  if(G.tierPick){
+    for(var tp=0;tp<TIER_UI.rows.length;tp++){
+      var row=TIER_UI.rows[tp];
+      if(vx>=120&&vx<=600&&vy>=row.y&&vy<=row.y+92){
+        if(tierUnlocked(G.level,row.id)){ G.tierPick=false; genLevel(G.level,{tier:row.id}); }
+        else { toast('先通关上一档才能解锁「'+TIER_NAME[row.id]+'」'); SFX.no(); }
+        return;
+      }
+    }
+    if(inBox(TIER_UI.close,vx,vy)){ G.tierPick=false; SFX.tap(); return; }
+    return;                                                // 点面板外：吃下点击，不穿透到结算页
+  }
   if(G.state==='title'){
     if(inBox(TITLE_UI.start,vx,vy)){ startFromTitle(); return; }
     if(inBox(TITLE_UI.daily,vx,vy)){ startDaily(); return; }
@@ -1468,21 +1483,20 @@ function handleTap(cx,cy){
     }
     if(inBox(WIN_UI.challenge,vx,vy)){ G.tierPick=true; SFX.tap(); return; }
     if(inBox(WIN_UI.home,vx,vy)){ goHome(); return; }
-    return;
-  }
-  if(G.state!=='play')return;
-  if(G.tierPick){                                         // 选档面板（模态）
-    for(var tp=0;tp<TIER_UI.rows.length;tp++){
-      var row=TIER_UI.rows[tp];
-      if(vx>=120&&vx<=600&&vy>=row.y&&vy<=row.y+92){
-        if(tierUnlocked(G.level,row.id)){ G.tierPick=false; genLevel(G.level,{tier:row.id}); }
-        else { toast('先通关上一档才能解锁「'+TIER_NAME[row.id]+'」'); SFX.no(); }
+    /* 结算弹窗里的三档方块（与 drawWinPanel 的几何一一对应）：不是纯展示 ——
+       点它可以换档重开。当前档只给引导不重开（否则又变成「点了却回到本关」）。 */
+    for(var tw=0;tw<3;tw++){
+      var tbx=150+tw*150;
+      if(vx>=tbx-58&&vx<=tbx+58&&vy>=712&&vy<=780){
+        if(!tierUnlocked(G.level,tw)){ toast('先通关上一档才能解锁「'+TIER_NAME[tw]+'」'); SFX.no(); }
+        else if(tw===G.tier){ toast('当前就是「'+TIER_NAME[tw]+'」档，点「再挑战本关」可重开'); }
+        else { genLevel(G.level,{tier:tw}); }
         return;
       }
     }
-    if(inBox(TIER_UI.close,vx,vy)){ G.tierPick=false; SFX.tap(); return; }
     return;
   }
+  if(G.state!=='play')return;
   if(G.fail){                                             // 失败面板（模态，含缓冲期）
     if(G.fail.t<0.6)return;                               // 情绪缓冲：短到不烦人，长到不误触
     for(var si=0;si<FAIL_OPTS.length;si++){
@@ -2211,13 +2225,14 @@ function drawWinPanel(time){
   drawStars(VW/2,616,34*pop,ws.stars,time);
   ctx.font='24px '+FONT;ctx.fillStyle='#6a8296';
   ctx.fillText('步数 '+ws.moves+' / 目标 '+ws.par+(ws.tools>0?(' · 道具 '+ws.tools):'')+(ws.revive>0?(' · 复活 '+ws.revive):''),VW/2,676);
-  /* 三档挑战的星数一览：让玩家看到"还有层没打" */
+  /* 三档挑战的星数一览：让玩家看到"还有层没打"。方块可点（见 handleTap 的 win 分支），
+     当前档加金边做可点的视觉暗示；未解锁保持灰。 */
   for(var t=0;t<3;t++){
-    var bx=150+t*150;
+    var bx=150+t*150, tun=tierUnlocked(G.level,t), tcur=(t===G.tier);
     rr(ctx,bx-58,712,116,68,14);
-    ctx.fillStyle=tierUnlocked(G.level,t)?'#eef6ff':'#eef1f4';ctx.fill();
-    ctx.strokeStyle=tierUnlocked(G.level,t)?'#7db4e2':'#c9d3da';ctx.lineWidth=2;ctx.stroke();
-    ctx.font='bold 22px '+FONT;ctx.fillStyle=tierUnlocked(G.level,t)?'#2e6da8':'#9aa7b2';
+    ctx.fillStyle=tun?'#eef6ff':'#eef1f4';ctx.fill();
+    ctx.strokeStyle=tun?(tcur?'#c9972f':'#7db4e2'):'#c9d3da';ctx.lineWidth=tcur?3:2;ctx.stroke();
+    ctx.font='bold 22px '+FONT;ctx.fillStyle=tun?'#2e6da8':'#9aa7b2';
     ctx.fillText(TIER_NAME[t],bx,740);
     drawStars(bx,762,9,starsOf(G.level,t),time);
   }
@@ -2227,7 +2242,7 @@ function drawWinPanel(time){
   rr(ctx,N.x,N.y,N.w,N.h,18);
   ctx.fillStyle='#4d9be8';ctx.fill();
   ctx.font='bold 32px '+FONT;ctx.fillStyle='#fff';
-  ctx.fillText(G.daily?'再来一局':'下一关 →',N.x+N.w/2,N.y+54);
+  ctx.fillText(G.daily?'重玩今日题':'下一关 →',N.x+N.w/2,N.y+54);
   rr(ctx,CH.x,CH.y,CH.w,CH.h,18);
   ctx.fillStyle='#ffe9a8';ctx.fill();
   ctx.strokeStyle='#c9972f';ctx.lineWidth=3;ctx.stroke();
@@ -2520,6 +2535,15 @@ function render(time){
   ctx.strokeStyle='rgba(96,138,178,0.85)';ctx.lineWidth=3;ctx.stroke();
   ctx.font='bold 28px '+FONT;ctx.fillStyle='#3a5570';
   ctx.fillText('重开',645,68);
+  /* 每日挑战进行中：HUD 上就要能看出来（否则玩着像普通关，结算才发现「今日挑战完成」——
+     用户会误以为是普通关通了却重开本关，这是 Bug A 的病根）。几何落在「关卡 N」与「重开」之间。 */
+  if(G.daily){
+    rr(ctx,250,28,240,60,16);
+    ctx.fillStyle='rgba(255,255,255,0.9)';ctx.fill();
+    ctx.strokeStyle='#7db4e2';ctx.lineWidth=3;ctx.stroke();
+    ctx.font='bold 28px '+FONT;ctx.fillStyle='#2e6da8';
+    ctx.fillText('📅 每日挑战',370,68);
+  }
   drawTools();
   if(G.fail)drawFailPanel(time);
   if(G.tutTip&&!G.fail&&!G.tierPick)drawTutTip(time);
@@ -2560,8 +2584,10 @@ function render(time){
     ctx.fillText(G.toast.msg,VW/2,138);
     ctx.globalAlpha=1;
   }
+  /* 选档面板是最上层模态：打开时不再叠画结算面板（否则结算面板会把它整块盖住，
+     玩家看到「弹窗上多了难度但点不动」） */
   if(G.tierPick)drawTierPanel(time);
-  if(G.state==='win')drawWinPanel(time);
+  else if(G.state==='win')drawWinPanel(time);
   if(G.lvPick)drawLvPick(time);        // 隐藏选关面板永远在最上层
 }
 

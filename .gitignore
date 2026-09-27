@@ -12,6 +12,10 @@ zz_*
 .DS_Store
 Thumbs.db
 
+# QA 工具的中间产物（每次跑都会重写，不入版本库）
+_gate.json
+_perf_raw.json
+
 # 发布产物（仅含 index.html，与 outputs/ 主文件字节一致，不入版本库）
 publish_water/index.html
 publish_taptap/index.html

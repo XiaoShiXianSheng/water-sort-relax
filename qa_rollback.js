@@ -126,14 +126,69 @@ const CASES = [
     suite: 'qa_design.js', expect: /教学关的极限档/,
     find: '  if(tier>0&&lv<=3){cells=12;colors=4;gates=1;ice=0;slots=5;tubes=3;}',
     repl: '  if(tier>0&&lv<=3){cells=20;colors=4;gates=1;ice=0;slots=5;tubes=5;}' + '   /* rollback-test */'
+  },
+  /* ---------- FIX-02：结算弹窗的三档方块从「纯展示」变成「可点」 ---------- */
+  {
+    name: '结算弹窗三档方块：删掉命中判定（方块又退回纯展示）',
+    suite: 'qa_ui.js', expect: /FIX-02a：结算弹窗点「困难」方块/,
+    find: 'if(vx>=tbx-58&&vx<=tbx+58&&vy>=712&&vy<=780){',
+    repl: 'if(false){'
+  },
+
+  /* ---------- 05:00 档新增：性能之外的两件事（修 flaky + 上线门禁）----------
+     注意：下面几条有的改的是**测试文件**、有的是**发布件**、有的干脆不改文件而是给一个
+     「线上是旧版」的场景 —— 所以用例支持 file（默认主文件）/ noPatch / liveTamper 三个开关。 */
+  {
+    name: '冒烟后不还原档位（脏档放行 → 后面一整簇普通档断言失真）',
+    file: 'test_water.js',
+    suite: 'test_water.js', expect: /冒烟随机点击后档位已还原/,
+    find: '  DBG.G.tier = 0;                                   // ← 还原为普通档（这一行是后续所有普通档断言的前提）',
+    repl: '  DBG.G.tier = 1;   /* rollback-test: 故意不还原 */'
+  },
+  {
+    name: '门禁 G3：主文件膨胀到 200KB 以上',
+    suite: 'qa_gate.js', expect: /单文件体积.*→ \d+(\.\d+)?KB \/ 上限 200KB/,
+    find: '<script>',
+    repl: '<script>/*' + 'pad'.repeat(25000) + '*/'      /* 注释填充：ES5 扫描会剥掉，所以只影响体积这一条 */
+  },
+  {
+    name: '门禁 G4：代码里混进箭头函数（老 WebView 直接语法报错）',
+    suite: 'qa_gate.js', expect: /→ 箭头函数/,
+    find: "var bg=document.createElement('canvas');",
+    repl: "var bg=document.createElement('canvas');var __rbRollback=()=>1;"
+  },
+  {
+    name: '门禁 G5：混进一个外部 <script src>',
+    suite: 'qa_gate.js', expect: /→ .*script src/,
+    find: '<script>',
+    repl: '<script src="https://cdn.example.com/analytics.js"></script>\n<script>'
+  },
+  {
+    name: '门禁 G6：layoutSolvable 恒返回 false（可解性判据被短路）',
+    suite: 'qa_gate.js', expect: /不可解：L1/,
+    find: 'for(key in occ)return false;',
+    repl: 'for(key in occ)return false;return false;   /* rollback-test */'
+  },
+  {
+    name: '门禁 G8a：改了主文件没同步发布件',
+    file: 'publish_water/index.html',
+    suite: 'qa_gate.js', expect: /≠ 发布件/,
+    find: '</body>',
+    repl: '<!--rollback-test: 发布件落后于主文件--></body>'
+  },
+  {
+    name: '门禁 G8b：线上跑的是旧版（本地起一个故意不一致的站点）',
+    suite: 'qa_gate.js', expect: /线上是旧版或没同步/,
+    noPatch: true, liveTamper: true
   }
 ];
 
 function md5(s) { return crypto.createHash('md5').update(s, 'utf8').digest('hex'); }
 
-function runSuite(file) {
+function runSuite(file, env) {
   const r = cp.spawnSync(NODE, [path.join(ROOT, file)], {
-    cwd: ROOT, encoding: 'utf8', timeout: 600000, maxBuffer: 64 * 1024 * 1024
+    cwd: ROOT, encoding: 'utf8', timeout: 600000, maxBuffer: 64 * 1024 * 1024,
+    env: Object.assign({}, process.env, env || {})
   });
   const out = (r.stdout || '') + (r.stderr || '');
   const fails = out.match(/^FAIL\b.*$/gm) || [];
@@ -141,8 +196,46 @@ function runSuite(file) {
   return { out: out, fails: fails.map(x => x.replace(/^FAIL\s+/, '')), pass: pass, rc: r.status };
 }
 
-const original = fs.readFileSync(GAME, 'utf8');
-const origHash = md5(original);
+/* 每个用例可以指定 file（默认主文件）；文件内容与 md5 按需惰性读一次，用完必须还原 */
+const fileCache = {};
+function origOf(f) {
+  const p = path.join(ROOT, f);
+  if (!fileCache[f]) {
+    const txt = fs.readFileSync(p, 'utf8');
+    fileCache[f] = { path: p, text: txt, hash: md5(txt) };
+  }
+  return fileCache[f];
+}
+
+/* 「线上是旧版」这个场景：起一个**独立进程**的站点，内容与发布件不同。
+   坑（第一次就踩了）：不能在父进程里起服务器 —— 父进程随即 spawnSync 跑子进程，
+   事件循环被阻塞，服务器根本 accept 不到连接，qa_gate 只能超时失败。
+   那样虽然也 FAIL，但验的是「取不到线上」而不是「线上不一致」，属于假绿。 */
+const HELPER_CODE = [
+  'var http=require("http"),fs=require("fs"),path=require("path");',
+  'var pub=fs.readFileSync(path.join(process.env.TAMPER_ROOT,"publish_water","index.html"),"utf8");',
+  'var t=pub.replace("</body>","<!--rollback-test: live is stale--></body>");',
+  'var s=http.createServer(function(q,r){r.writeHead(200,{"Content-Type":"text/html; charset=utf-8"});r.end(t);});',
+  's.listen(0,"127.0.0.1",function(){console.log("PORT="+s.address().port);});'
+].join('');
+function startTamperServer() {
+  return new Promise(resolve => {
+    const env = Object.assign({}, process.env, { TAMPER_ROOT: ROOT });
+    const proc = cp.spawn(NODE, ['-e', HELPER_CODE], { env: env, stdio: ['ignore', 'pipe', 'ignore'] });
+    let done = false;
+    const finish = v => { if (!done) { done = true; resolve(v); } };
+    proc.stdout.on('data', d => {
+      const m = String(d).match(/PORT=(\d+)/);
+      if (m) finish({ proc: proc, url: 'http://127.0.0.1:' + m[1] + '/' });
+    });
+    proc.on('error', () => finish({ proc: null, url: null }));
+    proc.on('exit', () => finish({ proc: null, url: null }));
+    setTimeout(() => finish({ proc: proc, url: null }), 8000);
+  });
+}
+
+const DEFAULT_FILE = 'outputs/解压水消除.html';
+const origHash = origOf(DEFAULT_FILE).hash;
 
 console.log('===== 回滚验证  ' + new Date().toISOString().replace('T', ' ').slice(0, 19) + '  =====');
 console.log('（做法：把产品代码故意改坏 → 跑对应套件 → 必须看到指定断言 FAIL → 用 md5 校验原文件已还原）');
@@ -151,28 +244,53 @@ console.log('');
 let bad = 0;
 const rows = [];
 
+/* 顶层 await 在 CommonJS 里不可用，而 liveTamper 用例要起本地服务器 → 包一层 async */
+(async function main() {
 for (const c of CASES) {
-  const hits = original.split(c.find).length - 1;
-  if (hits !== 1) {
-    bad++;
-    rows.push({ ok: false, name: c.name, why: '原文片段在文件里出现 ' + hits + ' 次（应为 1 次）—— 产品代码改过？请更新回滚用例' });
-    continue;
+  const f = c.file || DEFAULT_FILE;
+  const O = origOf(f);
+  const original = O.text;
+
+  let env = c.env || {};
+  let tamper = null;
+  if (c.liveTamper) {
+    tamper = await startTamperServer();
+    if (!tamper.url) {
+      bad++;
+      rows.push({ ok: false, name: c.name, why: '起不了本地篡改站点，这条用例没跑（不能算通过）' });
+      if (tamper.proc) { try { tamper.proc.kill(); } catch (e) { } }
+      continue;
+    }
+    env = Object.assign({}, env, { LIVE_URL: tamper.url });
   }
-  /* 改坏 → 跑 → 还原（无论跑成什么都要还原） */
+
   let r = null, err = null;
   try {
-    fs.writeFileSync(GAME, original.replace(c.find, c.repl), 'utf8');
-    r = runSuite(c.suite);
+    if (!c.noPatch) {
+      const hits = original.split(c.find).length - 1;
+      if (hits !== 1) {
+        bad++;
+        rows.push({
+          ok: false, name: c.name,
+          why: '原文片段在 ' + f + ' 里出现 ' + hits + ' 次（应为 1 次）—— 文件改过？请更新回滚用例'
+        });
+        continue;
+      }
+      fs.writeFileSync(O.path, original.replace(c.find, c.repl), 'utf8');
+    }
+    r = runSuite(c.suite, env);
   } catch (e) {
     err = e;
   } finally {
-    fs.writeFileSync(GAME, original, 'utf8');
+    if (!c.noPatch) fs.writeFileSync(O.path, original, 'utf8');
+    if (tamper && tamper.proc) { try { tamper.proc.kill(); } catch (e) { } }
   }
-  const restored = md5(fs.readFileSync(GAME, 'utf8')) === origHash;
-  if (!restored) { bad++; rows.push({ ok: false, name: c.name, why: '原文件没能还原（md5 不一致）！' }); continue; }
+
+  const restored = md5(fs.readFileSync(O.path, 'utf8')) === O.hash;
+  if (!restored) { bad++; rows.push({ ok: false, name: c.name, why: f + ' 没能还原（md5 不一致）！' }); continue; }
   if (err) { bad++; rows.push({ ok: false, name: c.name, why: '套件跑崩：' + err.message }); continue; }
 
-  const hit = r.fails.filter(f => c.expect.test(f));
+  const hit = r.fails.filter(x => c.expect.test(x));
   rows.push({
     ok: hit.length > 0, name: c.name, why: hit.length
       ? '如期 FAIL「' + hit[0].slice(0, 70) + '」（该套件 ' + r.pass + ' PASS / ' + r.fails.length + ' FAIL）'
@@ -186,5 +304,6 @@ console.log('');
 console.log('===== 回滚验证：' + rows.filter(x => x.ok).length + '/' + rows.length
   + ' 个用例如期 FAIL 且原文件已还原' + (bad ? '，有 ' + bad + ' 个异常' : '') + ' =====');
 console.log('（原文件 md5 ' + origHash.slice(0, 12) + '，校验通过：'
-  + (md5(fs.readFileSync(GAME, 'utf8')) === origHash) + '）');
+  + (md5(fs.readFileSync(origOf(DEFAULT_FILE).path, 'utf8')) === origHash) + '）');
 process.exit(bad ? 1 : 0);
+})();

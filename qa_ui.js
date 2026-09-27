@@ -528,4 +528,195 @@ guard(rep, 'UI', function () {
   }
 });
 
+/* ============ 14. 结算页语义：普通关 →「下一关」；每日挑战 →「重玩今日题」；再挑战本关 → 选档可切 ============
+   Bug A（用户报「普通关通关后按钮是再来一局、点了还在本关」）：
+     脚本实证（check_daily.js）—— 普通模式 G.daily 恒为 false、按钮本就是「下一关 →」，
+     点它真的进下一关；只有【每日挑战】才会显示「再来一局」且点击 = startDaily() 重开同题。
+     用户实际在每日挑战里，但「再来一局」文案会被读成「下一关」，这就是困惑来源。
+     修法：保留 G.daily 行为不变，把每日挑战的按钮文案改成语义明确的「重玩今日题」。
+   Bug B（用户报「再挑战本关的选档面板点不动、切不了档」）：
+     根因是 handleTap 里选档分支排在 G.state==='win' 之后 —— 打开面板那一刻 state 仍是 win，
+     点击先在 win 分支被 return，永远走不到选档分支；且渲染侧选档面板被结算面板整块盖住。
+     修法：选档分支提到最前（模态吃下所有点击、不穿透）+ 打开时不叠画结算面板。 */
+guard(rep, '结算页-选档', function () {
+
+  const btnOf = (t) => ({
+    next: t.some(s => s.indexOf('下一关') >= 0),
+    replay: t.some(s => s.indexOf('再来一局') >= 0),
+    replayDaily: t.some(s => s.indexOf('重玩今日题') >= 0),
+    panelWin: t.some(s => s.indexOf('收完') >= 0),      // 结算面板标题「🎉 全部收完！」
+    panelTier: t.some(s => s.indexOf('挑战档位') >= 0)  // 选档面板标题「第 N 关 · 挑战档位」
+  });
+  /* 只清空瓶子 + 走产品自己的结算入口 levelDone()，不改状态机的其它部分 */
+  function forceWin(g) {
+    g.DBG.G.bottles.forEach(b => { b.place = 'gone'; });
+    g.DBG.levelDone(); g.frames(3);
+    g.DBG.G.winStreak = 0; g.DBG.G.interPending = false;   // 隔离插屏，避免干扰
+  }
+  /* 生成指定关并结算；tiers = 构造该关已解锁到哪一档（覆盖 levelDone 的自动解锁） */
+  function winOn(g, lv, tiers) {
+    g.DBG.gen(lv, { tier: 0 }); g.frames(4);
+    g.DBG.Store.reset();
+    forceWin(g);
+    g.DBG.Store.data.tiers[lv] = (tiers === undefined ? 1 : tiers);
+    return g.DBG.G;
+  }
+
+  /* ---- Bug A：普通模式 ---- */
+  {
+    const g = fresh(); enter(g);
+    const G = winOn(g, 1, 0);
+    const bt = btnOf(g.renderOnce());
+    rep.ok('Bug A：普通模式通关后 G.daily===false（主按钮语义应为「下一关」）',
+      G.daily === false && !!G.winStats && G.winStats.daily === false,
+      'daily=' + G.daily + ' winStats.daily=' + (G.winStats && G.winStats.daily));
+    rep.ok('Bug A：普通模式通关页主按钮显示「下一关 →」（不是「再来一局」）',
+      bt.next && !bt.replay && !bt.replayDaily, JSON.stringify(bt));
+    const lv0 = G.level, N = g.DBG.WIN_UI.next;
+    g.viewClick(N.x + N.w / 2, N.y + N.h / 2); g.frames(6);
+    rep.ok('Bug A：普通模式点主按钮真的进入下一关（level+1 且回到 play）',
+      G.state === 'play' && G.level === lv0 + 1, 'state=' + G.state + ' level=' + G.level);
+  }
+
+  /* ---- Bug A：每日挑战 ---- */
+  {
+    const g = fresh();
+    g.DBG.startDaily(); g.frames(5);
+    const G = g.DBG.G, lv0 = G.level;
+    forceWin(g);
+    const bt = btnOf(g.renderOnce());
+    rep.ok('Bug A：每日挑战通关页主按钮文案是「重玩今日题」（不再被读成「下一关」）',
+      G.daily === true && bt.replayDaily && !bt.next && !bt.replay, JSON.stringify(bt));
+    const N = g.DBG.WIN_UI.next;
+    g.viewClick(N.x + N.w / 2, N.y + N.h / 2); g.frames(6);
+    rep.ok('Bug A：每日挑战点主按钮仍是重开今日同一局（行为未被改动）',
+      G.state === 'play' && G.daily === true && G.level === lv0,
+      'state=' + G.state + ' daily=' + G.daily + ' level=' + G.level);
+  }
+
+  /* ---- Bug A：入口普查（防「普通关被 daily 污染」这类回归） ---- */
+  {
+    const g = fresh(); enter(g);
+    const G = g.DBG.G, bad = [];
+    if (G.daily !== false) bad.push('进入后 daily=' + G.daily);
+    g.viewClick(645, 58); g.frames(2);                       // HUD「重开」→ genLevel(G.level)
+    if (G.daily !== false) bad.push('HUD重开后 daily=' + G.daily);
+    forceWin(g);                                             // 通关 →「下一关」→ genLevel(G.level+1)
+    const N = g.DBG.WIN_UI.next;
+    g.viewClick(N.x + N.w / 2, N.y + N.h / 2); g.frames(4);
+    if (G.daily !== false || G.state !== 'play') bad.push('「下一关」后 daily=' + G.daily + ' state=' + G.state);
+    const g2 = loadGame({ search: '?lvl=12' }); g2.frames(4); // ?lvl= 启动 → genLevel(URL_LVL)
+    if (g2.DBG.G.daily !== false) bad.push('?lvl= 启动 daily=' + g2.DBG.G.daily);
+    rep.ok('Bug A：非每日入口（进入/HUD重开/下一关/?lvl=）G.daily 恒为 false（无污染路径）',
+      bad.length === 0, bad.join(' | '));
+  }
+
+  /* ---- Bug B：再挑战本关 → 选档面板真的能点、能切档 ---- */
+  {
+    const g = fresh(); enter(g);
+    const G = winOn(g, 9, 1);                                // 困难档已解锁
+    const D = g.DBG, CH = D.WIN_UI.challenge;
+    g.viewClick(CH.x + CH.w / 2, CH.y + CH.h / 2); g.frames(3);
+    const bt = btnOf(g.renderOnce());
+    rep.ok('Bug B：点「再挑战本关」→ 选档面板打开（G.tierPick===true）',
+      G.tierPick === true, 'tierPick=' + G.tierPick);
+    rep.ok('Bug B：选档面板打开时不再叠画结算面板（渲染只见选档面板）',
+      bt.panelTier && !bt.panelWin, JSON.stringify(bt));
+    const r1 = D.TIER_UI.rows.filter(r => r.id === 1)[0];
+    g.viewClick(360, r1.y + 46); g.frames(5);
+    rep.ok('Bug B：点已解锁的「困难」档 → 真的换档（tier=1）并开局（回到 play）',
+      G.state === 'play' && G.tier === 1 && G.tierPick === false,
+      'state=' + G.state + ' tier=' + G.tier + ' tierPick=' + G.tierPick);
+    rep.ok('Bug B：换档后关卡号不变（同一关的递进挑战）', G.level === 9, 'level=' + G.level);
+  }
+
+  /* ---- Bug B：未解锁档有提示、关闭能回结算页 ---- */
+  {
+    const g = fresh(); enter(g);
+    const G = winOn(g, 9, 0);                                // 只解锁普通档
+    const D = g.DBG, CH = D.WIN_UI.challenge;
+    g.viewClick(CH.x + CH.w / 2, CH.y + CH.h / 2); g.frames(2);
+    const opened = G.tierPick === true;
+    G.toast = null;
+    const r1 = D.TIER_UI.rows.filter(r => r.id === 1)[0];
+    g.viewClick(360, r1.y + 46); g.frames(2);
+    rep.ok('Bug B：点未解锁的档位 → 有提示且不开局（仍停在结算/选档页）',
+      opened && G.tierPick === true && G.state === 'win' && !!G.toast && G.tier === 0,
+      'opened=' + opened + ' tierPick=' + G.tierPick + ' state=' + G.state
+      + ' toast=' + (G.toast && G.toast.msg) + ' tier=' + G.tier);
+    const CL = D.TIER_UI.close;
+    g.viewClick(CL.x + CL.w / 2, CL.y + CL.h / 2); g.frames(2);
+    rep.ok('Bug B：点「关闭」→ 关掉选档面板、回到结算页',
+      G.tierPick === false && G.state === 'win', 'tierPick=' + G.tierPick + ' state=' + G.state);
+  }
+
+  /* ---- FIX-02：结算弹窗的「三档方块」必须可点 + 每日挑战在 HUD 上可辨识 ----
+     用户原话「弹窗上加了新的难度，但那个难度我根本点不动」有两半：选档面板（Bug B）已修，
+     另一半是**结算弹窗里那三个档位方块**（drawWinPanel 只画星数、从无命中判定）——
+     它旁边还写着「同一关还有更高挑战 →」，玩家必然去点。
+     方块几何与 drawWinPanel 一致：中心 (150 + t*150, 746)，命中盒 x±58 / y∈[712,780]。 */
+  {
+    const box = (i) => ({ x: 150 + i * 150, y: 746 });
+
+    /* 02a-1：点「困难」方块 → 真的换档并开局，关卡号不变 */
+    const g = fresh(); enter(g);
+    const G = winOn(g, 9, 2);                       // 已解锁困难/极限
+    g.viewClick(box(1).x, box(1).y); g.frames(5);
+    rep.ok('FIX-02a：结算弹窗点「困难」方块 → 真的换档（tier 0→1）并开局（回到 play），关卡号不变',
+      G.state === 'play' && G.tier === 1 && G.level === 9,
+      'state=' + G.state + ' tier=' + G.tier + ' level=' + G.level);
+
+    /* 02a-2：点「当前档」方块 → 语义硬要求：不许重开 */
+    const g0 = fresh(); enter(g0);
+    const G0 = winOn(g0, 9, 1);                     // 当前档 = 0（普通）
+    G0.toast = null;
+    g0.viewClick(box(0).x, box(0).y); g0.frames(3);
+    rep.ok('FIX-02a：点「当前档」方块 → 不重开（仍停在结算页，level/tier 不变）且给 toast 引导',
+      G0.state === 'win' && G0.tier === 0 && G0.level === 9 && !!G0.toast,
+      'state=' + G0.state + ' tier=' + G0.tier + ' level=' + G0.level
+      + ' toast=' + (G0.toast && G0.toast.msg));
+
+    /* 02a-3：点「未解锁」方块 → 有提示、不开局 */
+    const g1 = fresh(); enter(g1);
+    const G1 = winOn(g1, 9, 0);                     // 只解锁普通档
+    G1.toast = null;
+    g1.viewClick(box(2).x, box(2).y); g1.frames(3);
+    rep.ok('FIX-02a：点「未解锁」方块 → 有提示、不开局、仍停在结算页',
+      G1.state === 'win' && G1.tier === 0 && !!G1.toast,
+      'state=' + G1.state + ' tier=' + G1.tier + ' toast=' + (G1.toast && G1.toast.msg));
+
+    /* 02b：每日挑战在玩的时候就能看出来（HUD 徽标）。用带 📅 的完整串，
+       避免与首页按钮「每日挑战（每天同一局）」和 toast「每日挑战：日期」混淆。 */
+    const gd = fresh();
+    gd.DBG.startDaily(); gd.frames(5);
+    gd.DBG.G.toast = null;                          // 排除 toast 文案干扰
+    const td = gd.renderOnce();
+    const gn = fresh(); enter(gn);
+    gn.DBG.G.toast = null;
+    const tn = gn.renderOnce();
+    rep.ok('FIX-02b：每日挑战进行中 HUD 显示「📅 每日挑战」徽标',
+      td.some(s => s.indexOf('📅 每日挑战') >= 0), JSON.stringify(td).slice(0, 90));
+    rep.ok('FIX-02b：普通关 HUD 不出现每日挑战徽标（两种模式在局内就能区分）',
+      !tn.some(s => s.indexOf('📅 每日挑战') >= 0), JSON.stringify(tn).slice(0, 90));
+
+    /* 02b-3：7 种分辨率（含平板横屏 + 2x DPR）徽标都在、无 NaN/undefined、无崩溃 */
+    const badRes = [];
+    for (const [w, h] of [[360, 640], [375, 667], [414, 896], [720, 1280], [1280, 720], [1440, 2560], [820, 1180]]) {
+      try {
+        const gg = loadGame({ width: w, height: h, dpr: 2 });
+        gg.frames(3);
+        gg.DBG.startDaily(); gg.frames(4);
+        gg.DBG.G.toast = null;
+        const t = gg.renderOnce();
+        const has = t.some(s => s.indexOf('📅 每日挑战') >= 0);
+        const dirty = t.some(s => s.indexOf('NaN') >= 0 || s.indexOf('undefined') >= 0
+          || s.indexOf('Infinity') >= 0);
+        if (!has || dirty) badRes.push(w + 'x' + h + (has ? '' : '(缺徽标)') + (dirty ? '(脏文字)' : ''));
+      } catch (e) { badRes.push(w + 'x' + h + '(异常' + e.message + ')'); }
+    }
+    rep.ok('FIX-02b：7 种分辨率下每日徽标都在、无 NaN/undefined、无渲染崩溃（徽标不出屏/不重叠）',
+      badRes.length === 0, badRes.join(' '));
+  }
+});
+
 rep.done();
