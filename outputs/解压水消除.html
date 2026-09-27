@@ -135,6 +135,7 @@ var G={
   mode:null, swapFirst:-1,   // null|'clear'|'swap'
   clears:0, anim:null, history:[],
   toast:null, t:0, hint:false, stuck:false,
+  lastPour:null,   // 上一次接水的瓶子：水管终点跟随它，而不是「数组里第一个台面瓶」（否则多瓶在台面时水管指错瓶）
   warn:null, lvTap:{n:0,t:0}, lvPick:false, lvPickPage:0,   // warn=醒目横幅；lvTap/lvPick=隐藏选关入口
   shareOpen:false, shared:{invite:0,help:0}
 };
@@ -204,7 +205,7 @@ function genLevel(lv){
   G.undoLeft=5; G.unlockLeft=1; G.tools={clear:1,finger:1,swap:1};
   G.clears=0; G.toast=null; particles=[]; flying=[];
   G.shareOpen=false; G.shared={invite:0,help:0}; G.stuck=false; G.hint=false; G.mode=null;
-  G.gates=[]; G.lvPick=false; G.warn=null; G.lvTap={n:0,t:0};
+  G.gates=[]; G.lvPick=false; G.warn=null; G.lvTap={n:0,t:0}; G.lastPour=null;
   var plan=levelPlan(lv);
   var gridRows=plan.rows, cellsTarget=plan.cells;
   var C=plan.colors, slotsN=plan.slots;
@@ -533,6 +534,7 @@ function tryDrinks(){
       for(var t=0;t<G.tubes.length;t++){
         if(bottomOf(G.tubes[t])===b.col){
           G.anim={type:'drink',b:b,tube:t,t:0,dur:0.55};
+          G.lastPour=b;   // 水管终点同步到真正在接水的瓶（修：多瓶在台面时水管指向数组第一个瓶的错位）
           SFX.pour();
           return;
         }
@@ -1230,10 +1232,17 @@ function drawTubeFade(){
   ctx.fillStyle=g;
   ctx.fillRect(0,0,VW,TUBE_FADE_H);
 }
+/* 水管终点目标：正在接水的瓶 > 上一次接水的瓶 > 台面上第一个瓶（数组序只是兜底）。
+   旧实现只按数组序取第一个台面瓶，多瓶在台面时会「管子指着 A 瓶、流出来的却是 B 瓶的水」。 */
+function manifoldTarget(){
+  if(G.anim&&G.anim.type==='drink')return G.anim.b;
+  if(G.lastPour&&G.lastPour.place==='counter')return G.lastPour;
+  for(var b=0;b<G.bottles.length;b++){if(G.bottles[b].place==='counter')return G.bottles[b];}
+  return null;
+}
 function drawManifold(time){
   // 没有瓶子在台面上时，整条汇流管道隐藏
-  var target=null;
-  for(var b=0;b<G.bottles.length;b++){if(G.bottles[b].place==='counter'){target=G.bottles[b];break;}}
+  var target=manifoldTarget();
   if(!target)return;
   var jy=G.junctionY;
   ctx.strokeStyle='#6fa7d8';ctx.lineCap='round';

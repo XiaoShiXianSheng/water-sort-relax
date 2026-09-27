@@ -57,6 +57,7 @@ code = code.slice(0, i)
   + 'cellRect:cellRect,cellAt:cellAt,checkStuck:checkStuck,'
   + 'layoutSolvable:layoutSolvable,iceAt:iceAt,drawJarCounter:drawJarCounter,get fatal(){return fatalShown;},'
   + 'plan:levelPlan,snapAnim:snapAnim,lvPickTap:lvPickTap,LV_PANEL:LV_PANEL,tubeCountFor:tubeCountFor,'
+  + 'tryDrinks:tryDrinks,manifoldTarget:manifoldTarget,'
   + 'adj:function(a,b){return cellsAdjacent(a,b);}};\n  '
   + code.slice(i);
 
@@ -959,6 +960,32 @@ try {
   if (shapeSet.size < 6) console.log('  实际组合: ' + Array.from(shapeSet).join(' '));
   chk('文本无 NaN/undefined（终检）', textsClean());
 } catch (e) { console.error(e); chk('高关卡套件执行', false); }
+
+/* ================= 水管终点回归（修：多瓶在台面时管子指错瓶） =================
+   旧实现 drawManifold 按数组序取第一个台面瓶当终点，水滴颜色却取正在接的瓶 →
+   「管子指着 A 瓶、流出来的却是 B 瓶的水」。现用 manifoldTarget()：接水瓶 > lastPour > 数组兜底。 */
+try {
+  withSeed(11, () => DBG.gen(3));
+  settle();
+  const Gm = DBG.G;
+  Gm.state = 'play'; Gm.anim = null; Gm.mode = null; Gm.lastPour = null;
+  const mk = (col, fill, slot, x) => ({ col: col, cap: 6, fill: fill, locked: false, cell: -1, gate: 0, q: 0,
+    place: 'counter', slot: slot, x: x, y: 700, capT: 1, wob: 0, doneT: 0, done: false, ice: 0, shake: 0 });
+  const b0 = mk(0, 0, 0, 120);   // 数组 0 号：空瓶（旧逻辑会把管子指给它）
+  const b1 = mk(0, 2, 1, 260);   // 数组 1 号：半瓶 —— 续接规则应优先接它
+  Gm.bottles = [b0, b1];
+  Gm.tubes = [{ units: [0, 0, 0, 0], h: 144, x: 60, drop: 0 }];
+  DBG.tryDrinks();
+  chk('续接规则：台面有半瓶时优先接半瓶（不是空瓶）', !!Gm.anim && Gm.anim.type === 'drink' && Gm.anim.b === b1);
+  chk('水管终点=正在接水的瓶（不是数组第一个台面瓶）', DBG.manifoldTarget() === b1);
+  chk('lastPour 记录了接水瓶', Gm.lastPour === b1);
+  frames(40); Gm.anim = null;   // 喝完后空闲
+  chk('空闲时水管终点停在刚接完的瓶（不跳回数组第一个）', DBG.manifoldTarget() === b1);
+  Gm.lastPour = null;
+  Gm.bottles.forEach(b => { b.place = 'grid'; });
+  chk('台面无瓶时水管目标为 null（整条管道隐藏）', DBG.manifoldTarget() === null);
+  withSeed(12, () => DBG.gen(3)); settle();   // 恢复正常关卡，避免污染后续（已无后续，稳妥起见）
+} catch (e) { console.error(e); chk('水管终点套件执行', false); }
 
 console.log(failures === 0 ? '\n=== ALL GREEN ===' : '\n=== ' + failures + ' FAILURES ===');
 process.exit(failures === 0 ? 0 : 1);
