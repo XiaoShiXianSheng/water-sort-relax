@@ -31,12 +31,26 @@ guard(rep, '设计', function () {
     cells: [], rows: [], rowLen: [], ragged: [], colors: [], colorCover: [],
     water: [], tubes: [], layers: [], slots: [], gates: [], gateAdj: [], gateEmpty: [],
     ice: [], solvable: [], leftBleed: [], rightBleed: [], topBleed: [],
-    gridBottom: [], counterClash: [], missingGap: []
+    gridBottom: [], counterClash: [], missingGap: [],
+    /* 本轮新增的三条：门洞顺序可判定 / 冰冻"冻得住" / 洞里序号连续 */
+    gateQ: [], iceLoose: [], gateStackOrder: []
   };
   let maxOverflow = 0, overflowAt = 0;
 
   for (let lv = 1; lv <= LVMAX; lv++) {
-    D.gen(lv); g.frames(3);
+    D.gen(lv);
+    /* ⚠ 冰冻瓶不变量必须在「走帧之前」采：主循环每一帧都会跑 thawByNeighbors()，
+       「开局就已两格空」的冰冻瓶会在第一帧当场化开 —— 走完帧再查，永远查不到。
+       （这条断言的第一版就是这么假绿的：回滚验证把生成期的过滤条件整段删掉，
+       断言照样全绿，因为瓶子早在 frames() 里化没了。） */
+    for (let bi0 = 0; bi0 < D.G.bottles.length; bi0++) {
+      const b0 = D.G.bottles[bi0];
+      if (b0.locked <= 0 || b0.place !== 'grid') continue;
+      let emp0 = 0;
+      for (let d0 = 0; d0 < 4; d0++) if (D.neighborEmpty(b0.cell, d0)) emp0++;
+      if (emp0 >= 2) bad.iceLoose.push('L' + lv + ' cell' + b0.cell + ' 空' + emp0 + '格');
+    }
+    g.frames(3);
     const G = D.G, pl = D.plan(lv);
     const water = G.tubes.reduce((s, t) => s + t.units.length, 0);
     const need = G.bottles.reduce((s, b) => s + b.cap, 0);
@@ -82,7 +96,11 @@ guard(rep, '设计', function () {
     /* --- 水管 --- */
     if (G.tubes.length < 3 || G.tubes.length > 9) bad.tubes.push('L' + lv + '=' + G.tubes.length);
     if (maxLayer > 16) bad.layers.push('L' + lv + '=' + maxLayer);
-    const of = Math.max(0, 0 - (C.BOTT_Y - maxLayer * (G.uh || 36)));
+    /* 水柱出屏量：和功能测试用同一套定义（管顶 = BOTT_Y - (层数*水层高 + 20)，
+       超过 TUBE_CUT_Y 才叫「顶出画面」）。老公式漏了 +20 且拿 BOTT_Y 当基准，
+       恒等于 0 —— 于是这条提醒永远不会消失（等于没测）。 */
+    const tubeTop = C.BOTT_Y - (maxLayer * (G.uh || 36) + 20);
+    const of = Math.max(0, C.TUBE_CUT_Y - tubeTop);
     if (of > maxOverflow) { maxOverflow = of; overflowAt = lv; }
 
     /* --- 台面槽 --- */
@@ -98,6 +116,29 @@ guard(rep, '设计', function () {
     }
     const iceN = G.bottles.filter(b => b.locked > 0).length;
     if (iceN > pl.ice + 1) bad.ice.push('L' + lv + ' 实际' + iceN + '>计划' + pl.ice);
+
+    /* --- 门洞：序号必须连续可判定、且此刻只有一个可取（生成期就该成立） ---
+       gateFront 的「只有 q 最小的可取」是门洞玩法的全部；q 缺号/重号或出现两个 front，
+       玩家看到的就是「顺序乱了 / 点了没反应」。 */
+    for (let gq = 0; gq < G.gates.length; gq++) {
+      const inGate = G.bottles.filter(b => b.gate === gq);
+      const qs = inGate.map(b => b.q).sort((a, b) => a - b);
+      const want = [];
+      for (let k = 0; k < inGate.length; k++) want.push(k);
+      const seen = {}; let dup = false;
+      qs.forEach(q => { if (seen[q]) dup = true; seen[q] = 1; });
+      if (dup || qs.join(',') !== want.join(','))
+        bad.gateQ.push('L' + lv + ' 洞' + gq + ' q=' + qs.join(','));
+      const fronts = inGate.filter(b => D.gateFront(b));
+      if (fronts.length !== 1 || fronts[0].q !== 0)
+        bad.gateStackOrder.push('L' + lv + ' 洞' + gq + ' 可取' + fronts.length + ' 个');
+    }
+
+    /* --- 冰冻瓶必须真的"冻得住"：四邻空位 ≤1（界外也算空） ---
+       生成期 icePool 明确排除了「角落」和「开局就已两格空」的格子。若这条被破坏，
+       冰冻瓶会在第一帧的 thawByNeighbors 里立刻化开 —— 冰冻玩法等于没做；
+       它不会报错、不会崩，只会「悄悄不生效」，所以必须由断言来守。
+       （采样点在上面，genLevel 之后、g.frames 之前。） */
 
     /* --- 可解性：这是最重要的一条，玩家卡死 = 差评 --- */
     if (!D.layoutSolvable()) bad.solvable.push('L' + lv);
@@ -139,6 +180,9 @@ guard(rep, '设计', function () {
   one('**门洞两两不相邻**（相邻会互相堵死）', bad.gateAdj);
   one('每个门洞至少含 1 个瓶子（空洞 = 无效设计）', bad.gateEmpty);
   one('冰冻瓶数不超 levelPlan 计划值', bad.ice);
+  one('**门洞叠放序号连续可判定**（每个洞的 q 恰好是 0..n-1，无缺号/重号）', bad.gateQ);
+  one('**每个门洞此刻只有一个瓶子可取**（就是最外面那个 q=0）', bad.gateStackOrder);
+  one('**冰冻瓶开局"冻得住"**（四邻空位 ≤1；否则第一帧就化开，冰冻等于没做）', bad.iceLoose);
   one('**可解性自检：1~40 关全部能通关**', bad.solvable);
   one('格子左不越界（留 ≥8px 边距）', bad.leftBleed);
   one('格子右不越界（留 ≥8px 边距）', bad.rightBleed);
@@ -146,16 +190,33 @@ guard(rep, '设计', function () {
   one('货架不压底部工具栏（留 ≥8px）', bad.gridBottom);
   one('**台面与货架之间留出空隙**（货架瓶盖顶 ≥ 台面刻度底 + 4px；否则首行会顶到台面上）', bad.counterClash);
 
-  /* ============ 节奏与多样性 ============ */
+  /* ============ 节奏与多样性 ============
+     V4.0 §6：1~3 关教学（恒 9 格、快速成功）→ 4~8 关过渡 → 9 关以后靠决策密度变难。
+     所以「波浪」只在 9 关以后（第 2 个周期起）成立；教学期本来就是平的，不该套波浪。 */
   const growth = info.map(x => x.cells);
   const waveBad = [];
-  for (let cyc = 0; cyc * 5 < growth.length; cyc++) {
+  for (let cyc = 1; cyc * 5 < growth.length; cyc++) {
     const seg = growth.slice(cyc * 5, cyc * 5 + 5);
     if (seg.length < 5) continue;
     if (!(seg[4] > seg[0] && seg[4] >= seg[1] && seg[4] >= seg[2] && seg[4] >= seg[3]))
       waveBad.push('#' + (cyc + 1) + '[' + seg.join(',') + ']');
   }
-  rep.ok('波浪节奏：每 5 关一个「峰—谷—爬坡—峰值」周期', waveBad.length === 0, waveBad.join(' '));
+  rep.ok('波浪节奏：9 关以后每 5 关一个「峰—谷—爬坡—峰值」周期', waveBad.length === 0, waveBad.join(' '));
+
+  /* 教学期 1~3 必须是「无干扰的纯净局」（V4.0 §6：快速理解/快速成功/几乎不挫败） */
+  const teachBad = [];
+  for (let lv = 1; lv <= 3; lv++) {
+    const p = D.plan(lv);
+    if (!(p.cells === 9 && p.colors === 3 && p.gates === 0 && p.ice === 0)) teachBad.push('L' + lv);
+  }
+  rep.ok('教学期 1~3 关恒为 9 格 / 3 色 / 无门洞无冰冻', teachBad.length === 0, teachBad.join(' '));
+
+  /* 9 关以后难度必须体现在「决策密度」，而不是「棋盘更大」（V4.0 §5.1） */
+  const dens = [];
+  for (let lv = 1; lv <= LVMAX; lv++) dens.push(D.plan(lv).density);
+  rep.ok('9 关以后决策密度递增（第 30 关 > 第 10 关）', dens[29] > dens[9], dens[29] + ' vs ' + dens[9]);
+  rep.ok('棋盘停止扩大：全部关卡格数 ≤ 26', Math.max.apply(null, growth) <= 26,
+    '最大 ' + Math.max.apply(null, growth) + ' 格');
   rep.ok('整体递进：第 30 关格子数 > 第 5 关', growth[29] > growth[4],
     growth[29] + ' vs ' + growth[4]);
 

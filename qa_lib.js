@@ -41,10 +41,14 @@ const INJECT = `window.__DBG={
   unlockBadgeAt:unlockBadgeAt, tubeAt:tubeAt, toVirtual:toVirtual,
   rowX0:rowX0, slotPos:slotPos, layoutAll:layoutAll,
   snapAnim:snapAnim, lvPickTap:lvPickTap, LV_PANEL:LV_PANEL,
-  AdService:AdService, Analytics:Analytics, SaveData:SaveData, AD_CFG:AD_CFG,
-  doRevive:doRevive, adRefillTool:adRefillTool, restoreSafeSnap:restoreSafeSnap, saveSafeSnap:saveSafeSnap,
-  calcStars:calcStars, nextLevel:nextLevel,
   drawBottle:drawBottle, drawJarCounter:drawJarCounter, drawGrid:drawGrid, drawSlot:drawSlot,
+  CFG:CFG, Store:Store, AdService:AdService, Track:Track, SAVE_KEY:SAVE_KEY, SAVE_VER:SAVE_VER,
+  levelDone:levelDone, saveProgress:saveProgress, bootSession:bootSession,
+  totalStars:totalStars, tierUnlocked:tierUnlocked, starsOf:starsOf,
+  startDaily:startDaily, dateKey:dateKey, dailySeed:dailySeed, dailyDoneToday:dailyDoneToday,
+  enterFail:enterFail, doRevive:doRevive, hasLegalDecision:hasLegalDecision,
+  refillTool:refillTool, waterLeft:waterLeft, findSafeSnapshotIdx:findSafeSnapshotIdx, doUndo:doUndo,
+  useClear:useClear, useSwap:useSwap, thawByNeighbors:thawByNeighbors, snapshot:snapshot,
   setView:function(w,h){ cw=w; ch=h; dpr=1;
     scale=Math.min(cw/VW,ch/VH); if(!isFinite(scale)||scale<=0)scale=1;
     offX=(cw-VW*scale)/2; offY=(ch-VH*scale)/2; },
@@ -52,6 +56,7 @@ const INJECT = `window.__DBG={
   consts:function(){ return {VW:VW,VH:VH,UH:UH,BOTT_Y:BOTT_Y,TUBE_CUT_Y:TUBE_CUT_Y,
     TUBE_FADE_H:TUBE_FADE_H,SLOT_Y:SLOT_Y,GRID_Y0:GRID_Y0,GX:GX,GY:GY,
     TOOL_Y:TOOL_Y,TOOL_H:TOOL_H,TOOL_W:TOOL_W,TOOL_GAP:TOOL_GAP,TOOL_X0:TOOL_X0,
+    TOOL_IDS:TOOLBS.map(function(t){return t.id;}),
     COLORS:COLORS.slice(), DIRS:DIRS.map(function(d){return {dx:d.dx,dy:d.dy};})}; }
 };`;
 
@@ -175,4 +180,15 @@ function guard(rep, name, fn) {
   }
 }
 
-module.exports = { loadGame, Reporter, guard, GAME };
+/* 固定随机种子：关卡是随机生成的，「特定局面」类断言不套种子就是在赌运气（flaky）。
+   用法：withSeed(20260927, function(){ D.gen(7); });
+   注意 fn 内部不要跑 frames —— 帧循环里的粒子/抖动也用 Math.random，没问题，
+   但生成完就还原种子才能保证「同一局面」的这一段是确定的。 */
+function withSeed(seed, fn) {
+  const orig = Math.random;
+  let x = seed >>> 0;
+  Math.random = function () { x = (x * 1103515245 + 12345) & 0x7fffffff; return x / 0x7fffffff; };
+  try { return fn(); } finally { Math.random = orig; }
+}
+
+module.exports = { loadGame, Reporter, guard, withSeed, GAME };

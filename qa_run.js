@@ -21,6 +21,7 @@ const REPS = Math.max(1, +(process.env.REPS || 1));
 
 const SUITES = [
   { key: 'func', name: '功能测试（点击级回归用例）', file: 'test_water.js', kind: 'checks', fast: true },
+  { key: 'biz', name: '商业化测试（广告/存档/埋点/档位/单局规模）', file: 'qa_biz.js', kind: 'qa', fast: true },
   { key: 'arch', name: '架构测试（单文件 / ES5 / 零依赖 / 兜底）', file: 'qa_arch.js', kind: 'qa', fast: true },
   { key: 'design', name: '设计测试（关卡与布局不变量）', file: 'qa_design.js', kind: 'qa', fast: true },
   { key: 'ui', name: 'UI 测试（命中回转 / 拒绝反馈 / 多分辨率）', file: 'qa_ui.js', kind: 'qa', fast: true },
@@ -140,6 +141,7 @@ L.push('');
 L.push('| 套件 | 它守的是什么 | 典型能抓到的 bug |');
 L.push('|---|---|---|');
 L.push('| 功能测试 | 每个按钮点下去的真实后果 | 道具不生效、水量不守恒、撤销错乱、广告位不触发 |');
+L.push('| 商业化测试 | 赚钱链路与存档底线 | 点了广告不发奖、没看完也发奖、重复发奖、存档被改还能读、隐私模式白屏 |');
 L.push('| 架构测试 | 单文件交付的地基 | 混进外部依赖、用了老 WebView 不支持的语法、线上白屏没兜底 |');
 L.push('| 设计测试 | 关卡数值自洽 | 关卡表写死导致高关不再变难、水量对不上、门洞相邻互锁、货架压住台面进度条 |');
 L.push('| UI 测试 | 手指戳下去会发生什么 | 点了没反应（命中框太小）、点错瓶子、静默拒绝、多分辨率下点不中、文字出现 NaN |');

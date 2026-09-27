@@ -1,19 +1,30 @@
 {
-  "at": "2026-09-27T14:22:17.663Z",
+  "at": "2026-09-27T15:15:57.710Z",
   "green": true,
   "total": {
-    "pass": 271,
+    "pass": 355,
     "fail": 0,
-    "warn": 1
+    "warn": 0
   },
   "suites": [
     {
       "key": "func",
       "name": "功能测试（点击级回归用例）",
-      "pass": 167,
+      "pass": 164,
       "fail": 0,
       "warn": 0,
-      "ms": 1174,
+      "ms": 4707,
+      "fails": [],
+      "warns": [],
+      "unstable": false
+    },
+    {
+      "key": "biz",
+      "name": "商业化测试（广告/存档/埋点/档位/单局规模）",
+      "pass": 66,
+      "fail": 0,
+      "warn": 0,
+      "ms": 597,
       "fails": [],
       "warns": [],
       "unstable": false
@@ -24,7 +35,7 @@
       "pass": 31,
       "fail": 0,
       "warn": 0,
-      "ms": 117,
+      "ms": 408,
       "fails": [],
       "warns": [],
       "unstable": false
@@ -32,23 +43,21 @@
     {
       "key": "design",
       "name": "设计测试（关卡与布局不变量）",
-      "pass": 26,
+      "pass": 33,
       "fail": 0,
-      "warn": 1,
-      "ms": 139,
+      "warn": 0,
+      "ms": 530,
       "fails": [],
-      "warns": [
-        "水柱能真的顶出屏幕顶部（有压迫感）  → 最大出屏仅 0px（第 0 关）"
-      ],
+      "warns": [],
       "unstable": false
     },
     {
       "key": "ui",
       "name": "UI 测试（命中回转 / 拒绝反馈 / 多分辨率）",
-      "pass": 17,
+      "pass": 31,
       "fail": 0,
       "warn": 0,
-      "ms": 315,
+      "ms": 2455,
       "fails": [],
       "warns": [],
       "unstable": false
@@ -59,7 +68,7 @@
       "pass": 30,
       "fail": 0,
       "warn": 0,
-      "ms": 9750,
+      "ms": 56963,
       "fails": [],
       "warns": [],
       "unstable": false

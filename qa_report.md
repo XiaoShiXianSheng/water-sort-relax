@@ -1,27 +1,25 @@
 # 《解压水消除》自动测试报告
 
-> 生成时间：2026-09-27 14:22:17　|　命令：`node qa_run.js`
+> 生成时间：2026-09-27 15:15:57　|　命令：`node qa_run.js`
 
 ## 结论：✅ 全部通过
 
 | 套件 | 通过 | 失败 | 提醒 | 耗时 |
 |---|---|---|---|---|
-| 功能测试（点击级回归用例） | 167 | 0 | 0 | 1174ms |
-| 架构测试（单文件 / ES5 / 零依赖 / 兜底） | 31 | 0 | 0 | 117ms |
-| 设计测试（关卡与布局不变量） | 26 | 0 | 1 | 139ms |
-| UI 测试（命中回转 / 拒绝反馈 / 多分辨率） | 17 | 0 | 0 | 315ms |
-| 合理性测试（机器人贪心通关 1~30 关） | 30 | 0 | 0 | 9750ms |
-| **合计** | **271** | **0** | **1** | |
-
-## 提醒（不阻塞，但要看一眼）
-
-- 设计测试（关卡与布局不变量）：水柱能真的顶出屏幕顶部（有压迫感）  → 最大出屏仅 0px（第 0 关）
+| 功能测试（点击级回归用例） | 164 | 0 | 0 | 4707ms |
+| 商业化测试（广告/存档/埋点/档位/单局规模） | 66 | 0 | 0 | 597ms |
+| 架构测试（单文件 / ES5 / 零依赖 / 兜底） | 31 | 0 | 0 | 408ms |
+| 设计测试（关卡与布局不变量） | 33 | 0 | 0 | 530ms |
+| UI 测试（命中回转 / 拒绝反馈 / 多分辨率） | 31 | 0 | 0 | 2455ms |
+| 合理性测试（机器人贪心通关 1~30 关） | 30 | 0 | 0 | 56963ms |
+| **合计** | **355** | **0** | **0** | |
 
 ## 这套测试在保护什么
 
 | 套件 | 它守的是什么 | 典型能抓到的 bug |
 |---|---|---|
 | 功能测试 | 每个按钮点下去的真实后果 | 道具不生效、水量不守恒、撤销错乱、广告位不触发 |
+| 商业化测试 | 赚钱链路与存档底线 | 点了广告不发奖、没看完也发奖、重复发奖、存档被改还能读、隐私模式白屏 |
 | 架构测试 | 单文件交付的地基 | 混进外部依赖、用了老 WebView 不支持的语法、线上白屏没兜底 |
 | 设计测试 | 关卡数值自洽 | 关卡表写死导致高关不再变难、水量对不上、门洞相邻互锁、货架压住台面进度条 |
 | UI 测试 | 手指戳下去会发生什么 | 点了没反应（命中框太小）、点错瓶子、静默拒绝、多分辨率下点不中、文字出现 NaN |
@@ -32,94 +30,38 @@
 <details><summary>功能测试（点击级回归用例）</summary>
 
 ```
-[analytics] first_open {"sessions":1,"level":1}
 PASS  标题页出现
-[analytics] game_start {}
-[analytics] level_start {"level":1,"tier":"normal"}
 PASS  点击开始进入游戏
-[analytics] ad_request {"type":"rewarded","placement":"tool_refill_finger","provider":"test"}
-[analytics] ad_load_success {"type":"rewarded","placement":"tool_refill_finger","provider":"test"}
-[analytics] ad_show {"type":"rewarded","placement":"tool_refill_finger"}
-[analytics] ad_complete {"type":"rewarded","placement":"tool_refill_finger"}
-[analytics] reward_granted {"placement":"tool_refill_finger"}
-[analytics] level_complete {"level":1,"tier":"normal","stars":2,"moves":9}
-[analytics] challenge_complete {"level":1,"tier":"normal"}
-[analytics] level_start {"level":2,"tier":"normal"}
-[analytics] level_start {"level":2,"tier":"normal"}
-[analytics] level_exit {"level":2}
-[analytics] session_duration {"sec":0}
-[analytics] game_start {}
-[analytics] level_start {"level":2,"tier":"normal"}
-[analytics] level_start {"level":2,"tier":"normal"}
-[analytics] level_exit {"level":2}
-[analytics] session_duration {"sec":0}
-[analytics] game_start {}
-[analytics] level_start {"level":2,"tier":"normal"}
-[analytics] ad_request {"type":"rewarded","placement":"tool_refill_finger","provider":"test"}
-[analytics] ad_load_success {"type":"rewarded","placement":"tool_refill_finger","provider":"test"}
-[analytics] ad_show {"type":"rewarded","placement":"tool_refill_finger"}
-[analytics] ad_complete {"type":"rewarded","placement":"tool_refill_finger"}
-[analytics] reward_granted {"placement":"tool_refill_finger"}
-[analytics] level_start {"level":2,"tier":"normal"}
-[analytics] level_start {"level":2,"tier":"normal"}
-[analytics] level_exit {"level":2}
-[analytics] session_duration {"sec":0}
-[analytics] game_start {}
-[analytics] level_start {"level":2,"tier":"normal"}
-[analytics] level_exit {"level":2}
-[analytics] session_duration {"sec":0}
-[analytics] game_start {}
-[analytics] level_start {"level":2,"tier":"normal"}
-[analytics] level_exit {"level":2}
-[analytics] session_duration {"sec":0}
-[analytics] game_start {}
-[analytics] level_start {"level":2,"tier":"normal"}
-[analytics] level_exit {"level":2}
-[analytics] session_duration {"sec":0}
-[analytics] game_start {}
-[analytics] level_start {"level":2,"tier":"normal"}
 PASS  冒烟：随机乱点 400 次 + 3000 帧无异常
 PASS  冒烟：文本无 NaN/undefined
-[analytics] level_start {"level":2,"tier":"normal"}
 PASS  机器人通关 第 2 关
-[analytics] level_start {"level":4,"tier":"normal"}
 PASS  机器人通关 第 4 关（含锁定瓶）
-[analytics] level_start {"level":6,"tier":"normal"}
 PASS  机器人通关 第 6 关（6 色 12 瓶）
 PASS  结算页文本无 NaN/undefined
-[analytics] level_start {"level":1,"tier":"normal"}
 PASS  直接点台面瓶子不会退回（需先点撤销）
 PASS  点撤销进入退回模式
 PASS  退回模式下点瓶子放回格子
 PASS  放置后撤销能还原台面
-[analytics] level_start {"level":2,"tier":"normal"}
 PASS  台面只留 1 个广告解锁槽
 PASS  点播放按钮解锁台面槽
-[analytics] level_start {"level":1,"tier":"normal"}
-[analytics] level_exit {"level":1}
-[analytics] session_duration {"sec":1}
-PASS  点首页按钮回到标题页
-[analytics] game_start {}
-[analytics] level_start {"level":2,"tier":"normal"}
-PASS  标题页点击开始进入游戏
-[analytics] level_start {"level":3,"tier":"normal"}
+PASS  道具用完 → 看广告补 1 次（Test Mode）
+PASS  补次不越权：不会自动替玩家进入清除模式
+PASS  补次后的奖励真的可用（再点一次即进入清除模式）
+PASS  撤销用尽 → 看广告补 1 次
+PASS  超过激励广告会话上限 → 拒绝发奖（拦截不弹）
+PASS  假分享已删除（工具栏不再有分享按钮）
 PASS  水量与瓶子需求严格守恒
 PASS  开局所有瓶子为空（0%）
-[analytics] level_start {"level":6,"tier":"normal"}
 PASS  第 6 关水量守恒
-[analytics] level_start {"level":3,"tier":"normal"}
 PASS  出现接水动画
 PASS  接水过程中还能放别的瓶子
-[analytics] level_start {"level":1,"tier":"normal"}
 PASS  喝满消除被中断后瓶子正常离场（不隐形占位）
 PASS  槽位占用与 freeSlot 判定一致
-[analytics] level_start {"level":4,"tier":"normal"}
-PASS  第 4 关存在冰冻瓶
+PASS  第 7 关存在冰冻瓶（V4.0：冰冻从第 7 关起）
 PASS  点冰冻瓶不再靠点击次数解冻
 PASS  存在「三面在货架内、只有一面朝界外」的格子
 PASS  冰冻瓶：四向里只有界外那一侧算空时不解冻
 PASS  冰冻瓶：界内任意一格空出来就解冻（不再只认左右两格）
-[analytics] level_start {"level":6,"tier":"normal"}
 PASS  第 6 关出现门洞
 PASS  能拿到一个「洞内多瓶 + 洞口朝格子内部」的门洞
 PASS  门洞里塞了多个瓶子
@@ -129,39 +71,26 @@ PASS  打通洞口后判定为可取
 PASS  洞口通了就能取走最前面的瓶子
 PASS  洞里的下一个顶上来
 PASS  门洞剩余数量与洞里实际瓶数一致
-[analytics] level_start {"level":1,"tier":"normal"}
-[analytics] level_fail {"level":1,"tier":"normal"}
-PASS  真无路可走时弹出失败面板
-[analytics] level_start {"level":1,"tier":"normal"}
-PASS  面板「重新开始」可用
-[analytics] level_start {"level":1,"tier":"normal"}
-[analytics] level_fail {"level":1,"tier":"normal"}
-[analytics] ad_request {"type":"rewarded","placement":"revive","provider":"test"}
-[analytics] ad_load_success {"type":"rewarded","placement":"revive","provider":"test"}
-[analytics] ad_show {"type":"rewarded","placement":"revive"}
-[analytics] ad_complete {"type":"rewarded","placement":"revive"}
-[analytics] reward_granted {"placement":"revive"}
-[analytics] revive_success {"level":1}
-PASS  面板「看广告复活」恢复安全快照
-[analytics] level_start {"level":1,"tier":"normal"}
-[analytics] level_start {"level":3,"tier":"normal"}
-[analytics] level_start {"level":5,"tier":"normal"}
-[analytics] level_start {"level":20,"tier":"normal"}
-[analytics] level_start {"level":30,"tier":"normal"}
+PASS  真无路可走时进入失败面板（不是静默干等）
+PASS  失败面板有明确的失败原因
+PASS  失败时自动记下了安全快照点（用于复活）
+PASS  失败面板入场缓冲期内不接受点击
+PASS  面板「重新开始本关」可用
+PASS  第二次也正确进入失败态
+PASS  看广告复活 → 回到可玩状态（面板关闭）
+PASS  复活后一定存在至少一个合法有效的决策
+PASS  复活消耗了复活次数（受每局上限约束）
+PASS  复活后记了埋点（revive_granted）
+PASS  复活次数用满 → 不再放行复活（拒绝而不是无限复活）
+PASS  面板「回首页」可用
 PASS  开局（第 1 关）就是 3×3 = 9 格
 PASS  整体递增：第 20 关格子数 > 第 5 关
 PASS  整体递增：第 30 关格子数 ≥ 第 20 关
 PASS  不会倒退：第 3 关格子数 ≥ 第 1 关
-[analytics] level_start {"level":8,"tier":"normal"}
 PASS  水管数在 3~9 之间（关卡驱动，不再只有 5~6 根）
 PASS  台面槽 5~7 个
 PASS  第 8 关出现门洞
 PASS  高关卡格子仍能装下所有瓶子（门洞里的共用一格）
-[analytics] level_start {"level":1,"tier":"normal"}
-[analytics] level_start {"level":15,"tier":"normal"}
-[analytics] level_start {"level":25,"tier":"normal"}
-[analytics] level_start {"level":30,"tier":"normal"}
-[analytics] level_start {"level":30,"tier":"normal"}
 PASS  第 1 关 3 根管（新手关保持清爽）
 PASS  第 15 关至少 6 根管（原版这里只有 4 根）
 PASS  第 25 关至少 8 根管
@@ -170,298 +99,181 @@ PASS  水层高度下限 28（不再为了不出屏把水柱压扁到 14~19）
 PASS  低关卡水柱不顶出画面（第 1 关看得见全貌）
 PASS  高关卡水柱真的顶出画面（第 30 关管顶越过 110）
 PASS  水柱没有夸张到整根消失（管顶不低于 -150，还能看见大半截）
-PASS  第 30 关比第 25 关更大（不再从第 26 关起永久封顶 28 格）
+PASS  格数硬上限 26 生效（第 25 / 30 关都不超过 26 格）
+PASS  后期不倒退：第 30 关格数 ≥ 第 25 关
 PASS  后期封顶后规模稳定（第 30 关两次生成格数一致）
-[analytics] level_start {"level":6,"tier":"normal"}
 PASS  台面瓶子上不再出现百分比文字（改成刻度格）
 PASS  刻度格绘制不触发致命错误（函数内变量名没写错）
 PASS  接了两口时同样不出现百分比
 PASS  进度文字改动后仍无 NaN/undefined
-[analytics] level_start {"level":1,"tier":"normal"}
-[analytics] level_start {"level":2,"tier":"normal"}
-[analytics] level_start {"level":3,"tier":"normal"}
-[analytics] level_start {"level":4,"tier":"normal"}
-[analytics] level_start {"level":5,"tier":"normal"}
-[analytics] level_start {"level":6,"tier":"normal"}
-[analytics] level_start {"level":7,"tier":"normal"}
-[analytics] level_start {"level":8,"tier":"normal"}
-[analytics] level_start {"level":9,"tier":"normal"}
-[analytics] level_start {"level":10,"tier":"normal"}
 PASS  所有关卡瓶子都固定 3 口（每口 1/3）
-[analytics] level_start {"level":1,"tier":"normal"}
-[analytics] level_start {"level":2,"tier":"normal"}
-[analytics] level_start {"level":3,"tier":"normal"}
-[analytics] level_start {"level":4,"tier":"normal"}
-[analytics] level_start {"level":5,"tier":"normal"}
-[analytics] level_start {"level":6,"tier":"normal"}
-[analytics] level_start {"level":7,"tier":"normal"}
-[analytics] level_start {"level":8,"tier":"normal"}
-[analytics] level_start {"level":9,"tier":"normal"}
-[analytics] level_start {"level":10,"tier":"normal"}
 PASS  每色瓶数尽量均分（最多相差 1 个）
 PASS  瓶子数 == 格子数 + 门洞多塞数（数量守恒）
-[analytics] level_start {"level":1,"tier":"normal"}
-[analytics] level_start {"level":1,"tier":"normal"}
-[analytics] level_start {"level":1,"tier":"normal"}
-[analytics] level_start {"level":2,"tier":"normal"}
-[analytics] level_start {"level":2,"tier":"normal"}
-[analytics] level_start {"level":2,"tier":"normal"}
-[analytics] level_start {"level":3,"tier":"normal"}
-[analytics] level_start {"level":3,"tier":"normal"}
-[analytics] level_start {"level":3,"tier":"normal"}
-[analytics] level_start {"level":4,"tier":"normal"}
-[analytics] level_start {"level":4,"tier":"normal"}
-[analytics] level_start {"level":4,"tier":"normal"}
-[analytics] level_start {"level":5,"tier":"normal"}
-[analytics] level_start {"level":5,"tier":"normal"}
-[analytics] level_start {"level":5,"tier":"normal"}
-[analytics] level_start {"level":6,"tier":"normal"}
-[analytics] level_start {"level":6,"tier":"normal"}
-[analytics] level_start {"level":6,"tier":"normal"}
-[analytics] level_start {"level":7,"tier":"normal"}
-[analytics] level_start {"level":7,"tier":"normal"}
-[analytics] level_start {"level":7,"tier":"normal"}
-[analytics] level_start {"level":8,"tier":"normal"}
-[analytics] level_start {"level":8,"tier":"normal"}
-[analytics] level_start {"level":8,"tier":"normal"}
-[analytics] level_start {"level":9,"tier":"normal"}
-[analytics] level_start {"level":9,"tier":"normal"}
-[analytics] level_start {"level":9,"tier":"normal"}
-[analytics] level_start {"level":10,"tier":"normal"}
-[analytics] level_start {"level":10,"tier":"normal"}
-[analytics] level_start {"level":10,"tier":"normal"}
-[analytics] level_start {"level":11,"tier":"normal"}
-[analytics] level_start {"level":11,"tier":"normal"}
-[analytics] level_start {"level":11,"tier":"normal"}
-[analytics] level_start {"level":12,"tier":"normal"}
-[analytics] level_start {"level":12,"tier":"normal"}
-[analytics] level_start {"level":12,"tier":"normal"}
-[analytics] level_start {"level":13,"tier":"normal"}
-[analytics] level_start {"level":13,"tier":"normal"}
-[analytics] level_start {"level":13,"tier":"normal"}
-[analytics] level_start {"level":14,"tier":"normal"}
-[analytics] level_start {"level":14,"tier":"normal"}
-[analytics] level_start {"level":14,"tier":"normal"}
-[analytics] level_start {"level":15,"tier":"normal"}
-[analytics] level_start {"level":15,"tier":"normal"}
-[analytics] level_start {"level":15,"tier":"normal"}
-[analytics] level_start {"level":16,"tier":"normal"}
-[analytics] level_start {"level":16,"tier":"normal"}
-[analytics] level_start {"level":16,"tier":"normal"}
-[analytics] level_start {"level":17,"tier":"normal"}
-[analytics] level_start {"level":17,"tier":"normal"}
-[analytics] level_start {"level":17,"tier":"normal"}
-[analytics] level_start {"level":18,"tier":"normal"}
-[analytics] level_start {"level":18,"tier":"normal"}
-[analytics] level_start {"level":18,"tier":"normal"}
-[analytics] level_start {"level":19,"tier":"normal"}
-[analytics] level_start {"level":19,"tier":"normal"}
-[analytics] level_start {"level":19,"tier":"normal"}
-[analytics] level_start {"level":20,"tier":"normal"}
-[analytics] level_start {"level":20,"tier":"normal"}
-[analytics] level_start {"level":20,"tier":"normal"}
-[analytics] level_start {"level":21,"tier":"normal"}
-[analytics] level_start {"level":21,"tier":"normal"}
-[analytics] level_start {"level":21,"tier":"normal"}
-[analytics] level_start {"level":22,"tier":"normal"}
-[analytics] level_start {"level":22,"tier":"normal"}
-[analytics] level_start {"level":22,"tier":"normal"}
-[analytics] level_start {"level":23,"tier":"normal"}
-[analytics] level_start {"level":23,"tier":"normal"}
-[analytics] level_start {"level":23,"tier":"normal"}
-[analytics] level_start {"level":24,"tier":"normal"}
-[analytics] level_start {"level":24,"tier":"normal"}
-[analytics] level_start {"level":24,"tier":"normal"}
-[analytics] level_start {"level":25,"tier":"normal"}
-[analytics] level_start {"level":25,"tier":"normal"}
-[analytics] level_start {"level":25,"tier":"normal"}
-[analytics] level_start {"level":26,"tier":"normal"}
-[analytics] level_start {"level":26,"tier":"normal"}
-[analytics] level_start {"level":26,"tier":"normal"}
-[analytics] level_start {"level":27,"tier":"normal"}
-[analytics] level_start {"level":27,"tier":"normal"}
-[analytics] level_start {"level":27,"tier":"normal"}
-[analytics] level_start {"level":28,"tier":"normal"}
-[analytics] level_start {"level":28,"tier":"normal"}
-[analytics] level_start {"level":28,"tier":"normal"}
-[analytics] level_start {"level":29,"tier":"normal"}
-[analytics] level_start {"level":29,"tier":"normal"}
-[analytics] level_start {"level":29,"tier":"normal"}
-[analytics] level_start {"level":30,"tier":"normal"}
-[analytics] level_start {"level":30,"tier":"normal"}
-[analytics] level_start {"level":30,"tier":"normal"}
 PASS  开局货架没有任何空格子（格子数 == 占用格数）
 PASS  行数始终在 3~5 之间（不再永远 3 行）
 PASS  每行至少 2 格且总格数对得上
 PASS  列数不超过 7（再多格子就小到看不清）
-[analytics] level_start {"level":4,"tier":"normal"}
-[analytics] level_start {"level":4,"tier":"normal"}
-[analytics] level_start {"level":4,"tier":"normal"}
-[analytics] level_start {"level":4,"tier":"normal"}
-[analytics] level_start {"level":4,"tier":"normal"}
-[analytics] level_start {"level":4,"tier":"normal"}
-[analytics] level_start {"level":5,"tier":"normal"}
-[analytics] level_start {"level":5,"tier":"normal"}
-[analytics] level_start {"level":5,"tier":"normal"}
-[analytics] level_start {"level":5,"tier":"normal"}
-[analytics] level_start {"level":5,"tier":"normal"}
-[analytics] level_start {"level":5,"tier":"normal"}
-[analytics] level_start {"level":6,"tier":"normal"}
-[analytics] level_start {"level":6,"tier":"normal"}
-[analytics] level_start {"level":6,"tier":"normal"}
-[analytics] level_start {"level":6,"tier":"normal"}
-[analytics] level_start {"level":6,"tier":"normal"}
-[analytics] level_start {"level":6,"tier":"normal"}
-[analytics] level_start {"level":7,"tier":"normal"}
-[analytics] level_start {"level":7,"tier":"normal"}
-[analytics] level_start {"level":7,"tier":"normal"}
-[analytics] level_start {"level":7,"tier":"normal"}
-[analytics] level_start {"level":7,"tier":"normal"}
-[analytics] level_start {"level":7,"tier":"normal"}
-[analytics] level_start {"level":8,"tier":"normal"}
-[analytics] level_start {"level":8,"tier":"normal"}
-[analytics] level_start {"level":8,"tier":"normal"}
-[analytics] level_start {"level":8,"tier":"normal"}
-[analytics] level_start {"level":8,"tier":"normal"}
-[analytics] level_start {"level":8,"tier":"normal"}
-[analytics] level_start {"level":9,"tier":"normal"}
-[analytics] level_start {"level":9,"tier":"normal"}
-[analytics] level_start {"level":9,"tier":"normal"}
-[analytics] level_start {"level":9,"tier":"normal"}
-[analytics] level_start {"level":9,"tier":"normal"}
-[analytics] level_start {"level":9,"tier":"normal"}
-[analytics] level_start {"level":10,"tier":"normal"}
-[analytics] level_start {"level":10,"tier":"normal"}
-[analytics] level_start {"level":10,"tier":"normal"}
-[analytics] level_start {"level":10,"tier":"normal"}
-[analytics] level_start {"level":10,"tier":"normal"}
-[analytics] level_start {"level":10,"tier":"normal"}
 PASS  第 4~10 关都生成了门洞
 PASS  门洞朝向永远在货架内（不会朝界外）
 PASS  门洞朝向永远指向一个真实存在的瓶子
-[analytics] level_start {"level":6,"tier":"normal"}
 PASS  门洞里塞了 2~3 个瓶子且都带自己的颜色
-[analytics] level_start {"level":1,"tier":"normal"}
 PASS  水先接到「已经有水的同色瓶」里
 PASS  空瓶在它接满之前不会被插队
-[analytics] level_start {"level":1,"tier":"normal"}
 PASS  台面几瓶全接不到水 → 出现软提示条（不挡操作）
-[analytics] level_fail {"level":1,"tier":"normal"}
 PASS  道具清空后 → 判定真死局并弹面板
-[analytics] level_start {"level":1,"tier":"normal"}
 PASS  还有「随心互换」时不算死局（不会误弹面板）
-[analytics] level_start {"level":1,"tier":"normal"}
-[analytics] level_start {"level":1,"tier":"normal"}
-[analytics] level_start {"level":1,"tier":"normal"}
-[analytics] level_start {"level":2,"tier":"normal"}
-[analytics] level_start {"level":2,"tier":"normal"}
-[analytics] level_start {"level":2,"tier":"normal"}
-[analytics] level_start {"level":3,"tier":"normal"}
-[analytics] level_start {"level":3,"tier":"normal"}
-[analytics] level_start {"level":3,"tier":"normal"}
-[analytics] level_start {"level":4,"tier":"normal"}
-[analytics] level_start {"level":4,"tier":"normal"}
-[analytics] level_start {"level":4,"tier":"normal"}
-[analytics] level_start {"level":5,"tier":"normal"}
-[analytics] level_start {"level":5,"tier":"normal"}
-[analytics] level_start {"level":5,"tier":"normal"}
-[analytics] level_start {"level":6,"tier":"normal"}
-[analytics] level_start {"level":6,"tier":"normal"}
-[analytics] level_start {"level":6,"tier":"normal"}
-[analytics] level_start {"level":7,"tier":"normal"}
-[analytics] level_start {"level":7,"tier":"normal"}
-[analytics] level_start {"level":7,"tier":"normal"}
-[analytics] level_start {"level":8,"tier":"normal"}
-[analytics] level_start {"level":8,"tier":"normal"}
-[analytics] level_start {"level":8,"tier":"normal"}
 PASS  开局不会误判死局
-[analytics] level_start {"level":4,"tier":"normal"}
-[analytics] level_start {"level":4,"tier":"normal"}
-[analytics] level_start {"level":4,"tier":"normal"}
-[analytics] level_start {"level":4,"tier":"normal"}
-[analytics] level_start {"level":4,"tier":"normal"}
-[analytics] level_start {"level":4,"tier":"normal"}
-[analytics] level_start {"level":5,"tier":"normal"}
-[analytics] level_start {"level":5,"tier":"normal"}
-[analytics] level_start {"level":5,"tier":"normal"}
-[analytics] level_start {"level":5,"tier":"normal"}
-[analytics] level_start {"level":5,"tier":"normal"}
-[analytics] level_start {"level":5,"tier":"normal"}
-[analytics] level_start {"level":6,"tier":"normal"}
-[analytics] level_start {"level":6,"tier":"normal"}
-[analytics] level_start {"level":6,"tier":"normal"}
-[analytics] level_start {"level":6,"tier":"normal"}
-[analytics] level_start {"level":6,"tier":"normal"}
-[analytics] level_start {"level":6,"tier":"normal"}
-[analytics] level_start {"level":7,"tier":"normal"}
-[analytics] level_start {"level":7,"tier":"normal"}
-[analytics] level_start {"level":7,"tier":"normal"}
-[analytics] level_start {"level":7,"tier":"normal"}
-[analytics] level_start {"level":7,"tier":"normal"}
-[analytics] level_start {"level":7,"tier":"normal"}
-[analytics] level_start {"level":8,"tier":"normal"}
-[analytics] level_start {"level":8,"tier":"normal"}
-[analytics] level_start {"level":8,"tier":"normal"}
-[analytics] level_start {"level":8,"tier":"normal"}
-[analytics] level_start {"level":8,"tier":"normal"}
-[analytics] level_start {"level":8,"tier":"normal"}
-[analytics] level_start {"level":10,"tier":"normal"}
-[analytics] level_start {"level":10,"tier":"normal"}
-[analytics] level_start {"level":10,"tier":"normal"}
-[analytics] level_start {"level":10,"tier":"normal"}
-[analytics] level_start {"level":10,"tier":"normal"}
-[analytics] level_start {"level":10,"tier":"normal"}
-[analytics] level_start {"level":12,"tier":"normal"}
-[analytics] level_start {"level":12,"tier":"normal"}
-[analytics] level_start {"level":12,"tier":"normal"}
-[analytics] level_start {"level":12,"tier":"normal"}
-[analytics] level_start {"level":12,"tier":"normal"}
-[analytics] level_start {"level":12,"tier":"normal"}
-[analytics] level_start {"level":15,"tier":"normal"}
-[analytics] level_start {"level":15,"tier":"normal"}
-[analytics] level_start {"level":15,"tier":"normal"}
-[analytics] level_start {"level":15,"tier":"normal"}
-[analytics] level_start {"level":15,"tier":"normal"}
-[analytics] level_start {"level":15,"tier":"normal"}
-[analytics] level_start {"level":20,"tier":"normal"}
-[analytics] level_start {"level":20,"tier":"normal"}
-[analytics] level_start {"level":20,"tier":"normal"}
-[analytics] level_start {"level":20,"tier":"normal"}
-[analytics] level_start {"level":20,"tier":"normal"}
-[analytics] level_start {"level":20,"tier":"normal"}
-[analytics] level_start {"level":25,"tier":"normal"}
-[analytics] level_start {"level":25,"tier":"normal"}
-[analytics] level_start {"level":25,"tier":"normal"}
-[analytics] level_start {"level":25,"tier":"normal"}
-[analytics] level_start {"level":25,"tier":"normal"}
-[analytics] level_start {"level":25,"tier":"normal"}
-[analytics] level_start {"level":30,"tier":"normal"}
-[analytics] level_start {"level":30,"tier":"normal"}
-[analytics] level_start {"level":30,"tier":"normal"}
-[analytics] level_start {"level":30,"tier":"normal"}
-[analytics] level_start {"level":30,"tier":"normal"}
-[analytics] level_start {"level":30,"tier":"normal"}
 PASS  门洞数不超过 levelPlan 的设计值，且峰值关明显多于放水关
 PASS  门洞之间互不相邻（不会互相堵死）
 PASS  格子数能被行数整除时，各行格数完全一致
-[analytics] level_start {"level":2,"tier":"normal"}
 PASS  点「魔法清除」进入清除模式
 PASS  清除后：清掉的那杯倒进台面同色瓶（+1 口）且退出模式
 PASS  清除后：所有瓶子仍是 3 口（分母统一，不会再出现 1/2、1/4）
 PASS  清除后：水量严格守恒（水少 1 杯 == 瓶里多 1 口）
 PASS  清除消耗 1 次道具
 PASS  台面无同色瓶时拒绝清除（不白扣水、不扣道具）
-[analytics] level_start {"level":8,"tier":"normal"}
-[analytics] level_start {"level":8,"tier":"normal"}
-[analytics] level_start {"level":8,"tier":"normal"}
-[analytics] level_start {"level":8,"tier":"normal"}
-[analytics] level_start {"level":8,"tier":"normal"}
-[analytics] level_start {"level":8,"tier":"normal"}
-[analytics] level_start {"level":8,"tier":"normal"}
-[analytics] level_start {"level":8,"tier":"normal"}
-[analytics] level_start {"level":8,"tier":"normal"}
-[analytics] level_start {"level":8,"tier":"normal"}
-[analytics] level_start
+PASS  门洞朝向绝不指向冰冻瓶（否则洞要等解冻、解冻要等洞 = 死循环）
+PASS  门洞朝向绝不指向另一个门洞（互指 = 互锁）
+PASS  生成 40 局，货架层自检恒为可解
+PASS  门洞朝向不会全挤向同一格（最多 2 个指同一格）
+PASS  第 8 关格子数符合关卡设计，且明显多于第 1 关的 9 格
+PASS  前置条件：确实搬走过洞里的瓶子
+PASS  洞里最前面的瓶子被取走后，自检仍判可解（不误报死局）
+PASS  放入第一瓶后进入「放置」动画
+PASS  动画期间的第二次点击不被吞掉（第二瓶照样上台面）
+PASS  第一瓶已被「落定」，没有卡在动画状态里
+PASS  台面满：弹醒目横幅 + 瓶子抖动（不再是静默无反应）
+PASS  台面满：瓶子不会莫名其妙地消失或卡住
+PASS  横幅 1.8 秒后自动消失
+PASS  连点 4 次还不打开（防误触）
+PASS  连点 5 次打开隐藏选关面板
+PASS  点数字直接跳到那一关（第 8 关）并收起面板
+PASS  在第 40 关打开时自动定位到第 2 页
+PASS  点「关闭」收起面板
+PASS  「万能指」自动把一个能喝到水的瓶子放上台面
+PASS  「万能指」消耗 1 次道具
+PASS  点「随心互换」进入互换模式
+PASS  选中第一根管后等待第二根
+PASS  两根管最底层真的互换了
+PASS  「随心互换」消耗 1 次道具并自动退出模式
+PASS  互换选到一半点空取消，不扣道具
+PASS  道具为 0 时点「万能指」→ 走广告补次（Test 模式），不产生越权动作
+PASS  道具为 0 时点「随心互换」→ 补次但不自动进入模式
+PASS  道具为 0 时点「魔法清除」→ 补次但不自动进入模式
+PASS  开局台面确实留着 1 个锁住的槽（在最右边）
+PASS  点「解锁」徽章真的开出新槽位
+PASS  解锁消耗 1 次解锁次数
+PASS  免费解锁用尽后不再无限开槽（拦截而不是无脑放行）
+PASS  解锁后再撤销：槽位锁回去、免费解锁次数也回滚（不会凭空吞掉）
+PASS  道具/撤销/解锁全空且管底无水可取 → 真的会进失败面板
+PASS  面板「看广告复活」：真的复活并回到可玩状态
+PASS  复活后存在合法决策（不会看完广告继续死）
+PASS  面板「重新开始本关」回到本关开头（道具复位成初始值）
+PASS  面板「回首页」真的回首页
+PASS  广告场景①工具补次：Test 模式点即完成并发放
+PASS  广告埋点齐全：request/show/complete/reward_granted
+PASS  奖励带场景名（可回答"玩家愿意看什么广告"）
+PASS  TEST 环境不产生真实收入（env 标记为 test）
+PASS  道具/广告套件执行期间无 NaN/undefined
+PASS  第 9 关生成无异常
+PASS  格子数严格按 levelPlan 走（1~30 关全部一致）
+PASS  第 1 关就有 3×3（9 格），不再是憋屈的 3×2
+PASS  教学期 1~3 关恒为 9 格 / 3 色 / 无门洞无冰冻
+PASS  第 4~5 关仍是纯净局（无门洞无冰冻）
+PASS  第 6 关只引入门洞（有门洞、无冰冻）
+PASS  第 7 关才引入冰冻（门洞 + 冰冻同时在场）
+PASS  过渡期颜色不猛加（1~8 关 ≤ 4 色）
+PASS  9 关以后决策密度真的在涨（第 30 关密度 > 第 10 关）
+PASS  棋盘硬上限 26 格生效（1~30 关全部不超）
+PASS  9 关以后仍保留「波浪」节奏（每个 5 关周期的峰值关格数最大）
+PASS  整体递增：第 30 关格子数 > 第 5 关
+PASS  行列组合多样：1~30 关至少出现 6 种不同的「行×列」
+PASS  文本无 NaN/undefined（终检）
+PASS  续接规则：台面有半瓶时优先接半瓶（不是空瓶）
+PASS  水管终点=正在接水的瓶（不是数组第一个台面瓶）
+PASS  lastPour 记录了接水瓶
+PASS  空闲时水管终点停在刚接完的瓶（不跳回数组第一个）
+PASS  台面无瓶时水管目标为 null（整条管道隐藏）
+
+=== ALL GREEN ===
+
+```
+
+</details>
+
+<details><summary>商业化测试（广告/存档/埋点/档位/单局规模）</summary>
+
+```
+PASS  默认环境是 test（未开通广告位时不产生真实收入）
+PASS  Test 模式：激励视频调用返回 true 且恰好发奖 1 次
+PASS  Test 模式不会误触发取消/失败
+PASS  埋点齐全：ad_request / ad_show / ad_complete / reward_granted
+PASS  奖励事件带场景名 + 环境标记（能回答"玩家愿意看什么广告"）
+PASS  中途退出 → 不发奖，且给出取消反馈
+PASS  中途退出记 ad_cancel 埋点
+PASS  广告拉取失败 → 不发奖、但明确回调 onFail
+PASS  adFailFallback=free 时放行降级（玩家不会被广告卡死）
+PASS  广告失败记 ad_load_fail 与 ad_fallback_granted
+PASS  adFailFallback='none' 时只提示、不发奖（策略真的可配置）
+PASS  激励视频单会话上限生效（第 4 次起被拦截）
+PASS  超限记 ad_cap_blocked 埋点
+PASS  有 tap 运行时但没填广告位 → 自动降级 test（不会卡住玩家）
+PASS  配好广告位后真的进入 online
+PASS  online：onClose 之前绝不发奖（不能"点了就发"）
+PASS  online：真的调用了 tap 广告的 show()
+PASS  online：onClose(isEnded=true) → 发奖
+PASS  online：发奖埋点 src=online
+PASS  重复回调幂等：连按 3 次 onClose 也只发 1 次奖
+PASS  重复发奖被拦截并埋点 reward_duplicate_blocked
+PASS  online：提前关闭（isEnded=false）→ 不发奖
+PASS  online：SDK 缺失/异常 → 降级放行而不是卡住（V4.0 §27）
+PASS  插屏：连续成功次数不够 → 不展示
+PASS  插屏：首次体验保护期内 → 不展示
+PASS  插屏：满足条件后展示 1 次
+PASS  插屏：冷却期内立刻再要 → 不展示（冷却真的生效）
+PASS  插屏：单会话上限 1 次，不会反复打断玩家
+PASS  插屏被拦也埋点（能回答"玩家实际看到几次插屏"）
+PASS  存档往返：写进去的进度能读回来
+PASS  存档带版本号（后续可以安全迁移）
+PASS  存档带校验和（不是裸 JSON，能发现被改过）
+PASS  被篡改的存档 → 判定无效并重建（不会读到脏进度）
+PASS  重建后是干净的新档（不是 99 关）
+PASS  被截断的存档 → 判定无效（不抛异常）
+PASS  老版本存档迁移：保留已有进度（第 7 关）
+PASS  迁移补齐缺失字段并统一版本号
+PASS  迁移后的档可以被再次安全读写
+PASS  隐私模式/配额满：save() 静默返回 false，不抛异常
+PASS  存档失败不影响当前这一局的进度（内存里仍是第 5 关）
+PASS  每日种子由日期决定（同一天全球同题）
+PASS  每日种子不同日期不同局
+PASS  埋点初始为空（reset 可用，便于本地核对）
+PASS  启动链路埋点存在：first_open
+PASS  启动链路埋点存在：game_start
+PASS  启动链路埋点存在：level_start
+PASS  每条事件都带时间/关卡/参数（可做漏斗分析）
+PASS  埋点写本地失败时静默降级（绝不因为埋点崩掉游戏）
+PASS  埋点缓冲区有上限（400 条写入后 ≤ 240 条）
+PASS  trackUrl 默认留空（零上报依赖，离线可核对）
+PASS  同一关的挑战档「空间越来越紧」（普通槽位 ≥ 困难 ≥ 极限）
+PASS  同一关的挑战档「决策密度越来越难」（density 严格递增）
+PASS  同一关的挑战档「干扰越来越多」（门洞数不减少）
+PASS  教学关的挑战档也保证可玩（格子 ≥ 12 且不出现 0 色）
+PASS  任何档位都不突破棋盘硬上限 26 格
+PASS  默认只能玩普通档
+PASS  通关普通档后解锁困难档
+PASS  通关困难档后解锁极限档
+PASS  每瓶固定 3 口：水总量 == 瓶数 × 3（单局规模可以精确推算）
+PASS  单局棋盘封顶 26 格（不再越玩越多）
+PASS  单局瓶子封顶（26 格 + 门洞最多多塞 8 瓶 = 34）
+PASS  单局水量封顶 ≤ 102 杯
+PASS  第 20 关以后单局规模已经稳定（波动 ≤ 12 杯，不再越玩越久）
+PASS  第 30 关水量不超过第 10 关的 1.8 倍（难度靠决策密度而不是堆量）
+PASS  好成绩步数（par）封顶 ≤ 60 步（单局时长可控）
+PASS  第 30 关比第 10 关难在做题密度（density 涨、格子不涨）
+
+=== SUITE biz: 66 PASS / 0 FAIL / 0 WARN  (319ms) ===
+__QA__ {"suite":"biz","pass":66,"fail":0,"warn":0,"ms":319,"fails":[],"warns":[]}
+
 ```
 
 </details>
@@ -478,7 +290,7 @@ PASS  零外部依赖：不含 XMLHttpRequest
 PASS  零外部依赖：不含 WebSocket
 PASS  零外部依赖：不含 importScripts
 PASS  零外部依赖：不含 外部 http 引用
-PASS  体积可控（≤ 200 KB，当前 99.6 KB / 101958 B）
+PASS  体积可控（≤ 200 KB，当前 131.5 KB / 134674 B）
 PASS  ES5 兼容：未使用 箭头函数 =>
 PASS  ES5 兼容：未使用 let 声明
 PASS  ES5 兼容：未使用 const 声明
@@ -495,20 +307,14 @@ PASS  单文件自包含（只有 1 个 <script> 块）
 PASS  有移动端 viewport（禁双指缩放 + 刘海安全区）
 PASS  有触屏事件入口（touchstart）
 PASS  无调试期 console 残留
-[analytics] first_open {"sessions":1,"level":1}
 PASS  默认启动是标题页（不是直接进关）
 PASS  默认不跳关：URL_LVL 为 0
 PASS  默认无渲染崩溃
-[analytics] first_open {"sessions":1,"level":1}
-[analytics] level_start {"level":15,"tier":"normal"}
 PASS  带 ?lvl=15 时才跳关（调试后门可控）
-[analytics] first_open {"sessions":1,"level":1}
-[analytics] first_open {"sessions":1,"level":1}
-[analytics] first_open {"sessions":1,"level":1}
 PASS  连续 3 次全新加载 + 渲染 10 帧，无一次崩溃
 
-=== SUITE arch: 31 PASS / 0 FAIL / 0 WARN  (50ms) ===
-__QA__ {"suite":"arch","pass":31,"fail":0,"warn":0,"ms":50,"fails":[],"warns":[]}
+=== SUITE arch: 31 PASS / 0 FAIL / 0 WARN  (130ms) ===
+__QA__ {"suite":"arch","pass":31,"fail":0,"warn":0,"ms":130,"fails":[],"warns":[]}
 
 ```
 
@@ -517,49 +323,6 @@ __QA__ {"suite":"arch","pass":31,"fail":0,"warn":0,"ms":50,"fails":[],"warns":[]
 <details><summary>设计测试（关卡与布局不变量）</summary>
 
 ```
-[analytics] first_open {"sessions":1,"level":1}
-[analytics] game_start {}
-[analytics] level_start {"level":1,"tier":"normal"}
-[analytics] level_start {"level":1,"tier":"normal"}
-[analytics] level_start {"level":2,"tier":"normal"}
-[analytics] level_start {"level":3,"tier":"normal"}
-[analytics] level_start {"level":4,"tier":"normal"}
-[analytics] level_start {"level":5,"tier":"normal"}
-[analytics] level_start {"level":6,"tier":"normal"}
-[analytics] level_start {"level":7,"tier":"normal"}
-[analytics] level_start {"level":8,"tier":"normal"}
-[analytics] level_start {"level":9,"tier":"normal"}
-[analytics] level_start {"level":10,"tier":"normal"}
-[analytics] level_start {"level":11,"tier":"normal"}
-[analytics] level_start {"level":12,"tier":"normal"}
-[analytics] level_start {"level":13,"tier":"normal"}
-[analytics] level_start {"level":14,"tier":"normal"}
-[analytics] level_start {"level":15,"tier":"normal"}
-[analytics] level_start {"level":16,"tier":"normal"}
-[analytics] level_start {"level":17,"tier":"normal"}
-[analytics] level_start {"level":18,"tier":"normal"}
-[analytics] level_start {"level":19,"tier":"normal"}
-[analytics] level_start {"level":20,"tier":"normal"}
-[analytics] level_start {"level":21,"tier":"normal"}
-[analytics] level_start {"level":22,"tier":"normal"}
-[analytics] level_start {"level":23,"tier":"normal"}
-[analytics] level_start {"level":24,"tier":"normal"}
-[analytics] level_start {"level":25,"tier":"normal"}
-[analytics] level_start {"level":26,"tier":"normal"}
-[analytics] level_start {"level":27,"tier":"normal"}
-[analytics] level_start {"level":28,"tier":"normal"}
-[analytics] level_start {"level":29,"tier":"normal"}
-[analytics] level_start {"level":30,"tier":"normal"}
-[analytics] level_start {"level":31,"tier":"normal"}
-[analytics] level_start {"level":32,"tier":"normal"}
-[analytics] level_start {"level":33,"tier":"normal"}
-[analytics] level_start {"level":34,"tier":"normal"}
-[analytics] level_start {"level":35,"tier":"normal"}
-[analytics] level_start {"level":36,"tier":"normal"}
-[analytics] level_start {"level":37,"tier":"normal"}
-[analytics] level_start {"level":38,"tier":"normal"}
-[analytics] level_start {"level":39,"tier":"normal"}
-[analytics] level_start {"level":40,"tier":"normal"}
 PASS  格数严格按 levelPlan（1~40 关）
 PASS  每行长度之和 == 格数 == 瓶子数
 PASS  行数在 2~5（不再是永远 3 行）
@@ -575,22 +338,28 @@ PASS  门洞数不超 levelPlan
 PASS  **门洞两两不相邻**（相邻会互相堵死）
 PASS  每个门洞至少含 1 个瓶子（空洞 = 无效设计）
 PASS  冰冻瓶数不超 levelPlan 计划值
+PASS  **门洞叠放序号连续可判定**（每个洞的 q 恰好是 0..n-1，无缺号/重号）
+PASS  **每个门洞此刻只有一个瓶子可取**（就是最外面那个 q=0）
+PASS  **冰冻瓶开局"冻得住"**（四邻空位 ≤1；否则第一帧就化开，冰冻等于没做）
 PASS  **可解性自检：1~40 关全部能通关**
 PASS  格子左不越界（留 ≥8px 边距）
 PASS  格子右不越界（留 ≥8px 边距）
 PASS  货架首行不高于设计基线
 PASS  货架不压底部工具栏（留 ≥8px）
 PASS  **台面与货架之间留出空隙**（货架瓶盖顶 ≥ 台面刻度底 + 4px；否则首行会顶到台面上）
-PASS  波浪节奏：每 5 关一个「峰—谷—爬坡—峰值」周期
+PASS  波浪节奏：9 关以后每 5 关一个「峰—谷—爬坡—峰值」周期
+PASS  教学期 1~3 关恒为 9 格 / 3 色 / 无门洞无冰冻
+PASS  9 关以后决策密度递增（第 30 关 > 第 10 关）
+PASS  棋盘停止扩大：全部关卡格数 ≤ 26
 PASS  整体递进：第 30 关格子数 > 第 5 关
 PASS  行列组合多样：1~40 关至少出现 6 种「行×列」
 PASS  格数区间合理（9 起步，≤ 40 上限）
 PASS  管数确实涨到 9 根（第 90 关不再是 6 根的 bug 已修）
-WARN  水柱能真的顶出屏幕顶部（有压迫感）  → 最大出屏仅 0px（第 0 关）
+PASS  水柱能真的顶出屏幕顶部（有压迫感）
   （40 关指标已写入 qa_design_table.tsv）
 
-=== SUITE design: 26 PASS / 0 FAIL / 1 WARN  (72ms) ===
-__QA__ {"suite":"design","pass":26,"fail":0,"warn":1,"ms":72,"fails":[],"warns":["水柱能真的顶出屏幕顶部（有压迫感）  → 最大出屏仅 0px（第 0 关）"]}
+=== SUITE design: 33 PASS / 0 FAIL / 0 WARN  (236ms) ===
+__QA__ {"suite":"design","pass":33,"fail":0,"warn":0,"ms":236,"fails":[],"warns":[]}
 
 ```
 
@@ -599,156 +368,40 @@ __QA__ {"suite":"design","pass":26,"fail":0,"warn":1,"ms":72,"fails":[],"warns":
 <details><summary>UI 测试（命中回转 / 拒绝反馈 / 多分辨率）</summary>
 
 ```
-[analytics] first_open {"sessions":1,"level":1}
-[analytics] game_start {}
-[analytics] level_start {"level":1,"tier":"normal"}
-[analytics] first_open {"sessions":1,"level":1}
-[analytics] game_start {}
-[analytics] level_start {"level":1,"tier":"normal"}
-[analytics] first_open {"sessions":1,"level":1}
-[analytics] game_start {}
-[analytics] level_start {"level":1,"tier":"normal"}
-[analytics] first_open {"sessions":1,"level":1}
-[analytics] game_start {}
-[analytics] level_start {"level":1,"tier":"normal"}
-[analytics] first_open {"sessions":1,"level":1}
-[analytics] game_start {}
-[analytics] level_start {"level":1,"tier":"normal"}
-[analytics] first_open {"sessions":1,"level":1}
-[analytics] game_start {}
-[analytics] level_start {"level":1,"tier":"normal"}
-[analytics] first_open {"sessions":1,"level":1}
-[analytics] game_start {}
-[analytics] level_start {"level":1,"tier":"normal"}
 PASS  7 种分辨率（含平板横屏 + 2x DPR）加载渲染进关全部正常、坐标映射可逆
-[analytics] first_open {"sessions":1,"level":1}
-[analytics] game_start {}
-[analytics] level_start {"level":1,"tier":"normal"}
-[analytics] first_open {"sessions":1,"level":1}
-[analytics] game_start {}
-[analytics] level_start {"level":1,"tier":"normal"}
-[analytics] first_open {"sessions":1,"level":1}
-[analytics] game_start {}
-[analytics] level_start {"level":1,"tier":"normal"}
 PASS  在 360 / 375 / 1440 宽三种屏上，点货架瓶子都能真的飞上台面
-[analytics] first_open {"sessions":1,"level":1}
-[analytics] game_start {}
-[analytics] level_start {"level":1,"tier":"normal"}
-[analytics] level_start {"level":1,"tier":"normal"}
-[analytics] level_start {"level":3,"tier":"normal"}
-[analytics] level_start {"level":5,"tier":"normal"}
-[analytics] level_start {"level":9,"tier":"normal"}
-[analytics] level_start {"level":10,"tier":"normal"}
-[analytics] level_start {"level":15,"tier":"normal"}
-[analytics] level_start {"level":20,"tier":"normal"}
-[analytics] level_start {"level":25,"tier":"normal"}
-[analytics] level_start {"level":30,"tier":"normal"}
-PASS  命中回转：点在瓶子身上任意位置（890 次探针 / 9 关全量）都命中它自己
+PASS  命中回转：点在瓶子身上任意位置（4715 次探针 / 1~40 关全量取样，35 关含门洞 / 101 个洞内多瓶）都命中它自己
 PASS  门洞里叠着的后排瓶子不会点错到别的格子
-[analytics] first_open {"sessions":1,"level":1}
-[analytics] game_start {}
-[analytics] level_start {"level":1,"tier":"normal"}
 PASS  台面瓶子：点瓶身上部能命中自己
-PASS  底部 5 个按钮（清除/万能指/互换/撤销/分享）热区都对准自己
-[analytics] first_open {"sessions":1,"level":1}
-[analytics] game_start {}
-[analytics] level_start {"level":1,"tier":"normal"}
+PASS  底部工具按钮（clear/finger/swap/undo）热区都对准自己
 PASS  端到端：点货架瓶子 → 它真的变成台面瓶子
-[analytics] first_open {"sessions":1,"level":1}
-[analytics] game_start {}
-[analytics] level_start {"level":1,"tier":"normal"}
-[analytics] level_start {"level":4,"tier":"normal"}
-PASS  点冰冻瓶：有抖动/提示反馈（不是静默"点不动"）
-[analytics] first_open {"sessions":1,"level":1}
-[analytics] game_start {}
-[analytics] level_start {"level":1,"tier":"normal"}
-[analytics] level_start {"level":4,"tier":"normal"}
 PASS  点洞口被挡的瓶子：有抖动/提示反馈
-[analytics] first_open {"sessions":1,"level":1}
-[analytics] game_start {}
-[analytics] level_start {"level":1,"tier":"normal"}
-[analytics] level_start {"level":1,"tier":"normal"}
-[analytics] level_start {"level":2,"tier":"normal"}
-[analytics] level_start {"level":3,"tier":"normal"}
-[analytics] level_start {"level":4,"tier":"normal"}
-[analytics] level_start {"level":5,"tier":"normal"}
-[analytics] level_start {"level":6,"tier":"normal"}
-[analytics] level_start {"level":7,"tier":"normal"}
-[analytics] level_start {"level":8,"tier":"normal"}
-[analytics] level_start {"level":9,"tier":"normal"}
-[analytics] level_start {"level":10,"tier":"normal"}
-[analytics] level_start {"level":11,"tier":"normal"}
-[analytics] level_start {"level":12,"tier":"normal"}
-[analytics] level_start {"level":13,"tier":"normal"}
-[analytics] level_start {"level":14,"tier":"normal"}
-[analytics] level_start {"level":15,"tier":"normal"}
-[analytics] level_start {"level":16,"tier":"normal"}
-[analytics] level_start {"level":17,"tier":"normal"}
-[analytics] level_start {"level":18,"tier":"normal"}
-[analytics] level_start {"level":19,"tier":"normal"}
-[analytics] level_start {"level":20,"tier":"normal"}
-[analytics] level_start {"level":21,"tier":"normal"}
-[analytics] level_start {"level":22,"tier":"normal"}
-[analytics] level_start {"level":23,"tier":"normal"}
-[analytics] level_start {"level":24,"tier":"normal"}
-[analytics] level_start {"level":25,"tier":"normal"}
-[analytics] level_start {"level":26,"tier":"normal"}
-[analytics] level_start {"level":27,"tier":"normal"}
-[analytics] level_start {"level":28,"tier":"normal"}
-[analytics] level_start {"level":29,"tier":"normal"}
-[analytics] level_start {"level":30,"tier":"normal"}
-[analytics] level_start {"level":31,"tier":"normal"}
-[analytics] level_start {"level":32,"tier":"normal"}
-[analytics] level_start {"level":33,"tier":"normal"}
-[analytics] level_start {"level":34,"tier":"normal"}
-[analytics] level_start {"level":35,"tier":"normal"}
-[analytics] level_start {"level":36,"tier":"normal"}
-[analytics] level_start {"level":37,"tier":"normal"}
-[analytics] level_start {"level":38,"tier":"normal"}
-[analytics] level_start {"level":39,"tier":"normal"}
-[analytics] level_start {"level":40,"tier":"normal"}
 PASS  货架瓶子的视觉框左右不出屏（1~40 关）
 PASS  货架瓶子不压底部工具栏
 PASS  瓶子之间不重叠：瓶宽 < 格距、台面槽间距 ≥ 82
-[analytics] first_open {"sessions":1,"level":1}
 PASS  标题页有游戏名与操作说明
-PASS  标题页有「点击屏幕开始」引导
-[analytics] first_open {"sessions":1,"level":1}
-[analytics] game_start {}
-[analytics] level_start {"level":1,"tier":"normal"}
-[analytics] level_start {"level":1,"tier":"normal"}
-[analytics] level_start {"level":5,"tier":"normal"}
-[analytics] level_start {"level":15,"tier":"normal"}
-[analytics] level_start {"level":30,"tier":"normal"}
-[analytics] first_open {"sessions":1,"level":1}
-[analytics] game_start {}
-[analytics] level_start {"level":1,"tier":"normal"}
-[analytics] level_start {"level":1,"tier":"normal"}
-[analytics] level_start {"level":5,"tier":"normal"}
-[analytics] level_start {"level":15,"tier":"normal"}
-[analytics] level_start {"level":30,"tier":"normal"}
-[analytics] first_open {"sessions":1,"level":1}
-[analytics] game_start {}
-[analytics] level_start {"level":1,"tier":"normal"}
-[analytics] level_start {"level":1,"tier":"normal"}
-[analytics] level_start {"level":5,"tier":"normal"}
-[analytics] level_start {"level":15,"tier":"normal"}
-[analytics] level_start {"level":30,"tier":"normal"}
+PASS  标题页有明确的开始引导（「开 始 游 戏」按钮）
+PASS  标题页有每日挑战入口
+PASS  标题页显示进度与收集星数（给"回来玩"的理由）
 PASS  3 种分辨率 × 4 个关卡：绘制文字无 NaN / undefined / Infinity，HUD 在位
-[analytics] first_open {"sessions":1,"level":1}
-[analytics] game_start {}
-[analytics] level_start {"level":1,"tier":"normal"}
-[analytics] first_open {"sessions":1,"level":1}
-[analytics] game_start {}
-[analytics] level_start {"level":1,"tier":"normal"}
 PASS  触屏（touchstart）与鼠标（mousedown）走同一条输入路径，结果一致
-[analytics] first_open {"sessions":1,"level":1}
-[analytics] game_start {}
-[analytics] level_start {"level":1,"tier":"normal"}
 PASS  点空白处不会误触发任何瓶子动作
+PASS  门洞里每个瓶子的叠放序号 q 恰好是 0..n-1（无缺号/重号，101 个洞 / 101 个多瓶洞）
+PASS  每个门洞此刻恰好只有一个瓶子可取，且就是最外面那个（q=0）
+PASS  门洞后排的瓶子点不到（141 次探针）—— 挡在前面的必须先取走
+PASS  点击级：连点洞口取走的顺序严格是 0,1,2…（实测 0,1,2，种子 1 / L24）
+PASS  开局（第一帧之前）冰冻瓶一定"冻得住"（四邻空位 ≤1；否则冻了等于没冻）
+PASS  解冻阈值：四邻只空出 1 格时不解冻（阈值是 2，不是 1）
+PASS  四邻空出 2 格 → 自动解冻（不用点，且给了解冻提示）
+PASS  点冰冻瓶：有抖动/提示反馈（不是静默"点不动"）
+PASS  冰冻瓶点一下不会解冻、也不会被拿走（点击不解冻）
+PASS  撤销回退后状态逐字段一致（管中水 / 每个瓶子 / 槽位 / 完成数 / 解锁次数）：10 次「动作→撤销」真的回到了撤销前（其中 4 次已出水、6 次未出水 / 共试 13 次）
+PASS  点「魔法清除」→ 进清除模式 → 点水管：清掉的那杯倒进台面同色瓶
+PASS  魔法清除水量守恒：管中水 −1 == 瓶里 +1（一滴都没漏掉）
+PASS  台面无同色瓶时拒绝清除：不白扣一杯水、不扣道具（否则必然攒成死局）
 
-=== SUITE ui: 17 PASS / 0 FAIL / 0 WARN  (242ms) ===
-__QA__ {"suite":"ui","pass":17,"fail":0,"warn":0,"ms":242,"fails":[],"warns":[]}
+=== SUITE ui: 31 PASS / 0 FAIL / 0 WARN  (2124ms) ===
+__QA__ {"suite":"ui","pass":31,"fail":0,"warn":0,"ms":2124,"fails":[],"warns":[]}
 
 ```
 
@@ -757,72 +410,6 @@ __QA__ {"suite":"ui","pass":17,"fail":0,"warn":0,"ms":242,"fails":[],"warns":[]}
 <details><summary>合理性测试（机器人贪心通关 1~30 关）</summary>
 
 ```
-[analytics] first_open {"sessions":1,"level":1}
-[analytics] level_start {"level":1,"tier":"normal"}
-[analytics] level_start {"level":1,"tier":"normal"}
-[analytics] level_start {"level":2,"tier":"normal"}
-[analytics] level_start {"level":2,"tier":"normal"}
-[analytics] level_start {"level":3,"tier":"normal"}
-[analytics] level_start {"level":3,"tier":"normal"}
-[analytics] level_start {"level":4,"tier":"normal"}
-[analytics] level_start {"level":4,"tier":"normal"}
-[analytics] level_start {"level":5,"tier":"normal"}
-[analytics] level_start {"level":5,"tier":"normal"}
-[analytics] level_start {"level":6,"tier":"normal"}
-[analytics] level_start {"level":6,"tier":"normal"}
-[analytics] level_start {"level":7,"tier":"normal"}
-[analytics] level_start {"level":7,"tier":"normal"}
-[analytics] level_start {"level":8,"tier":"normal"}
-[analytics] level_start {"level":8,"tier":"normal"}
-[analytics] level_start {"level":9,"tier":"normal"}
-[analytics] level_start {"level":9,"tier":"normal"}
-[analytics] level_start {"level":10,"tier":"normal"}
-[analytics] level_start {"level":10,"tier":"normal"}
-[analytics] level_start {"level":11,"tier":"normal"}
-[analytics] level_start {"level":11,"tier":"normal"}
-[analytics] level_start {"level":12,"tier":"normal"}
-[analytics] level_start {"level":12,"tier":"normal"}
-[analytics] level_start {"level":13,"tier":"normal"}
-[analytics] level_start {"level":13,"tier":"normal"}
-[analytics] level_start {"level":13,"tier":"normal"}
-[analytics] level_start {"level":14,"tier":"normal"}
-[analytics] level_start {"level":14,"tier":"normal"}
-[analytics] level_start {"level":15,"tier":"normal"}
-[analytics] level_start {"level":15,"tier":"normal"}
-[analytics] level_start {"level":15,"tier":"normal"}
-[analytics] level_start {"level":16,"tier":"normal"}
-[analytics] level_start {"level":16,"tier":"normal"}
-[analytics] level_start {"level":17,"tier":"normal"}
-[analytics] level_start {"level":17,"tier":"normal"}
-[analytics] level_start {"level":18,"tier":"normal"}
-[analytics] level_start {"level":18,"tier":"normal"}
-[analytics] level_fail {"level":18,"tier":"normal"}
-[analytics] level_start {"level":18,"tier":"normal"}
-[analytics] level_start {"level":19,"tier":"normal"}
-[analytics] level_start {"level":19,"tier":"normal"}
-[analytics] level_start {"level":20,"tier":"normal"}
-[analytics] level_start {"level":20,"tier":"normal"}
-[analytics] level_start {"level":21,"tier":"normal"}
-[analytics] level_start {"level":21,"tier":"normal"}
-[analytics] level_start {"level":22,"tier":"normal"}
-[analytics] level_start {"level":22,"tier":"normal"}
-[analytics] level_start {"level":23,"tier":"normal"}
-[analytics] level_start {"level":23,"tier":"normal"}
-[analytics] level_start {"level":24,"tier":"normal"}
-[analytics] level_start {"level":24,"tier":"normal"}
-[analytics] level_start {"level":25,"tier":"normal"}
-[analytics] level_start {"level":25,"tier":"normal"}
-[analytics] level_start {"level":26,"tier":"normal"}
-[analytics] level_start {"level":26,"tier":"normal"}
-[analytics] level_start {"level":27,"tier":"normal"}
-[analytics] level_start {"level":27,"tier":"normal"}
-[analytics] level_start {"level":28,"tier":"normal"}
-[analytics] level_start {"level":28,"tier":"normal"}
-[analytics] level_start {"level":29,"tier":"normal"}
-[analytics] level_start {"level":29,"tier":"normal"}
-[analytics] level_start {"level":30,"tier":"normal"}
-[analytics] level_start {"level":30,"tier":"normal"}
-[analytics] level_start {"level":30,"tier":"normal"}
 
 ```
 
