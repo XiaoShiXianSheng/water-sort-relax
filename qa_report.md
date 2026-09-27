@@ -1,18 +1,17 @@
 # 《解压水消除》自动测试报告
 
-> 生成时间：2026-09-27 15:15:57　|　命令：`node qa_run.js`
+> 生成时间：2026-09-27 16:44:06　|　命令：`node qa_run.js --quick`
 
 ## 结论：✅ 全部通过
 
 | 套件 | 通过 | 失败 | 提醒 | 耗时 |
 |---|---|---|---|---|
-| 功能测试（点击级回归用例） | 164 | 0 | 0 | 4707ms |
-| 商业化测试（广告/存档/埋点/档位/单局规模） | 66 | 0 | 0 | 597ms |
-| 架构测试（单文件 / ES5 / 零依赖 / 兜底） | 31 | 0 | 0 | 408ms |
-| 设计测试（关卡与布局不变量） | 33 | 0 | 0 | 530ms |
-| UI 测试（命中回转 / 拒绝反馈 / 多分辨率） | 31 | 0 | 0 | 2455ms |
-| 合理性测试（机器人贪心通关 1~30 关） | 30 | 0 | 0 | 56963ms |
-| **合计** | **355** | **0** | **0** | |
+| 功能测试（点击级回归用例） | 164 | 0 | 0 | 8636ms |
+| 商业化测试（广告/存档/埋点/档位/单局规模） | 66 | 0 | 0 | 1074ms |
+| 架构测试（单文件 / ES5 / 零依赖 / 兜底） | 31 | 0 | 0 | 587ms |
+| 设计测试（关卡与布局不变量） | 33 | 0 | 0 | 813ms |
+| UI 测试（命中回转 / 拒绝反馈 / 多分辨率） | 31 | 0 | 0 | 3803ms |
+| **合计** | **325** | **0** | **0** | |
 
 ## 这套测试在保护什么
 
@@ -271,8 +270,8 @@ PASS  第 30 关水量不超过第 10 关的 1.8 倍（难度靠决策密度而�
 PASS  好成绩步数（par）封顶 ≤ 60 步（单局时长可控）
 PASS  第 30 关比第 10 关难在做题密度（density 涨、格子不涨）
 
-=== SUITE biz: 66 PASS / 0 FAIL / 0 WARN  (319ms) ===
-__QA__ {"suite":"biz","pass":66,"fail":0,"warn":0,"ms":319,"fails":[],"warns":[]}
+=== SUITE biz: 66 PASS / 0 FAIL / 0 WARN  (503ms) ===
+__QA__ {"suite":"biz","pass":66,"fail":0,"warn":0,"ms":503,"fails":[],"warns":[]}
 
 ```
 
@@ -290,7 +289,7 @@ PASS  零外部依赖：不含 XMLHttpRequest
 PASS  零外部依赖：不含 WebSocket
 PASS  零外部依赖：不含 importScripts
 PASS  零外部依赖：不含 外部 http 引用
-PASS  体积可控（≤ 200 KB，当前 131.5 KB / 134674 B）
+PASS  体积可控（≤ 200 KB，当前 131.7 KB / 134819 B）
 PASS  ES5 兼容：未使用 箭头函数 =>
 PASS  ES5 兼容：未使用 let 声明
 PASS  ES5 兼容：未使用 const 声明
@@ -313,8 +312,8 @@ PASS  默认无渲染崩溃
 PASS  带 ?lvl=15 时才跳关（调试后门可控）
 PASS  连续 3 次全新加载 + 渲染 10 帧，无一次崩溃
 
-=== SUITE arch: 31 PASS / 0 FAIL / 0 WARN  (130ms) ===
-__QA__ {"suite":"arch","pass":31,"fail":0,"warn":0,"ms":130,"fails":[],"warns":[]}
+=== SUITE arch: 31 PASS / 0 FAIL / 0 WARN  (201ms) ===
+__QA__ {"suite":"arch","pass":31,"fail":0,"warn":0,"ms":201,"fails":[],"warns":[]}
 
 ```
 
@@ -358,8 +357,8 @@ PASS  管数确实涨到 9 根（第 90 关不再是 6 根的 bug 已修）
 PASS  水柱能真的顶出屏幕顶部（有压迫感）
   （40 关指标已写入 qa_design_table.tsv）
 
-=== SUITE design: 33 PASS / 0 FAIL / 0 WARN  (236ms) ===
-__QA__ {"suite":"design","pass":33,"fail":0,"warn":0,"ms":236,"fails":[],"warns":[]}
+=== SUITE design: 33 PASS / 0 FAIL / 0 WARN  (333ms) ===
+__QA__ {"suite":"design","pass":33,"fail":0,"warn":0,"ms":333,"fails":[],"warns":[]}
 
 ```
 
@@ -400,16 +399,8 @@ PASS  点「魔法清除」→ 进清除模式 → 点水管：清掉的那杯�
 PASS  魔法清除水量守恒：管中水 −1 == 瓶里 +1（一滴都没漏掉）
 PASS  台面无同色瓶时拒绝清除：不白扣一杯水、不扣道具（否则必然攒成死局）
 
-=== SUITE ui: 31 PASS / 0 FAIL / 0 WARN  (2124ms) ===
-__QA__ {"suite":"ui","pass":31,"fail":0,"warn":0,"ms":2124,"fails":[],"warns":[]}
-
-```
-
-</details>
-
-<details><summary>合理性测试（机器人贪心通关 1~30 关）</summary>
-
-```
+=== SUITE ui: 31 PASS / 0 FAIL / 0 WARN  (3331ms) ===
+__QA__ {"suite":"ui","pass":31,"fail":0,"warn":0,"ms":3331,"fails":[],"warns":[]}
 
 ```
 

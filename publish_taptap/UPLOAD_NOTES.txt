@@ -1,0 +1,21 @@
+Water Sort Relax (解压水消除) - TapTap H5 小游戏上传包 v4.0.0
+================================================================
+
+包内文件：
+- index.html     游戏本体（单文件，134 KB，纯 ES5，零外部依赖，无任何第三方 SDK 脚本）
+- icon_512.png   512x512 应用图标（如平台要求其他尺寸，请在上传界面按提示调整）
+- UPLOAD_NOTES.txt 本说明文件（上传时可删除）
+
+开发者需在上传后台自行补充：
+1. 应用图标 / 截图 / 简介 / 分类标签
+2. 隐私政策链接与版权信息（以平台后台提示为准）
+3. 版号 / 备案等合规信息（以平台后台提示为准）
+
+广告配置（开通广告位后）：
+- 打开 index.html，找到 var CFG = {
+- 将 CFG.adUnit.rewarded 填为「激励视频广告位 ID」
+- 将 CFG.adUnit.interstitial 填为「插屏广告位 ID」
+- 两个都填好并重新上传后，游戏自动从 TEST 模式切换为 ONLINE 模式（调用 tap.createRewardedVideoAd / tap.createInterstitialAd）
+- 留空则保持 TEST 模式（点击广告入口立即返回模拟结果，不产生真实收入）
+
+版本：v4.0.0

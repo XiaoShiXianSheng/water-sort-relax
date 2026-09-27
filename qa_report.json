@@ -1,8 +1,8 @@
 {
-  "at": "2026-09-27T15:15:57.710Z",
+  "at": "2026-09-27T16:44:06.747Z",
   "green": true,
   "total": {
-    "pass": 355,
+    "pass": 325,
     "fail": 0,
     "warn": 0
   },
@@ -13,7 +13,7 @@
       "pass": 164,
       "fail": 0,
       "warn": 0,
-      "ms": 4707,
+      "ms": 8636,
       "fails": [],
       "warns": [],
       "unstable": false
@@ -24,7 +24,7 @@
       "pass": 66,
       "fail": 0,
       "warn": 0,
-      "ms": 597,
+      "ms": 1074,
       "fails": [],
       "warns": [],
       "unstable": false
@@ -35,7 +35,7 @@
       "pass": 31,
       "fail": 0,
       "warn": 0,
-      "ms": 408,
+      "ms": 587,
       "fails": [],
       "warns": [],
       "unstable": false
@@ -46,7 +46,7 @@
       "pass": 33,
       "fail": 0,
       "warn": 0,
-      "ms": 530,
+      "ms": 813,
       "fails": [],
       "warns": [],
       "unstable": false
@@ -57,18 +57,7 @@
       "pass": 31,
       "fail": 0,
       "warn": 0,
-      "ms": 2455,
-      "fails": [],
-      "warns": [],
-      "unstable": false
-    },
-    {
-      "key": "bot",
-      "name": "合理性测试（机器人贪心通关 1~30 关）",
-      "pass": 30,
-      "fail": 0,
-      "warn": 0,
-      "ms": 56963,
+      "ms": 3803,
       "fails": [],
       "warns": [],
       "unstable": false

@@ -132,6 +132,7 @@ function toolX(i){return TOOL_X0+i*(TOOL_W+TOOL_GAP);}
    adUnitId 为空时（尚未在开发者中心开通广告）会自动降级为 TEST，流程绝不被卡死。 */
 
 var CFG={
+  version:'4.0.0',                         // 对外版本号：随每条埋点上报，出事时能区分线上跑的是哪一版
   env:'test',                              // 'test'(默认：模拟完成，供开发/自动化测试) | 'online'(真实 SDK)
   adUnit:{rewarded:'',interstitial:''},    // 在 TapTap 开发者中心 → 商店 → 小游戏广告 开通并创建广告位后填入
   rewardedSessionCap:3,                    // 单会话激励视频上限（初始实验值，不是行业真理）
@@ -218,7 +219,7 @@ var Track={
     try{
       var lv=0,gt=0;
       try{ if(typeof G!=='undefined'&&G){ lv=G.level||0; gt=Math.round(G.t||0); } }catch(e0){}
-      var ev={e:name,t:new Date().getTime(),gt:gt,lv:lv,p:params||{}};
+      var ev={e:name,t:new Date().getTime(),gt:gt,lv:lv,v:CFG.version,p:params||{}};
       Track.buf.push(ev);
       if(Track.buf.length>240)Track.buf.shift();
       try{

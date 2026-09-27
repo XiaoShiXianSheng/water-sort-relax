@@ -14,3 +14,8 @@ Thumbs.db
 
 # 发布产物（仅含 index.html，与 outputs/ 主文件字节一致，不入版本库）
 publish_water/index.html
+publish_taptap/index.html
+
+# 可再生的上传包（publish_taptap/ 重新压缩即得）与图标源文件
+tap_upload_v*.zip
+_icon_src.html
