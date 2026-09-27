@@ -44,6 +44,17 @@ function warn(id, name, detail) {
   console.log('SKIP  [' + id + '] ' + name + '  → ' + (detail || ''));
 }
 
+/* 「只差换行符」诊断：内容一模一样、只有 CRLF/LF 之别时，直接说出来。
+   踩过：全局 core.autocrlf=true，一次 git rebase 就把主文件从 LF 写成 CRLF，
+   发布件和线上还是 LF → 门禁翻红，但内容其实完全一致，不看这条提示要查很久。 */
+function eolOnly(a, b) {
+  if (!a || !b || a.equals(b)) return false;
+  const na = a.toString('latin1').replace(/\r\n/g, '\n');
+  const nb = b.toString('latin1').replace(/\r\n/g, '\n');
+  return na === nb;
+}
+const EOL_HINT = '　⚠ 内容其实**完全一致**，只差换行符（CRLF vs LF）—— 检查 `core.autocrlf` 与 `.gitattributes`';
+
 /* ============ G4 用：剥掉注释 / 字符串 / 正则，只留真正的代码 ============ */
 function stripLits(src) {
   let out = '', i = 0;
@@ -228,10 +239,13 @@ function fetchLive(url, depth) {
   const pubSame = hashes['outputs/解压水消除.html'] && hashes['publish_water/index.html']
     && hashes['outputs/解压水消除.html'].md5 === hashes['publish_water/index.html'].md5;
 
+  const selfBuf2 = hashes['outputs/解压水消除.html'] ? fs.readFileSync(path.join(ROOT, 'outputs/解压水消除.html')) : null;
+  const pubBuf2 = hashes['publish_water/index.html'] ? fs.readFileSync(path.join(ROOT, 'publish_water/index.html')) : null;
   item('G8a', '发布件与主文件字节一致（改了主文件必须同步发布目录）', !!pubSame,
     pubSame ? 'md5 ' + hashes['publish_water/index.html'].md5 + '（' + hashes['publish_water/index.html'].n + 'B）'
       : (hashes['publish_water/index.html']
         ? '主文件 ' + hashes['outputs/解压水消除.html'].md5 + ' ≠ 发布件 ' + hashes['publish_water/index.html'].md5
+        + (eolOnly(selfBuf2, pubBuf2) ? EOL_HINT : '')
         : '发布目录里没有 index.html：' + PUB));
 
   if (NO_LIVE) {
@@ -244,12 +258,13 @@ function fetchLive(url, depth) {
         '取不到线上内容（' + r.err + '）→ 无法证明线上就是这一版，按「不许上线」处理');
     } else {
       const liveMd5 = crypto.createHash('md5').update(r.buf).digest('hex');
-      const same = pubSame && r.buf.equals(fs.readFileSync(PUB));
+      const same = pubSame && r.buf.equals(pubBuf2);
       item('G8b', '线上字节与本地一致（带 ?t= 破 CDN 缓存）', same,
         same ? '线上 ' + r.buf.length + 'B / md5 ' + liveMd5 + ' 与发布件逐字节相同'
           : '线上 ' + r.buf.length + 'B / md5 ' + liveMd5
           + '　vs 本地发布件 ' + (hashes['publish_water/index.html'] ? hashes['publish_water/index.html'].n + 'B / md5 ' + hashes['publish_water/index.html'].md5 : '缺失')
-          + '　→ 线上是旧版或没同步');
+          + '　→ 线上是旧版或没同步'
+          + (eolOnly(r.buf, pubBuf2) ? EOL_HINT : ''));
     }
   }
 

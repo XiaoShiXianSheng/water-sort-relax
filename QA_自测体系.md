@@ -300,6 +300,30 @@ $tok = (("protocol=https`nhost=github.com`n`n" | & git credential fill 2>&1) |
 - 判断是否真的推上去了，**不要信本地 rc**，直接问远端：
   `git ls-remote origin refs/heads/main` 与 `git rev-parse HEAD` 比对。
 
+### 8.1 全局 `core.autocrlf=true` 会偷偷改写交付物的字节（2026-09-28）
+
+**事故**：一次 `git rebase`（只是为了整合远端几个 docs 提交）之后，
+`outputs/解压水消除.html` 从 **136672B(LF)** 变成 **139502B(CRLF)**，
+而 `publish_water/index.html` 与线上仍是 LF ——
+于是「发布件/线上字节一致」这两条门禁翻红。**但内容其实一模一样，只差换行符**，
+如果只看到「md5 不一致」，会往「是不是谁改了游戏」的方向查很久。
+
+**根因**：本机全局 `core.autocrlf=true`，git 每次 checkout 都把工作区的 LF 换成 CRLF。
+平时无所谓（git add 时会归一化，`git status` 照样干净），
+但**字节相等是硬门禁时就要命了**：任何一次 rebase / checkout / reset 都会让文件变体重。
+
+**修法（两层）**：
+
+1. 加 `.gitattributes` 把交付物钉死：`*.html -text`（关掉该路径的换行转换，
+   工作区字节 == 版本库字节 == 线上字节）。
+2. 门禁里加**自动诊断**：当两边字节不等但「去掉 `\r\n` 之后完全相同」时，
+   直接打印「⚠ 内容其实完全一致，只差换行符（CRLF vs LF）—— 检查 `core.autocrlf` 与 `.gitattributes`」。
+   并且在 `qa_rollback.js` 里加了一条对应的回滚用例，防止这句提示哪天被删掉没人发现。
+
+**通用教训**：凡是「必须逐字节一致」的交付物（单文件 HTML、签名产物、可执行包），
+都要显式在 `.gitattributes` 里声明 `-text`，不要依赖本机 git 配置 ——
+**本机配置是环境，不是契约**。
+
 ---
 
 ## 9. 上线门禁：把「上线前必过清单」做成可执行的东西

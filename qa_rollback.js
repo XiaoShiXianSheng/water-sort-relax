@@ -180,6 +180,15 @@ const CASES = [
     name: '门禁 G8b：线上跑的是旧版（本地起一个故意不一致的站点）',
     suite: 'qa_gate.js', expect: /线上是旧版或没同步/,
     noPatch: true, liveTamper: true
+  },
+  {
+    /* 真实事故：全局 core.autocrlf=true，一次 git rebase 就把主文件写成 CRLF、
+       发布件与线上还是 LF → 门禁翻红，但内容一模一样。这条既验证 G8a 会 FAIL，
+       也验证「只差换行符」那句诊断还在（不然下次又得查半天）。 */
+    name: '门禁 G8a：发布件只差换行符（CRLF vs LF，内容一致但字节不等）',
+    file: 'publish_water/index.html',
+    suite: 'qa_gate.js', expect: /只差换行符/,
+    crlfTamper: true
   }
 ];
 
@@ -266,7 +275,10 @@ for (const c of CASES) {
 
   let r = null, err = null;
   try {
-    if (!c.noPatch) {
+    if (c.crlfTamper) {
+      /* 整个文件强转 CRLF：模拟「git 把工作区换行改了」这一类事故 */
+      fs.writeFileSync(O.path, original.replace(/\r\n/g, '\n').replace(/\n/g, '\r\n'), 'utf8');
+    } else if (!c.noPatch) {
       const hits = original.split(c.find).length - 1;
       if (hits !== 1) {
         bad++;
