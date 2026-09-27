@@ -71,6 +71,61 @@ const CASES = [
     suite: 'qa_ui.js', expect: /魔法清除水量守恒/,
     find: 'tgt.fill++;',
     repl: '/* rollback-test: 故意漏掉 tgt.fill++ */'
+  },
+  /* ---------- 02:00 档新增的 9 条设计断言，逐条做回滚验证 ---------- */
+  {
+    name: 'levelPlan：放水关不再减量（breathe 恒 false）',
+    suite: 'qa_design.js', expect: /放水关真的放水/,
+    find: '  var peak=(phase===4), breathe=(phase===0||phase===1);',
+    repl: '  var peak=(phase===4), breathe=false;   /* rollback-test */'
+  },
+  {
+    name: 'levelPlan：门洞上限从 4 提到 6（单局操作量天花板失守）',
+    suite: 'qa_design.js', expect: /单局操作量天花板/,
+    find: 'gates=Math.min(1+Math.floor((t+1)/4),4);',
+    repl: 'gates=Math.min(1+Math.floor((t+1)/4),6);   /* rollback-test */'
+  },
+  {
+    name: 'levelPlan：后期台面槽收到 5（槽 < 颜色数）',
+    suite: 'qa_design.js', expect: /台面槽 ≥ 颜色数/,
+    find: '    slots=Math.min(5+Math.floor(t/8),6);',
+    repl: '    slots=Math.min(4+Math.floor(t/8),5);' + '   /* rollback-test */'
+  },
+  {
+    name: 'genLevel：某色瓶数多塞 2 瓶（每色瓶数不均衡）',
+    suite: 'qa_design.js', expect: /每色瓶数均衡/,
+    find: '    var pn=perBase+(pc<perRem?1:0);',
+    repl: '    var pn=perBase+(pc<perRem?1:0);if(pc===0)pn+=2;' + '   /* rollback-test */'
+  },
+  {
+    name: 'genLevel：冰冻瓶候选放开「洞里不冻」的限制',
+    suite: 'qa_design.js', expect: /冰冻瓶绝不藏在门洞里/,
+    find: 'if(cb.gate>=0||cellIsCorner(cb.cell))continue;',
+    repl: 'if(cellIsCorner(cb.cell))continue;' + '   /* rollback-test */'
+  },
+  {
+    name: 'pickGateDirs：洞口方向直接取「所有界内方向」',
+    suite: 'qa_design.js', expect: /洞口朝向合法/,
+    find: '      var pick=fresh.length?fresh:(occD.length?occD:(freeD.length?freeD:inD));',
+    repl: '      var pick=inD;' + '   /* rollback-test */'
+  },
+  {
+    name: '门洞塞瓶数从 2~3 摊成固定 4 瓶',
+    suite: 'qa_design.js', expect: /每个门洞藏 2~3 个瓶子/,
+    find: 'for(var gk=0;gk<maxGates;gk++){var w=2+((cfg>>gk)&1);ws.push(w);es+=w-1;}',
+    repl: 'for(var gk=0;gk<maxGates;gk++){var w=4;ws.push(w);es+=w-1;}' + '   /* rollback-test */'
+  },
+  {
+    name: 'levelPlan：极限档 tier>=2 整段失效（极限 == 困难）',
+    suite: 'qa_design.js', expect: /三档挑战严格更难/,
+    find: '  if(tier>=2){',
+    repl: '  if(tier>=2&&false){' + '   /* rollback-test */'
+  },
+  {
+    name: '教学关的挑战档把棋盘改大到 20 格 / 5 管',
+    suite: 'qa_design.js', expect: /教学关的极限档/,
+    find: '  if(tier>0&&lv<=3){cells=12;colors=4;gates=1;ice=0;slots=5;tubes=3;}',
+    repl: '  if(tier>0&&lv<=3){cells=20;colors=4;gates=1;ice=0;slots=5;tubes=5;}' + '   /* rollback-test */'
   }
 ];
 

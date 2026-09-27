@@ -1,8 +1,8 @@
 {
-  "at": "2026-09-27T16:44:06.747Z",
+  "at": "2026-09-27T18:12:30.594Z",
   "green": true,
   "total": {
-    "pass": 325,
+    "pass": 334,
     "fail": 0,
     "warn": 0
   },
@@ -13,7 +13,7 @@
       "pass": 164,
       "fail": 0,
       "warn": 0,
-      "ms": 8636,
+      "ms": 1982,
       "fails": [],
       "warns": [],
       "unstable": false
@@ -24,7 +24,7 @@
       "pass": 66,
       "fail": 0,
       "warn": 0,
-      "ms": 1074,
+      "ms": 307,
       "fails": [],
       "warns": [],
       "unstable": false
@@ -35,7 +35,7 @@
       "pass": 31,
       "fail": 0,
       "warn": 0,
-      "ms": 587,
+      "ms": 243,
       "fails": [],
       "warns": [],
       "unstable": false
@@ -43,10 +43,10 @@
     {
       "key": "design",
       "name": "设计测试（关卡与布局不变量）",
-      "pass": 33,
+      "pass": 42,
       "fail": 0,
       "warn": 0,
-      "ms": 813,
+      "ms": 280,
       "fails": [],
       "warns": [],
       "unstable": false
@@ -57,7 +57,7 @@
       "pass": 31,
       "fail": 0,
       "warn": 0,
-      "ms": 3803,
+      "ms": 1133,
       "fails": [],
       "warns": [],
       "unstable": false

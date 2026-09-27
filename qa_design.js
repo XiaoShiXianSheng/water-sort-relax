@@ -7,6 +7,17 @@
  *   · 不越界：货架不压工具栏、不压台面进度条（这是用户肉眼能看见的丑）
  *   · 波浪节奏：峰值关真的比放水关难
  *
+ * 02:00 档补的 9 条「还没被断言保护」的设计规则（每条都做过回滚验证）：
+ *   · 放水关在同周期里必须「全维度 ≤ 峰值关，且至少两项严格更低」（density 必须严格更低）
+ *   · 单局操作量天花板（总水量 ≤96 / 预估平均步数 ≤220）—— 挡「把棋盘改大反而更水」的老路
+ *   · 普通档台面槽 ≥ 颜色数（每种颜色都得有一个接水口，广告解锁位就是补齐最后那一个）
+ *   · 每色瓶数均衡（彼此相差 ≤1，且每色 ≥2 瓶；防「某色只有 1 瓶」）
+ *   · 冰冻瓶绝不藏在门洞里（顺序锁 + 解冻双约束 = 玩家体感「这关不讲理」）
+ *   · 门洞朝向合法（在货架内 / 不朝另一个门洞 / 不朝冰冻瓶）
+ *   · 每个门洞藏 2~3 个瓶子
+ *   · 三档挑战严格更难（density 普通 < 困难 < 极限）
+ *   · 教学关的挑战档仍保留 12 格 / 3 管 / 冰冻 ≤1（别把新手第一关变成劝退关）
+ *
  * 用法：node qa_design.js
  */
 const { loadGame, Reporter, guard } = require('./qa_lib.js');
@@ -33,9 +44,13 @@ guard(rep, '设计', function () {
     ice: [], solvable: [], leftBleed: [], rightBleed: [], topBleed: [],
     gridBottom: [], counterClash: [], missingGap: [],
     /* 本轮新增的三条：门洞顺序可判定 / 冰冻"冻得住" / 洞里序号连续 */
-    gateQ: [], iceLoose: [], gateStackOrder: []
+    gateQ: [], iceLoose: [], gateStackOrder: [],
+    /* 02:00 档新增：单局操作量 / 槽色配比 / 每色瓶数 / 冰冻进洞 / 洞口朝向 / 洞内瓶数 */
+    volume: [], slotVsColor: [], colorBalance: [],
+    iceInGate: [], gateDir: [], gateWidth: []
   };
   let maxOverflow = 0, overflowAt = 0;
+  let maxEstSteps = 0, maxEstStepsAt = 0, maxWater = 0, maxWaterAt = 0;
 
   for (let lv = 1; lv <= LVMAX; lv++) {
     D.gen(lv);
@@ -49,6 +64,26 @@ guard(rep, '设计', function () {
       let emp0 = 0;
       for (let d0 = 0; d0 < 4; d0++) if (D.neighborEmpty(b0.cell, d0)) emp0++;
       if (emp0 >= 2) bad.iceLoose.push('L' + lv + ' cell' + b0.cell + ' 空' + emp0 + '格');
+    }
+    /* --- 门洞形状 / 洞口朝向 / 冰冻瓶不许进洞（同样在 frames() 之前采） ---
+       ① 每洞 2~3 瓶：只有 1 瓶的门洞等于白送，4 瓶以上则「一次要腾 4 格才通」太憋。
+       ② 洞口朝向：必须在货架内、不朝另一个门洞（互指 = 互锁）、不朝冰冻瓶（互相牵制 = 环）。
+          生成期有 dirOk() 与 40 次重掷兜底，这里守住「重掷兜底被改坏」的情况。
+       ③ 冰冻瓶不进洞：洞里的瓶子本来就带顺序锁，再叠一层解冻条件就是双重约束，
+          玩家体感是「这关不讲理」，也让 layoutSolvable 的剥落自检频繁失败。 */
+    for (let ga = 0; ga < D.G.gates.length; ga++) {
+      const gt = D.G.gates[ga];
+      const inGate = D.G.bottles.filter(b => b.gate === ga);
+      if (inGate.length < 2 || inGate.length > 3)
+        bad.gateWidth.push('L' + lv + ' 洞' + ga + ' 藏' + inGate.length + '瓶');
+      const nc = D.neighborCell(gt.cell, gt.dir);
+      if (nc < 0) bad.gateDir.push('L' + lv + ' 洞' + ga + ' 朝界外');
+      else if (D.gateAt(nc) >= 0) bad.gateDir.push('L' + lv + ' 洞' + ga + ' 朝另一个门洞');
+      else if (D.iceAt(nc)) bad.gateDir.push('L' + lv + ' 洞' + ga + ' 朝冰冻瓶');
+    }
+    for (let igi = 0; igi < D.G.bottles.length; igi++) {
+      const ib = D.G.bottles[igi];
+      if (ib.locked > 0 && ib.gate >= 0) bad.iceInGate.push('L' + lv + ' cell' + ib.cell);
     }
     g.frames(3);
     const G = D.G, pl = D.plan(lv);
@@ -64,6 +99,7 @@ guard(rep, '设计', function () {
       colors: colorSet.size, gates: G.gates.length,
       ice: G.bottles.filter(b => b.locked > 0).length, slots: G.slots.length,
       tubes: G.tubes.length, water: water, need: need, maxLayer: maxLayer,
+      density: pl.density,
       tile: G.tile, gridY0: G.gridY0, gridBottom: gridBottom, rgb: rowsMin + '-' + rowsMax
     });
 
@@ -105,6 +141,37 @@ guard(rep, '设计', function () {
 
     /* --- 台面槽 --- */
     if (G.slots.length < 5 || G.slots.length > 7) bad.slots.push('L' + lv + '=' + G.slots.length);
+    /* 槽位与颜色数的配比（普通档）：台面槽是「给某种颜色接水的工位」，
+       槽 < 颜色数意味着「就算把广告位也解锁了，也凑不齐每种颜色一个工位」——
+       玩家会被迫频繁「把没接满的瓶子退回货架」，广告解锁位的价值也被抹掉。
+       挑战档（困难/极限）刻意少槽、允许 < 颜色数，那是它难在哪儿的定义，不算违规。 */
+    if (G.slots.length < pl.colors)
+      bad.slotVsColor.push('L' + lv + ' 槽' + G.slots.length + '<色' + pl.colors);
+
+    /* --- 每色瓶数均衡：彼此相差 ≤1，且每色 ≥2 瓶 ---
+       「某色只有 1 瓶」= 这个颜色的水只有 3 滴，玩家几乎不用为它做决策，
+       开局对称性也被破坏（生成器注释写的「每色至少 2 瓶」从来没被断言守过）。 */
+    const colorCnt = [];
+    for (let cc = 0; cc < pl.colors; cc++) colorCnt.push(0);
+    for (let b3 = 0; b3 < G.bottles.length; b3++) colorCnt[G.bottles[b3].col]++;
+    const cnMin = Math.min.apply(null, colorCnt), cnMax = Math.max.apply(null, colorCnt);
+    if (cnMax - cnMin > 1)
+      bad.colorBalance.push('L' + lv + ' 每色 ' + colorCnt.join('/') + ' 差' + (cnMax - cnMin));
+    if (cnMin < 2)
+      bad.colorBalance.push('L' + lv + ' 有颜色只有 ' + cnMin + ' 瓶（' + colorCnt.join('/') + '）');
+
+    /* --- 单局操作量天花板 ---
+       水位 = 总水量 = 玩家至少要点这么多口；实测绕路比（实际步数 / 理论下界 瓶数×3）
+       稳定在 2.2~2.4，取 2.3 估算：预估平均步数 = 水量 × 2.3。
+       按每步 2 秒算 220 步 ≈ 7.5 分钟 —— 这是「玩得太累」的临界点，
+       所以天花板钉在「水量 ≤96（≈32 瓶）」+「预估步数 ≤220」。
+       历史教训：早期棋盘涨到 35 格 / 42 瓶，第 30 关平均 281 步、单局近 9 分钟，
+       而贪心通关率反而升到 75% —— 加格子加的是操作量，不是思考深度。 */
+    const estSteps = Math.round(water * 2.3);
+    if (water > 96 || estSteps > 220)
+      bad.volume.push('L' + lv + ' 水' + water + ' / 预估' + estSteps + '步');
+    if (estSteps > maxEstSteps) { maxEstSteps = estSteps; maxEstStepsAt = lv; }
+    if (water > maxWater) { maxWater = water; maxWaterAt = lv; }
 
     /* --- 门洞 / 冰冻 --- */
     if (G.gates.length > pl.gates) bad.gates.push('L' + lv + ' 实际' + G.gates.length + '>计划' + pl.gates);
@@ -190,6 +257,15 @@ guard(rep, '设计', function () {
   one('货架不压底部工具栏（留 ≥8px）', bad.gridBottom);
   one('**台面与货架之间留出空隙**（货架瓶盖顶 ≥ 台面刻度底 + 4px；否则首行会顶到台面上）', bad.counterClash);
 
+  /* ---------- 02:00 档新增：7 条「玩家能感觉到」的设计规则 ---------- */
+  one('**普通档台面槽 ≥ 颜色数**（每种颜色都得有个接水工位；槽比色少 = 广告解锁位白给）', bad.slotVsColor);
+  one('**每色瓶数均衡**（彼此相差 ≤1，且每色 ≥2 瓶；防「某色只有 1 瓶」）', bad.colorBalance);
+  one('**单局操作量天花板**（总水量 ≤96 且预估平均步数 ≤220；挡「棋盘改大反而更累」的老路）',
+    bad.volume, '　实测最重 L' + maxWaterAt + ' 水' + maxWater + ' / 预估 ' + maxEstSteps + ' 步（L' + maxEstStepsAt + '）');
+  one('**每个门洞藏 2~3 个瓶子**（1 个是白送、4 个以上要一次腾 4 格）', bad.gateWidth);
+  one('**洞口朝向合法**（在货架内 / 不朝另一个门洞 / 不朝冰冻瓶）', bad.gateDir);
+  one('**冰冻瓶绝不藏在门洞里**（顺序锁 + 解冻双约束 = 玩家体感「这关不讲理」）', bad.iceInGate);
+
   /* ============ 节奏与多样性 ============
      V4.0 §6：1~3 关教学（恒 9 格、快速成功）→ 4~8 关过渡 → 9 关以后靠决策密度变难。
      所以「波浪」只在 9 关以后（第 2 个周期起）成立；教学期本来就是平的，不该套波浪。 */
@@ -203,6 +279,30 @@ guard(rep, '设计', function () {
   }
   rep.ok('波浪节奏：9 关以后每 5 关一个「峰—谷—爬坡—峰值」周期', waveBad.length === 0, waveBad.join(' '));
 
+  /* 「波浪」不能只看格子数：放水关（每周期第 1、2 关）必须在**所有维度**上都比同周期峰值关轻，
+     而且决策密度（density）要严格更低、至少两项指标严格更低。
+     只比格数会放过一类坏设计：格子少了两格、门洞/冰冻却和峰值一样多 —— 玩家感觉不到「放水」。
+     教学周期（第 1 个 5 关）本来就是平的，不套这条。 */
+  const breatheBad = [];
+  for (let cyc = 1; cyc * 5 + 5 <= info.length; cyc++) {
+    const seg = info.slice(cyc * 5, cyc * 5 + 5);
+    const pk = seg[4];
+    for (let bi = 0; bi < 2; bi++) {                  // 放水关 = 相位 0 / 1
+      const b = seg[bi];
+      let strict = 0;
+      if (b.cells < pk.cells) strict++;
+      if (b.gates < pk.gates) strict++;
+      if (b.ice < pk.ice) strict++;
+      if (b.colors < pk.colors) strict++;
+      const ok = b.density < pk.density && b.cells <= pk.cells && b.gates <= pk.gates &&
+        b.ice <= pk.ice && b.colors <= pk.colors && strict >= 2;
+      if (!ok) breatheBad.push('L' + b.lv + '(格' + b.cells + '/洞' + b.gates + '/冰' + b.ice +
+        '/色' + b.colors + '/d' + b.density + ') vs 峰值L' + pk.lv + 'd' + pk.density);
+    }
+  }
+  rep.ok('**放水关真的放水**：每周期第 1、2 关全维度 ≤ 峰值关，且密度严格更低、≥2 项严格更低',
+    breatheBad.length === 0, breatheBad.join(' '));
+
   /* 教学期 1~3 必须是「无干扰的纯净局」（V4.0 §6：快速理解/快速成功/几乎不挫败） */
   const teachBad = [];
   for (let lv = 1; lv <= 3; lv++) {
@@ -215,6 +315,25 @@ guard(rep, '设计', function () {
   const dens = [];
   for (let lv = 1; lv <= LVMAX; lv++) dens.push(D.plan(lv).density);
   rep.ok('9 关以后决策密度递增（第 30 关 > 第 10 关）', dens[29] > dens[9], dens[29] + ' vs ' + dens[9]);
+
+  /* 三档挑战（普通 / 困难 / 极限）必须「真的更难」：density 严格递增。
+     否则「困难」只是换个名字、玩家多花时间却没多拿难度，三档系统的意义就没了。 */
+  const tierBad = [];
+  for (let lv = 1; lv <= LVMAX; lv++) {
+    const d0 = D.plan(lv, 0).density, d1 = D.plan(lv, 1).density, d2 = D.plan(lv, 2).density;
+    if (!(d1 > d0 && d2 > d1)) tierBad.push('L' + lv + ' ' + d0 + '/' + d1 + '/' + d2);
+  }
+  rep.ok('三档挑战严格更难（决策密度 普通 < 困难 < 极限）', tierBad.length === 0, tierBad.join(' '));
+
+  /* 教学关（1~3）的挑战档不许把棋盘改大、管数改多，冰冻最多 1 个 —— 别把新手第一关变成劝退关 */
+  const tierTeach = [];
+  for (let lv = 1; lv <= 3; lv++) {
+    const p = D.plan(lv, 2);
+    if (!(p.cells === 12 && p.tubes === 3 && p.ice <= 1 && p.slots >= 4))
+      tierTeach.push('L' + lv + ' 格' + p.cells + '/管' + p.tubes + '/冰' + p.ice + '/槽' + p.slots);
+  }
+  rep.ok('教学关的极限档仍保留 12 格 / 3 管 / 冰冻 ≤1 / 槽 ≥4', tierTeach.length === 0, tierTeach.join(' '));
+
   rep.ok('棋盘停止扩大：全部关卡格数 ≤ 26', Math.max.apply(null, growth) <= 26,
     '最大 ' + Math.max.apply(null, growth) + ' 格');
   rep.ok('整体递进：第 30 关格子数 > 第 5 关', growth[29] > growth[4],
@@ -233,10 +352,15 @@ guard(rep, '设计', function () {
   rep.warnIf('水柱能真的顶出屏幕顶部（有压迫感）', maxOverflow < 4,
     '最大出屏仅 ' + maxOverflow + 'px（第 ' + overflowAt + ' 关）');
 
+  /* 操作量的绝对水位也打出来（不进断言，给人看趋势）：上限 96 水 / 220 步 */
+  console.log('  （操作量最重：L' + maxWaterAt + ' 水' + maxWater + ' → 预估 ' + maxEstSteps +
+    ' 步（L' + maxEstStepsAt + '）；天花板 96 水 / 220 步）');
+
   /* 把 40 关的关键指标写出来，给人和 AI 复查用 */
-  const lines = ['lv\t格\t行\t行长\t色\t洞\t冰\t槽\t管\t水\t需\t最大层\ttile\tgridY0\t货架底'];
+  const lines = ['lv\t格\t行\t行长\t色\t洞\t冰\t槽\t管\t水\t需\t最大层\t密度\t预估步\ttile\tgridY0\t货架底'];
   info.forEach(x => lines.push([x.lv, x.cells, x.rows, x.rowLen.join(','), x.colors, x.gates, x.ice,
-    x.slots, x.tubes, x.water, x.need, x.maxLayer, x.tile, x.gridY0, x.gridBottom].join('\t')));
+    x.slots, x.tubes, x.water, x.need, x.maxLayer, x.density, Math.round(x.water * 2.3),
+    x.tile, x.gridY0, x.gridBottom].join('\t')));
   require('fs').writeFileSync(__dirname + '/qa_design_table.tsv', lines.join('\n'), 'utf8');
   console.log('  （40 关指标已写入 qa_design_table.tsv）');
 });
