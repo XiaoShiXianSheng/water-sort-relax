@@ -160,3 +160,84 @@ one('台面槽 5~7', bad.slots);   // → L35=4 L40=4
 
 **正确分工：人负责判断"好不好玩"，机器负责证明"对不对"。**
 把"对不对"全部自动化，人只花时间在"好不好玩"上。
+
+---
+
+## 8. 提交推送：一个会静默失败的坑（本机实测，务必先读）
+
+夜间任务要"自己提交、自己推送"，而本机 `git push` 有一个**非常隐蔽**的坑：
+
+| 现象 | 实测值 |
+|---|---|
+| `git push origin main` | **退出码 128，stdout + stderr 全空**，什么都不打印 |
+| `git ls-remote origin`（公开仓库读，不需要凭据） | rc=0，正常返回 |
+| 耗时 | push 卡 **约 14 秒**后失败 |
+
+只看这两个现象，第一反应肯定会误判成"网络问题 / 沙箱拦截 / 仓库权限"——**全都不是**。
+
+### 定位手法（关键，别猜）
+
+把 git 自己的 trace 写进文件（不要指望 stderr，它就是空的）：
+
+```powershell
+$env:GIT_TRACE = "C:/path/to/_trace.log"
+(& git push origin main 2>&1) -join "`n"
+# 然后读 _trace.log
+```
+
+trace 停在最后一行，答案就出来了：
+
+```
+run_command: 'git credential-manager get'      ← 卡在这里，14 秒后进程死亡
+```
+
+**根因**：本机 `credential.helper` 指向 WorkBuddy 自带 PortableGit 1.2.0 的
+`git-credential-manager.exe`，它在非交互环境里取凭据会卡死。
+git 拿到空凭据后**静默失败**（连一行 `fatal:` 都不打印）。
+
+> 注意：`git credential fill`（直接要凭据）反而**能成功**返回 token，
+> 所以"凭据助手是坏的"这个结论靠 `credential fill` 是验不出来的，必须看 trace。
+
+### 解法（本项目已落地，两条一起做）
+
+1. **仓库级清掉继承来的 helper**：`.git/config` 里加一段空值——
+   空值 = 重置整个 helper 链（全局配的那些不再生效）：
+
+   ```ini
+   [credential]
+   	helper = 
+   ```
+
+   > 坑中坑：PowerShell 传空字符串参数给 git 会被丢掉，`git config --local credential.helper ""`
+   > 写不进去。**直接编辑 `.git/config` 文件**最可靠，改完用 `git config --local --get credential.helper` 回读确认。
+
+2. **把 token 写进 remote URL**（仓库级，`.git/config` 不会被提交）：
+
+   ```powershell
+   git remote set-url origin "https://<用户名>:<token>@github.com/<owner>/<repo>.git"
+   ```
+
+3. **验证（必须做）**：
+
+   ```powershell
+   (& git push --dry-run origin main 2>&1) -join " | "   # 期望：几秒内 rc=0
+   ```
+
+### 备用配方
+
+正式推送仍然失败时，显式把 helper 置空 + 用带 token 的 URL：
+
+```powershell
+$env:GIT_TERMINAL_PROMPT="0"
+$tok = (("protocol=https`nhost=github.com`n`n" | & git credential fill 2>&1) |
+        Where-Object { $_ -like "password=*" }) -replace "^password=",""
+(& git -c credential.helper= -c credential.interactive=false `
+      push "https://<用户名>:$tok@github.com/<owner>/<repo>.git" main 2>&1) -join "`n"
+```
+
+### 顺带两条 PowerShell 输出陷阱
+
+- `git push 1>> $log 2>> $log` 会**吞掉**输出（连"rc="都取不到）；用
+  `$o = (& git push origin main 2>&1) -join "`n"` 再自己写文件。
+- 判断是否真的推上去了，**不要信本地 rc**，直接问远端：
+  `git ls-remote origin refs/heads/main` 与 `git rev-parse HEAD` 比对。
