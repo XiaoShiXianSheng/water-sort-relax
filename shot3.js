@@ -124,9 +124,10 @@ if (MODE === 'title') {
 if (setup) html = html.replace('</body>', setup + '</body>');
 
 const LOG = path.join(__dirname, '_shot3.log');
-const tmp = path.join(__dirname, '_s3_' + NAME + '.html');
+const SAFE = NAME.replace(/[\\/]/g, '_');
+const tmp = path.join(__dirname, '_s3_' + SAFE + '.html');
 const out = path.join(__dirname, NAME + '.png');
-const prof = path.join(__dirname, '_chr_' + NAME);
+const prof = path.join(__dirname, '_chr_' + SAFE);
 try {
   fs.appendFileSync(LOG, 'START ' + NAME + ' mode=' + (MODE || '-') + ' lv=' + LV + '\n');
   fs.writeFileSync(tmp, html);

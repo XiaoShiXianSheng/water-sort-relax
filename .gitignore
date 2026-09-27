@@ -6,6 +6,8 @@ node_modules/
 _*.txt
 _*.html
 _*.log
+_chr_*/
+zz_*
 .run/
 .DS_Store
 Thumbs.db
