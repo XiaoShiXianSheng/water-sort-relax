@@ -5,6 +5,7 @@
 - **线上**：https://water-sort-relax.app.workbuddy.host/
 - **形态**：`outputs/解压水消除.html` 一个文件搞定，双击即玩，零依赖
 - **技术**：纯 ES5（兼容老 WebView）· Canvas 2D · WebAudio 现场合成音效（无音频文件）
+- **截图**：`screenshots/` 目录（第 1/15/25/30 关、台面刻度、卡死广告面板）
 
 ## 这次想要的评审方向
 
@@ -23,7 +24,7 @@
 |---|---|
 | `lv` 变量区 | 全局画布常量：`BOTT_Y`（管底基准线）、`SLOT_Y`（台面）、`GRID_Y0`（货架） |
 | `levelPlan(lv)` | **难度曲线核心**。每 5 关一个周期，第 5/10/15/20/25/30 关为峰值，其后两关放水。输出格数、行数、列数、颜色数、门洞数、冰冻数、台面槽数 |
-| `tubeCountFor(units)` | 水管根数自适应（3~7 根），保证单管不超过 18 层 |
+| `tubeCountFor(units)` | 水管根数自适应（3~9 根，随关卡线性增长到第 22 关封顶） |
 | `genLevel(lv)` | 关卡生成：算格子布局 → 摆门洞/冰冻 → 分配瓶子 → 分配水层 → **可解性自检**（失败重试 40 次，兜底撤冰冻） |
 | `buildGrid / cellAt / rowX0 / neighborCell` | 货架的「行长度表」布局。为什么不直接用 rows×cols：门洞会多塞瓶子占格，按矩形摊必定留空格 |
 | `layoutSolvable()` | 剥落式可解性自检：反复剥掉"此刻可取"的元素，剥不干净 = 存在依赖环 = 死锁 |
@@ -32,6 +33,7 @@
 | `useClear / useFinger / useSwap / doUndo` | 三个道具 + 撤销 |
 | `STUCK_OPTS / stuckAction()` | 卡死自救面板的 4 个选项（3 个挂"看广告"文案，**但没接真广告 SDK，点了直接给奖励**） |
 | `shareInvite / shareHelp` | 分享的 2 个功能。**同样是纯模拟，没有调系统分享** |
+| `drawTube / drawTubeOpenPath` | 水管绘制（含水柱顶出屏幕的平口造型）· `drawJarCounter` 台面瓶子 + 三格进度刻度 |
 | `render()` / 各 `draw*` | 绘制 |
 
 ## 已知的设计取舍（欢迎挑战）
@@ -47,9 +49,10 @@
 ## 怎么验证改动没改坏
 
 ```bash
-node test_water.js        # 124 项无头回归测试，全绿才行
+node test_water.js        # 138 项无头回归测试，全绿才行
 node bot_run.js           # 机器人贪心通关 1~30 关
 node dbg_diff.js          # 难度量化：开局可选占比 / 贪心通关率 / 绕路比
+                          #   可指定关卡：LVS=1,5,10,15,20,25,30 REPS=20 node dbg_diff.js
 node dbg_curve.js         # 打印 1~40 关的布局参数
 ```
 

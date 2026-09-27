@@ -6,6 +6,48 @@
 
 ---
 
+## 在线资源（先看这三个）
+
+| 项 | 地址 | 用途 |
+|---|---|---|
+| **① 线上可玩** | https://water-sort-relax.app.workbuddy.host/ | 手机竖屏打开最佳。**点着玩三关**比看一百行描述有用 |
+| **② 源码仓库** | https://github.com/XiaoShiXianSheng/water-sort-relax | 全部代码 + 测试 + 本文件。请做代码评审 |
+| **③ 单文件本体** | [outputs/解压水消除.html](https://github.com/XiaoShiXianSheng/water-sort-relax/blob/main/outputs/%E8%A7%A3%E5%8E%8B%E6%B0%B4%E6%B6%88%E9%99%A4.html) | 约 90 KB，双击即玩，零依赖 |
+
+### 截图（直接看图，不用自己去跑）
+
+> 这是 Canvas 游戏，**光给网址 AI 看不到画面**（源码里没有图像信息）。以下图片是 raw 直链，AI 若有视觉能力可直接读取。
+
+**第 1 关** —— 开局信息密度（3 根水管、9 格、送分难度）
+
+![第1关](https://raw.githubusercontent.com/XiaoShiXianSheng/water-sort-relax/main/screenshots/01_level01_3tubes.png)
+
+**第 15 关（峰值关）** —— 7 根水管，水柱开始顶出画面上沿
+
+![第15关](https://raw.githubusercontent.com/XiaoShiXianSheng/water-sort-relax/main/screenshots/02_level15_7tubes_topoff.png)
+
+**第 30 关（峰值关）** —— 9 根水管，水柱冲出屏幕、货架 5 行 7 列、42 个瓶子
+
+![第30关](https://raw.githubusercontent.com/XiaoShiXianSheng/water-sort-relax/main/screenshots/03_level30_9tubes_overflow.png)
+
+**★ 卡死自救面板** —— **这是目前唯一的广告入口，请重点批判它**（第 4 节说它几乎触发不到）
+
+![卡死面板](https://raw.githubusercontent.com/XiaoShiXianSheng/water-sort-relax/main/screenshots/06_stuck_panel_ad.png)
+
+**台面瓶子** —— 瓶子下方是三格进度刻度（不再显示 33%、67%）
+
+![台面刻度](https://raw.githubusercontent.com/XiaoShiXianSheng/water-sort-relax/main/screenshots/04_counter_progress_ticks.png)
+
+**台面满提示** —— 唯一的"操作受阻"反馈（橙色横幅 + 瓶子抖动）
+
+![台面满](https://raw.githubusercontent.com/XiaoShiXianSheng/water-sort-relax/main/screenshots/05_board_full_banner.png)
+
+**第 25 关（峰值关）** —— 5 行 7 列、6 色、4 个门洞 + 4 个冰冻瓶
+
+![第25关](https://raw.githubusercontent.com/XiaoShiXianSheng/water-sort-relax/main/screenshots/08_level25_peak.png)
+
+---
+
 ## 0. 怎么提问才能拿到有用的答案
 
 直接把这段和本文档一起发：
@@ -55,7 +97,7 @@
 
 | 项目 | 状态 | 说明 |
 |---|---|---|
-| 魔法清除 / 万能指 / 随心互换 / 撤销 / 解锁台面 | **功能全部正常** | 124 项自动化测试全绿，含"道具为 0 时的拒绝路径" |
+| 魔法清除 / 万能指 / 随心互换 / 撤销 / 解锁台面 | **功能全部正常** | 138 项自动化测试全绿，含"道具为 0 时的拒绝路径" |
 | 卡死自救面板 4 个选项 | **功能全部正常** | 题目要求：每个选项点了都真的产生对应效果 |
 | 邀请好友 +1、好友帮消除 | **功能正常，但是假的** | 没有调任何系统分享，点一下直接发奖励 |
 | 「看广告」按钮 | **纯文字，没有广告** | 没有接任何广告 SDK，点了直接给奖励，等于白送 |
@@ -162,14 +204,29 @@
 
 ---
 
-## 10. 给 AI 看的截图建议
+## 10. 代码评审（请一并做）
 
-不要发网址（Canvas 游戏源码里没有画面信息，AI 抓不到）。
+源码全在一个文件里：`outputs/解压水消除.html`（约 90 KB，纯 ES5，零依赖，Canvas 2D，音效用 WebAudio 现场合成）。
+`README.md` 里有**函数路线图**和**四条已知的设计取舍**（欢迎挑战），`test_water.js` 是 138 项无头回归测试。
 
-建议附这 3 张：
+按这个顺序看最快：
 
-1. **第 1 关画面** —— 体会开局的信息密度
-2. **第 25 关画面** —— 体会后期货架有多挤、门洞和冰冻瓶长什么样
-3. **卡死自救面板** —— 这是目前唯一的广告入口，请重点批判它够不够
+1. `levelPlan(lv)` —— 难度曲线核心（每 5 关一个周期，第 5/10/15/20/25/30 关峰值，其后两关放水）
+2. `genLevel(lv)` —— 关卡生成 + **可解性自检**（失败重试 40 次）。**这条自检是"广告触发 ≈ 0"的直接原因，请重点评审**
+3. `handleTap()` —— 全部输入入口
+4. `STUCK_OPTS / stuckAction()` —— 唯一的广告位（3 个选项），以及 `shareInvite / shareHelp`（假的分享）
+5. `render()` / 各 `draw*` —— 绘制
 
-如果平台支持联网，再补一句：线上可玩地址 https://water-sort-relax.app.workbuddy.host/ ，但请以截图和本文档为准。
+请特别指出：
+
+- **哪里是"为了不出 bug 而牺牲了商业价值"**（我们怀疑可解性自检就是典型）
+- **哪些改动是低成本的**（单文件、无构建，加 localStorage / 结算星级 / 计步器都很轻）
+- **哪些改动必须引入外部依赖**（真广告 SDK、云端排行榜）
+- 代码里**有没有会被平台审核卡住的东西**（比如假的"看广告"按钮 —— 上架前必须换成真的或被移除）
+
+---
+
+## 11. 一句话总结我想要的
+
+我不需要"画面好看"这种评价。我要的是：**这套设计里，哪些数字（留存率、广告触发次数、单局时长）现在是死的，以及最小改动怎么把它们救活。**
+

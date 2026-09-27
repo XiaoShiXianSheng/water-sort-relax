@@ -45,6 +45,19 @@ if (MODE === 'picker') {
   setInterval(function(){ if(keep&&keep.place==='counter'&&!keep.done)keep.fill=2; },60);
 })();
 </script>`;
+} else if (MODE === 'stuck') {
+  // 真死局：把所有管底换成货架上不存在的「幽灵色」（本模式请用 3 色关卡，如 LV=6）
+  setup = `
+<script>
+(function(){ var D=window.__DBG; if(!D)return; D.gen(${LV}); var G=D.G;
+  setTimeout(function(){
+    G.anim=null; G.tools={clear:0,finger:0,swap:0}; G.undoLeft=0; G.unlockLeft=0;
+    G.tubes.forEach(function(t){ for(var k=0;k<t.units.length;k++) t.units[k]=5; });
+  }, 60);
+  setTimeout(function(){ G.stuck=true; }, 1200);
+  setInterval(function(){ G.stuck=true; }, 50);
+})();
+</script>`;
 } else if (MODE === 'hint') {
   setup = `
 <script>

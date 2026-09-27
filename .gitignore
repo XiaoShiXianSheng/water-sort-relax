@@ -4,6 +4,8 @@ node_modules/
 *.tmp
 *.genie
 _*.txt
+_*.html
+_*.log
 .run/
 .DS_Store
 Thumbs.db
