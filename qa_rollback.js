@@ -473,6 +473,30 @@ const CASES = [
     suite: 'qa_design.js', expect: /普通档台面槽位随关卡单调不减/,
     find: '    slots=Math.min(5+Math.floor(t/8),6);',
     repl: '    slots=Math.min(5+Math.floor(t/8),6);if(lv>=18&&lv<=20)slots=5;   /* rollback-test */'
+  },
+  /* ---------- 05:00 档新增 G9「真浏览器启动冒烟」的三条回滚用例 ----------
+     这三条刻意覆盖**三种不同的白屏成因**，而不是同一个成因换三种写法：
+       ① 启动就抛错（脚本没跑完 → 主循环压根没注册）
+       ② 跑起来了但 render 空转（画面全空 = 用户看到白屏）
+       ③ 主循环跑一帧就不排下一帧（画面卡死在第一帧）
+     三者互不重叠，能证明 G9 的四条断言各自有独立效力。 */
+  {
+    name: 'G9①：启动即抛错（genLevel 后 throw，后面的 requestAnimationFrame(loop) 不再执行）',
+    suite: 'qa_smoke_live.js', expect: /主循环在跑/,
+    find: 'if(URL_LVL){genLevel(URL_LVL);}',
+    repl: 'if(URL_LVL){genLevel(URL_LVL);throw new Error("SMOKE_BOOT");}   /* rollback-test */'
+  },
+  {
+    name: 'G9②：render() 空转（主循环照跑，但画面上什么都没画 = 白屏）',
+    suite: 'qa_smoke_live.js', expect: /画面真的画出了东西/,
+    find: 'function render(time){',
+    repl: 'function render(time){if(1)return;   /* rollback-test: 空转 */'
+  },
+  {
+    name: 'G9③：主循环不排下一帧（画完第一帧就冻住）',
+    suite: 'qa_smoke_live.js', expect: /主循环在跑/,
+    find: '  }\n  requestAnimationFrame(loop);\n}',
+    repl: '  }\n  /* rollback-test: 故意不排下一帧 */\n}'
   }
 ];
 
@@ -538,6 +562,29 @@ function startServer(code) {
 
 const DEFAULT_FILE = 'outputs/解压水消除.html';
 const origHash = origOf(DEFAULT_FILE).hash;
+
+/* ---- 快照「会被套件顺手重写的受版本控制产物」 ----
+ * 踩到过（2026-09-29 05:00）：跑完一轮回滚验证后 `git diff qa_design_table.tsv` 显示
+ * L18~L20 的「槽」列从 6 变成 5、密度跟着变 —— 看上去像"产品数值回归"。
+ * 实际是回滚用例「第 18~20 关把台面槽收回去 1 个」跑 qa_design.js 时，
+ * 把**改坏版**的关卡指标表留在了工作区（qa_design.js 每次运行都会重写这张表）。
+ * 所以这里跟产品文件一样：先快照、跑完原样还原 —— 别让"验证工具"污染交付物。 */
+const VOLATILE = ['qa_design_table.tsv'];
+const volSnap = {};
+VOLATILE.forEach(f => {
+  try { volSnap[f] = fs.readFileSync(path.join(ROOT, f)); } catch (e) { volSnap[f] = null; }
+});
+function restoreVolatile() {
+  const done = [];
+  VOLATILE.forEach(f => {
+    if (!volSnap[f]) return;
+    const p = path.join(ROOT, f);
+    let same = false;
+    try { same = fs.readFileSync(p).equals(volSnap[f]); } catch (e) { same = false; }
+    if (!same) { fs.writeFileSync(p, volSnap[f]); done.push(f); }
+  });
+  return done;
+}
 
 console.log('===== 回滚验证  ' + new Date().toISOString().replace('T', ' ').slice(0, 19) + '  =====');
 console.log('（做法：把产品代码故意改坏 → 跑对应套件 → 必须看到指定断言 FAIL → 用 md5 校验原文件已还原）');
@@ -617,7 +664,9 @@ for (const c of CASES) {
 }
 
 rows.forEach(x => console.log((x.ok ? '  ✔ ' : '  ✘ ') + x.name + '\n      ' + x.why));
+const volFixed = restoreVolatile();
 console.log('');
+console.log('  已还原被套件重写的产物：' + (volFixed.length ? volFixed.join('、') : '（无变化）'));
 console.log('===== 回滚验证：' + rows.filter(x => x.ok).length + '/' + rows.length
   + ' 个用例如期 FAIL 且原文件已还原' + (bad ? '，有 ' + bad + ' 个异常' : '') + ' =====');
 console.log('（原文件 md5 ' + origHash.slice(0, 12) + '，校验通过：'

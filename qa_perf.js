@@ -104,7 +104,18 @@ const BENCH = '<script>\n' + [
   '    for(i=0;i<a.length;i++)sum+=a[i];',
   '    function q(p){ return s[Math.min(s.length-1,Math.floor(p*(s.length-1)))]; }',
   '    var o16=0,o50=0; for(i=0;i<a.length;i++){ if(a[i]>16.7)o16++; if(a[i]>50)o50++; }',
-  '    return {n:a.length,avg:sum/a.length,p50:q(0.5),p95:q(0.95),max:s[s.length-1],over16:o16,over50:o50};',
+  '    return {n:a.length,avg:sum/a.length,p50:q(0.5),p95:q(0.95),p99:q(0.99),max:s[s.length-1],over16:o16,over50:o50};',
+  '  }',
+  /* 最差帧出现在采样窗口的第几帧？注意采样窗口本身是在 90 帧热身**之后**才开始的，
+     所以窗口第 1 帧偏高 = 采集刚开始的过渡，不代表"玩着玩着卡一下"。
+     同时算「去掉最差那 1 帧后的平均」，用来看这一个尖峰对平均值的影响有多大。 */
+  '  function worst(a){',
+  '    var mxi=0,i,sum=0; for(i=1;i<a.length;i++)if(a[i]>a[mxi])mxi=i;',
+  '    for(i=0;i<a.length;i++)sum+=a[i];',
+  '    var rest=a.length>1?sum-a[mxi]:0;',
+  '    return {idx:mxi,val:a[mxi]||0,n:a.length,',
+  '      avgNoMax:a.length>1?rest/(a.length-1):0,',
+  '      second:a.length>1?Math.max.apply(null,a.slice(0,mxi).concat(a.slice(mxi+1))):0};',
   '  }',
   '  function avgObj(arr,keys){',
   '    var o={},i,k; for(k=0;k<keys.length;k++)o[keys[k]]=0;',
@@ -149,6 +160,7 @@ const BENCH = '<script>\n' + [
   '      /* ---- A 空载逐帧 ---- */',
   '      sample(' + IDLE_FRAMES + ',function(r){',
   '        rep.idle=stats(r.frames); rep.idleInterval=stats(r.interval);',
+  '        rep.idleWorst=worst(r.frames);',
   '        rep.idleCalls=avgObj(r.calls,["grad","rgrad","fill","stroke","arc","fillRect","drawImage","beginPath","rect","save","restore","text"]);',
   '        /* ---- B 粒子峰值：life 拉满 + 每 10ms 补足，保证是真正的稳态峰值 ---- */',
   '        var mk=function(){ while(D.particles.length<' + BURST_N + '){',
@@ -159,6 +171,7 @@ const BENCH = '<script>\n' + [
   '        sample(' + BURST_FRAMES + ',function(r2){',
   '          rep.burstParticles=D.particles.length;',
   '          rep.burst=stats(r2.frames);',
+  '          rep.burstWorst=worst(r2.frames);',
   '          rep.burstCalls=avgObj(r2.calls,["grad","rgrad","fill","stroke","arc","fillRect","drawImage","beginPath"]);',
   '          D.particles.length=0;',
   '          /* ---- C 消融归因：整帧 − 去掉某子系统后的整帧（各项可比，不会出现 >100%）---- */',
@@ -299,18 +312,34 @@ function finish(rep) {
 
   L.push('## 2. 逐帧耗时（60fps 预算 = 16.7ms）');
   L.push('');
-  L.push('| 场景 | 帧数 | **平均** | p50 | p95 | **最差** | >16.7ms | >50ms |');
-  L.push('|---|---|---|---|---|---|---|---|');
-  const row = (name, s) => !s ? '| ' + name + ' | — | — | — | — | — | — | — |'
-    : '| ' + name + ' | ' + s.n + ' | **' + f(s.avg) + 'ms** | ' + f(s.p50) + 'ms | ' + f(s.p95) + 'ms | **'
-    + f(s.max) + 'ms** | ' + s.over16 + ' | ' + s.over50 + ' |';
+  L.push('| 场景 | 帧数 | **平均** | p50 | p95 | p99 | **最差** | >16.7ms | >50ms |');
+  L.push('|---|---|---|---|---|---|---|---|---|');
+  const row = (name, s) => !s ? '| ' + name + ' | — | — | — | — | — | — | — | — |'
+    : '| ' + name + ' | ' + s.n + ' | **' + f(s.avg) + 'ms** | ' + f(s.p50) + 'ms | ' + f(s.p95) + 'ms | '
+    + f(s.p99) + 'ms | **' + f(s.max) + 'ms** | ' + s.over16 + ' | ' + s.over50 + ' |';
   L.push(row('空载（正常对局）', rep.idle));
   L.push(row('粒子峰值（' + (rep.burstParticles || BURST_N) + ' 个粒子同时在场）', rep.burst));
+  L.push('');
+  /* 最差帧落在采样窗口第几帧：窗口是 90 帧热身之后才开始的，
+     所以「窗口第 1 帧」= 采集过渡，「窗口中间」才是真正的稳态抖动。 */
+  const W1 = (key, label) => {
+    const w = rep[key];
+    if (!w || !w.n) return;
+    const first = w.idx === 0;
+    L.push('- **' + label + '最差帧**：' + f(w.val) + 'ms，出现在采样窗口第 ' + (w.idx + 1) + ' / ' + w.n
+      + ' 帧（第 2 差 ' + f(w.second) + 'ms；去掉这一个尖峰后平均 '
+      + f(w.avgNoMax) + 'ms，即它对平均的影响约 '
+      + f(w.val / w.n) + 'ms）'
+      + (first ? '—— 落在窗口**第 1 帧**，属采集刚开始的过渡，不代表稳态卡顿' : '—— 在窗口中间，属稳态里的一次抖动'));
+  };
+  W1('idleWorst', '空载');
+  W1('burstWorst', '粒子峰值');
   L.push('');
   if (rep.idleInterval) {
     L.push('rAF 时间戳间隔：平均 ' + f(rep.idleInterval.avg) + 'ms / 最差 ' + f(rep.idleInterval.max)
       + 'ms。headless 无垂直同步，这个数不等于「能不能稳住 60fps」，仅供参考；');
-    L.push('真正决定卡不卡的是上表的**每帧耗时**——它 2ms、预算 16.7ms，就是还有 8 倍余量。');
+    L.push('真正决定卡不卡的是上表的**每帧耗时**——平均 ' + f(rep.idle.avg) + 'ms、p99 ' + f(rep.idle.p99)
+      + 'ms，预算 16.7ms，还有 ' + (16.7 / (rep.idle.avg || 1)).toFixed(1) + ' 倍余量。');
     L.push('');
   }
 
@@ -375,18 +404,28 @@ function finish(rep) {
   }
 
   /* ---- 结论 ---- */
+  /* 判定口径按派单书：**平均 > 16.7ms** 或 **出现 >50ms 长帧** 才算不达标。
+     中间那些零星 >16.7ms 的帧只提示、不算失败 —— 共享机器上一次 GC / 调度抖动
+     就能造出一个 17ms 的帧，把它当硬失败会让这个脚本变成"随机报警器"。 */
   const bad = [];
   if (rep.idle && rep.idle.avg > 16.7) bad.push('空载平均 ' + f(rep.idle.avg) + 'ms > 16.7ms');
   if (rep.idle && rep.idle.over50 > 0) bad.push('空载出现 ' + rep.idle.over50 + ' 个 >50ms 长帧');
   if (rep.burst && rep.burst.avg > 16.7) bad.push('粒子峰值平均 ' + f(rep.burst.avg) + 'ms > 16.7ms');
   if (rep.burst && rep.burst.over50 > 0) bad.push('粒子峰值出现 ' + rep.burst.over50 + ' 个 >50ms 长帧');
+  const warn16 = ((rep.idle && rep.idle.over16) || 0) + ((rep.burst && rep.burst.over16) || 0);
   L.push('## 4. 结论');
   L.push('');
   if (!bad.length) {
-    L.push('✅ **达标，本档不改游戏本体**：空载与粒子峰值都远在 60fps 预算内，零长帧。');
+    L.push('✅ **达标，本档不改游戏本体**：空载与粒子峰值都远在 60fps 预算内，零长帧（>50ms）。');
     L.push('');
     L.push('余量：空载 ' + f(rep.idle.avg) + 'ms / 16.7ms ≈ **' + (16.7 / (rep.idle.avg || 1)).toFixed(1)
       + ' 倍**；粒子峰值 ' + f(rep.burst.avg) + 'ms ≈ **' + (16.7 / (rep.burst.avg || 1)).toFixed(1) + ' 倍**。');
+    L.push('');
+    L.push('- 超出 16.7ms 的帧共 **' + warn16 + '** 个（' + (warn16 ? '都是零星尖峰，见上面的最差帧归因' : '一个都没有')
+      + '）；超出 50ms 的 **0** 个。');
+    L.push('- 判定口径：平均 > 16.7ms 或出现 >50ms 长帧才算不达标（脚本退出码 2）。');
+    L.push('  零星 17ms 级尖峰只提示不算失败 —— 共享机器上一次 GC / 调度抖动就能造出来，'
+      + '把它当硬失败等于做了个随机报警器。');
   } else {
     L.push('⚠️ **超出预算，需要优化**：');
     bad.forEach(b => L.push('- ' + b));

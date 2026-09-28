@@ -13,6 +13,8 @@
  *  4. `--gate` 的判据分两层：套件级（0 FAIL / 无 flaky）由本文件算，
  *     文件级与线上级（体积 / ES5 / 依赖 / 可解性 / 线上字节）由 qa_gate.js 算并写 _gate.json，
  *     本文件只负责汇总成一张「能不能上线」的表 —— 判据集中在 qa_gate.js，别在这里重复实现。
+ *  5. `--gate` 还会多跑两个 gateOnly 套件：qa_gate.js（文件/线上级判据）与
+ *     qa_smoke_live.js（真浏览器冒烟 → G9）。它们只在门禁下跑，`--quick` 与默认两档口径不变。
  */
 const { spawnSync } = require('child_process');
 const fs = require('fs');
@@ -36,7 +38,11 @@ const SUITES = [
   { key: 'bot', name: '合理性测试（机器人贪心通关）', file: 'bot_run.js', kind: 'bot', fast: false,
     env: GATE ? { MAX: '40', TRIES: '3' } : { MAX: '30', TRIES: '3' } },
   /* 门禁套件放最后：它要读的 _gate.json 里含线上比对，独立成进程好排查 */
-  { key: 'gate', name: '上线门禁（体积 / ES5 / 依赖 / 可解性 / 线上一致）', file: 'qa_gate.js', kind: 'qa', fast: true, gateOnly: true }
+  { key: 'gate', name: '上线门禁（体积 / ES5 / 依赖 / 可解性 / 线上一致）', file: 'qa_gate.js', kind: 'qa', fast: true, gateOnly: true },
+  /* 真浏览器冒烟（G9）：前面所有套件都跑在**假 canvas** 上，谁也证明不了"真机不是白屏"。
+     它只在 --gate 下跑（默认与 --quick 的口径保持不变），且**只判对/错不判快慢** ——
+     帧耗时在共享机器上会抖，塞进门禁会让门禁自己时红时绿，性能交给 qa_perf.js 单独量。 */
+  { key: 'smoke', name: '真浏览器冒烟（Chrome 360×640 · 4 关 × 90 帧 · 非白屏）', file: 'qa_smoke_live.js', kind: 'qa', fast: false, gateOnly: true }
 ];
 
 function runSuite(s) {
@@ -161,8 +167,22 @@ if (GATE) {
   } else {
     gadd('G7', '机器人 1~40 关全通', false, '机器人套件没跑');
   }
-  /* 按编号排一下：门禁表要能一眼从 G1 读到 G8b，别让「后加的条件」插在中间 */
-  const ORDER = ['G1', 'G2', 'G2b', 'G3', 'G4', 'G5', 'G6', 'G7', 'G8a', 'G8b'];
+  /* G9 真浏览器冒烟：这条是"白屏事故"的最后一道闸。
+     静态扫描（G4/G5）只能证明语法和依赖没问题，假 canvas 套件连 API 缺失都不报错 ——
+     只有真浏览器跑起来，才能证明"点开真的有画面"。它只判对错不判快慢，所以是确定性的。 */
+  const smokeRes = results.find(r => r.key === 'smoke');
+  if (!smokeRes) {
+    gadd('G9', '真浏览器启动冒烟（4 关 × 90 帧：无错误 / 非白屏 / 主循环在跑）', false,
+      '冒烟套件没跑 —— 「没验证」不算通过');
+  } else {
+    gadd('G9', '真浏览器启动冒烟（4 关 × 90 帧：无错误 / 非白屏 / 主循环在跑）', smokeRes.fail === 0,
+      smokeRes.fail === 0
+        ? smokeRes.pass + ' 项全过（Chrome headless 360×640，见 _smoke.json）'
+        : smokeRes.fails.slice(0, 2).join('；'));
+  }
+
+  /* 按编号排一下：门禁表要能一眼从 G1 读到 G9，别让「后加的条件」插在中间 */
+  const ORDER = ['G1', 'G2', 'G2b', 'G3', 'G4', 'G5', 'G6', 'G7', 'G8a', 'G8b', 'G9'];
   gateItems.sort((a, b) => {
     const ia = ORDER.indexOf(a.id), ib = ORDER.indexOf(b.id);
     return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);

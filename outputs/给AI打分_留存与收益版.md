@@ -24,9 +24,9 @@
 | 项 | 地址 | 用途 |
 |---|---|---|
 | **① 线上可玩** | https://water-sort-relax.app.workbuddy.host/ | 手机竖屏最佳，横屏也能玩。**点着玩三关**比看一百行描述有用 |
-| **② 源码仓库** | https://github.com/XiaoShiXianSheng/water-sort-relax | 全部代码 + 456 项自动化测试（`--gate` 口径）+ 本文件。请做代码评审 |
+| **② 源码仓库** | https://github.com/XiaoShiXianSheng/water-sort-relax | 全部代码 + 476 项自动化测试（`--gate` 口径，11 条硬门禁）+ 本文件。请做代码评审 |
 | **③ 单文件本体** | [outputs/解压水消除.html](https://github.com/XiaoShiXianSheng/water-sort-relax/blob/main/outputs/%E8%A7%A3%E5%8E%8B%E6%B0%B4%E6%B6%88%E9%99%A4.html) | 约 90 KB，双击即玩，零依赖 |
-| **④ 自动测试报告** | [qa_report.md](https://github.com/XiaoShiXianSheng/water-sort-relax/blob/main/qa_report.md) | 456 项测试的完整输出，可复现（口径见 `QA_测试口径规范.md`） |
+| **④ 自动测试报告** | [qa_report.md](https://github.com/XiaoShiXianSheng/water-sort-relax/blob/main/qa_report.md) | 476 项测试的完整输出，可复现（口径见 `QA_测试口径规范.md`） |
 
 ### 截图（直接看图，不用自己跑）
 
@@ -231,7 +231,7 @@
 ### 3.4 工程质量现状（这是我最想让 AI 评审的部分之一）
 
 - 单文件 HTML，**纯 ES5**（兼容老 WebView），零依赖，Canvas 2D，音效用 WebAudio 现场合成
-- **456 项（`node qa_run.js --gate`，7 个套件）**，一条命令跑完，详细见 `qa_report.md`。
+- **476 项（`node qa_run.js --gate`，8 个套件）**，一条命令跑完，详细见 `qa_report.md`。
   口径定义（为什么历史材料里出现过 355/364/334/403）见 `QA_测试口径规范.md`：
 
 | 套件 | 项数 | 守的是什么 |
@@ -478,7 +478,7 @@
 
 我已经把"测试"做成了自动化，因为**让用户手动一关一关玩着找 bug 是最贵的做法**。现状：
 
-- **456 项（`--gate`） / 7 个套件**，一条命令跑完，报告落盘，退出码表达结论
+- **476 项（`--gate`） / 8 个套件**，一条命令跑完，报告落盘，退出码表达结论
 - 覆盖：功能（点击级）、架构（单文件/ES5/零依赖/兜底）、设计（关卡数值自洽）、UI（命中回转/拒绝反馈/多分辨率）、合理性（机器人通关）
 - 机制保障：**每条新断言都要做"回滚验证"**（故意改坏产品代码，确认测试真的会 FAIL）—— 这招抓出过两次"假绿"
 - 已知盲区：没有真机测试、没有性能基准、没有长时间运行/内存泄漏测试、没有广告 SDK 的失败降级测试（因为还没接）
@@ -504,7 +504,7 @@
 ## 13. 代码层面的背景（供判断改造成本）
 
 - 单文件 HTML，约 148.8 KB，**纯 ES5**（兼容老 WebView），零依赖，Canvas 2D，音效用 WebAudio 现场合成
-- **456 项 Node 无头自动化测试**（`node qa_run.js --gate` 一条命令），改完能立刻验证没改坏
+- **476 项 Node 无头自动化测试**（`node qa_run.js --gate` 一条命令），改完能立刻验证没改坏
 - 意味着：加 localStorage 存档、加结算星级这类改造成本**很低**；
   **加真广告 SDK 和任何联网能力是主要工作量**
 - 已上线：https://water-sort-relax.app.workbuddy.host/
@@ -514,7 +514,7 @@
 ## 14. 代码评审（请一并做）
 
 源码全在一个文件里：`outputs/解压水消除.html`（约 90 KB，纯 ES5，零依赖）。
-`README.md` 里有**函数路线图**和**四条已知的设计取舍**（欢迎挑战），`qa_report.md` 是最近一次测试（`--gate` 456 项）的输出。
+`README.md` 里有**函数路线图**和**四条已知的设计取舍**（欢迎挑战），`qa_report.md` 是最近一次测试（`--gate` 476 项）的输出。
 
 按这个顺序看最快：
 
