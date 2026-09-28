@@ -1,9 +1,79 @@
 {
-  "at": "2026-09-28T18:31:14.304Z",
+  "at": "2026-09-28T21:22:32.936Z",
   "green": true,
-  "gate": null,
+  "gate": {
+    "ok": true,
+    "items": [
+      {
+        "id": "G1",
+        "name": "全部套件 0 FAIL",
+        "ok": true,
+        "detail": "476 项断言全过"
+      },
+      {
+        "id": "G2",
+        "name": "无 flaky（快速套件重跑 2 遍结果一致）",
+        "ok": true,
+        "detail": "2 遍重跑全部一致"
+      },
+      {
+        "id": "G2b",
+        "name": "没有套件崩溃 / 静默跳过",
+        "ok": true,
+        "detail": "8 个套件全部产出结论"
+      },
+      {
+        "id": "G3",
+        "name": "单文件体积 < 200KB（零依赖交付形态没退化）",
+        "ok": true,
+        "detail": "148.8KB / 上限 200KB"
+      },
+      {
+        "id": "G4",
+        "name": "ES5 合规（剥掉注释/字符串/正则后无 ES6+ 语法）",
+        "ok": true,
+        "detail": "扫过 94KB 纯代码，0 命中"
+      },
+      {
+        "id": "G5",
+        "name": "无外部依赖（自包含单文件）",
+        "ok": true,
+        "detail": "1 个内联 <script>，0 个 src/link/@import/url(http)"
+      },
+      {
+        "id": "G6",
+        "name": "1~40 关全部可解（每关 3 次生成）+ 水量守恒",
+        "ok": true,
+        "detail": "40 关 × 3 次，全部通过剥落式自检且水量守恒"
+      },
+      {
+        "id": "G7",
+        "name": "机器人 1~40 关全通（固定种子，可复现）",
+        "ok": true,
+        "detail": "40/40 通关；其中 1~30 关 30/30"
+      },
+      {
+        "id": "G8a",
+        "name": "发布件与主文件字节一致（改了主文件必须同步发布目录）",
+        "ok": true,
+        "detail": "md5 516536f2ad7bb1a2cb14e0f878a39b60（152352B）"
+      },
+      {
+        "id": "G8b",
+        "name": "线上字节与本地一致（带 ?t= 破 CDN 缓存）",
+        "ok": true,
+        "detail": "线上 152352B / md5 516536f2ad7bb1a2cb14e0f878a39b60 与发布件逐字节相同"
+      },
+      {
+        "id": "G9",
+        "name": "真浏览器启动冒烟（4 关 × 90 帧：无错误 / 非白屏 / 主循环在跑）",
+        "ok": true,
+        "detail": "20 项全过（Chrome headless 360×640，见 _smoke.json）"
+      }
+    ]
+  },
   "total": {
-    "pass": 410,
+    "pass": 476,
     "fail": 0,
     "warn": 0
   },
@@ -14,7 +84,7 @@
       "pass": 165,
       "fail": 0,
       "warn": 0,
-      "ms": 3243,
+      "ms": 2572,
       "fails": [],
       "warns": [],
       "unstable": false
@@ -25,7 +95,7 @@
       "pass": 66,
       "fail": 0,
       "warn": 0,
-      "ms": 689,
+      "ms": 433,
       "fails": [],
       "warns": [],
       "unstable": false
@@ -36,7 +106,7 @@
       "pass": 31,
       "fail": 0,
       "warn": 0,
-      "ms": 364,
+      "ms": 303,
       "fails": [],
       "warns": [],
       "unstable": false
@@ -47,7 +117,7 @@
       "pass": 50,
       "fail": 0,
       "warn": 0,
-      "ms": 651,
+      "ms": 550,
       "fails": [],
       "warns": [],
       "unstable": false
@@ -58,7 +128,83 @@
       "pass": 98,
       "fail": 0,
       "warn": 0,
-      "ms": 3310,
+      "ms": 2569,
+      "fails": [],
+      "warns": [],
+      "unstable": false
+    },
+    {
+      "key": "bot",
+      "name": "合理性测试（机器人贪心通关）",
+      "pass": 40,
+      "fail": 0,
+      "warn": 0,
+      "ms": 59367,
+      "fails": [],
+      "warns": [],
+      "unstable": false,
+      "botWon": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31,
+        32,
+        33,
+        34,
+        35,
+        36,
+        37,
+        38,
+        39,
+        40
+      ],
+      "botLost": []
+    },
+    {
+      "key": "gate",
+      "name": "上线门禁（体积 / ES5 / 依赖 / 可解性 / 线上一致）",
+      "pass": 6,
+      "fail": 0,
+      "warn": 0,
+      "ms": 969,
+      "fails": [],
+      "warns": [],
+      "unstable": false
+    },
+    {
+      "key": "smoke",
+      "name": "真浏览器冒烟（Chrome 360×640 · 4 关 × 90 帧 · 非白屏）",
+      "pass": 20,
+      "fail": 0,
+      "warn": 0,
+      "ms": 9216,
       "fails": [],
       "warns": [],
       "unstable": false
