@@ -45,6 +45,16 @@ function firstDiff(a, b) {
   }
   return '无差异';
 }
+/* 运行期总水量口径（19 节主循环守恒用）：管中水 + 瓶中的水。
+   「已收走的瓶子」按满杯（cap）计账 —— 因为 completeJar 会把 b.fill 清零并把瓶子
+   从台面摘走，那 3 杯水此刻「在飞行特效里」，按满杯记才守恒。 */
+function totalWater(D) {
+  const G = D.G;
+  let tube = 0, jar = 0;
+  for (const t of G.tubes) tube += t.units.length;
+  for (const b of G.bottles) jar += (b.place === 'gone' ? b.cap : b.fill);
+  return { tube: tube, jar: jar, sum: tube + jar };
+}
 
 guard(rep, 'UI', function () {
 
@@ -1112,6 +1122,188 @@ guard(rep, 'B8 广告撤销封顶', function () {
     rep.ok('B8③：genLevel 后 G.adUndo 归零（与 reviveUsed 一起按局重置）',
       G.adUndo === 0 && G.reviveUsed === 0, 'adUndo=' + G.adUndo);
   }
+});
+
+/* ============ 19. 主循环守恒：喝水 → 接满 3 口 → 自动收走 ============
+   ⚠ 2026-09-28 23:00 档补：这是全项目最后一块「零断言」盲区。
+   已有的守恒断言都停在**生成期**（管中水 == 所有瓶子容量之和）或**单个道具**上（魔法清除），
+   而游戏最核心的那条链 —— 管子 →（喝水）瓶子 fill+1 → fill==cap → completeJar
+   → 瓶子消失 + G.clears+1 —— 从头到尾没人守过。这条链上漏任何一步，玩家看到的是
+   「水没了、瓶子还在」或者「清完了却不计入进度（永远通不了关）」。
+   断言口径：已收走的瓶子按满杯计账，于是
+       管中水 + 瓶中的水（含已收走的满杯） == 常量
+   在「真实帧驱动完成一次接满→收走」的前后都必须成立。
+   注意：这里不手工调 completeJar，而是把瓶子预置成「差一口」后交给主循环的 tryDrinks ——
+   验的是真链路，不是把产品函数当 API 调。 */
+guard(rep, '主循环守恒', function () {
+  const g = fresh(); const D = g.DBG; const G = D.G;
+  enter(g);
+  const badDone = [], badKeep = [];
+  let samples = 0;
+  for (const lv of [3, 9, 15, 20, 25, 30, 35]) {
+    withSeed(9100 + lv, () => D.gen(lv));
+    g.frames(8); g.waitIdle(); g.frames(4);
+    G.slots.forEach(s => { s.open = true; });
+    const bottoms = G.tubes.map(t => (t.units.length ? t.units[0] : -1));
+    /* 选一个「管底颜色 == 它自己的颜色」且没被冰冻、不在洞里的瓶子，摆上台面预置成 2 口 */
+    const jar = G.bottles.filter(b => b.place === 'grid' && !b.locked && b.gate < 0
+      && bottoms.indexOf(b.col) >= 0)[0];
+    const slot = D.freeSlot();
+    if (!jar || slot < 0) continue;
+    jar.place = 'counter'; jar.slot = slot; jar.fill = jar.cap - 1; jar.capT = 1;
+    const W0 = totalWater(D), c0 = G.clears;
+    let ticks = 0;
+    while (jar.place !== 'gone' && ticks < 500) { g.frames(1); ticks++; }
+    samples++;
+    const W1 = totalWater(D);
+    if (!(jar.place === 'gone' && jar.slot === -1 && G.clears === c0 + 1)) {
+      badDone.push('L' + lv + '：place=' + jar.place + ' slot=' + jar.slot
+        + ' clears=' + c0 + '→' + G.clears + '（' + ticks + ' 帧后仍未收走）');
+    }
+    if (W1.sum !== W0.sum) {
+      badKeep.push('L' + lv + '：总水量 ' + W0.sum + '→' + W1.sum
+        + '（管 ' + W0.tube + '→' + W1.tube + '，瓶 ' + W0.jar + '→' + W1.jar + '）');
+    }
+  }
+  rep.ok('主循环：接满 3 口 → 瓶子真的消失（place=gone）、槽位被释放（slot=-1）、G.clears 恰 +1'
+    + '（' + samples + ' 个关卡，全程真实帧驱动 + tryDrinks）',
+    samples >= 5 && badDone.length === 0,
+    (samples < 5 ? '有效样本只有 ' + samples + ' 关；' : '') + badDone.slice(0, 4).join(' | '));
+  rep.ok('主循环守恒：从「差一口」到「自动收走」全程，管中水 + 瓶中的水（收走按满杯计）恒定不变',
+    samples >= 5 && badKeep.length === 0, badKeep.slice(0, 4).join(' | '));
+});
+
+/* ============ 20. 万能指：挑选语义 + 不做白工 + 不改变水量 ============
+   「万能指」的设计语义是「把一个**此刻真能喝到水**的瓶子直接摆上台面」，
+   挑选条件全写在 useFinger 里：place==='grid' && !locked && 颜色 ∈ 管底颜色集 && gridPlayable。
+   把这条断言钉住，是因为放宽任何一条都会让道具失去意义：
+   能拿冰冻瓶 = 绕过解冻机制；能拿洞里的瓶 = 绕过顺序锁；能拿永远喝不到的颜色 = 把
+   「不会玩」变成「乱拿」。另外它必须**只搬瓶子、不喝水**（水量的改变只属于「喝水/道具清除」）。 */
+guard(rep, '万能指', function () {
+  const g = fresh(); const D = g.DBG; const G = D.G;
+  enter(g);
+  const badPick = [], badCost = [], badKeep = [];
+  let samples = 0, noCol = 0, gateOrIce = 0;
+  for (const lv of [9, 12, 15, 20, 25, 30, 35]) {
+    withSeed(5200 + lv, () => D.gen(lv));
+    g.frames(8); g.waitIdle(); g.frames(4);
+    G.slots.forEach(s => { s.open = true; });
+    const bottoms = G.tubes.map(t => (t.units.length ? t.units[0] : -1));
+    const set = {}; bottoms.forEach(c => { if (c >= 0) set[c] = 1; });
+    const grid = G.bottles.filter(b => b.place === 'grid');
+    /* 局面本身要有区分度：存在「颜色不在任何管底」的瓶子 / 冰冻瓶 / 洞里的瓶。
+       否则挑选条件被改坏也看不出来（断言就成了恒真）。 */
+    if (grid.some(b => !set[b.col])) noCol++;
+    if (grid.some(b => b.gate >= 0) || grid.some(b => b.locked)) gateOrIce++;
+    G.tools.finger = 2;
+    const W0 = totalWater(D);
+    D.useFinger();                                  // 同步函数：点完立刻读，绝不走帧（走帧就被喝掉了）
+    const a = G.anim, picked = (a && a.b) ? a.b : null;
+    samples++;
+    if (!picked || picked.place !== 'anim' || !set[picked.col] || picked.locked || picked.gate >= 0) {
+      badPick.push('L' + lv + '：选中 ' + (picked ? ('col' + picked.col + ' place' + picked.place
+        + ' locked' + picked.locked + ' gate' + picked.gate) : '无')
+        + '（管底色集 ' + Object.keys(set).join(',') + '）');
+    }
+    if (!picked || G.tools.finger !== 1) badCost.push('L' + lv + '：道具 2→' + G.tools.finger);
+    if (totalWater(D).sum !== W0.sum) {
+      badKeep.push('L' + lv + '：总水量 ' + W0.sum + '→' + totalWater(D).sum);
+    }
+    g.waitIdle(600); g.frames(4);
+  }
+  rep.ok('「万能指」搬上台面的必须是此刻真能喝到水的瓶子（颜色在管底色集里 / 不是冰冻瓶 / 不在门洞里）'
+    + '（' + samples + ' 关，其中 ' + noCol + ' 关存在「喝不到的颜色」、' + gateOrIce + ' 关有冰冻瓶或洞内瓶）',
+    samples >= 5 && noCol >= 3 && badPick.length === 0,
+    (noCol < 3 ? '区分度不足：只有 ' + noCol + ' 关存在喝不到的颜色，断言可能恒真；' : '')
+    + badPick.slice(0, 4).join(' | '));
+  rep.ok('「万能指」真消耗 1 次道具（不做白工，也不白扣）',
+    samples >= 5 && badCost.length === 0, badCost.slice(0, 4).join(' | '));
+  rep.ok('「万能指」只搬瓶子、不喝管里的水（管中水量守恒）',
+    samples >= 5 && badKeep.length === 0, badKeep.slice(0, 4).join(' | '));
+});
+
+/* ============ 21. 随心互换：只换塔顶一杯 / 水量守恒 / 空管拒绝不扣道具 ============ */
+guard(rep, '随心互换', function () {
+  const g = fresh(); const D = g.DBG; const G = D.G;
+  enter(g);
+  withSeed(6100, () => D.gen(15));
+  g.frames(8); g.waitIdle(); g.frames(4);
+  /* 挑两根长度不同的水管（长度一样的话「换整根管」和「换塔顶」看不出区别） */
+  let i = -1, j = -1;
+  for (let a = 0; a < G.tubes.length && j < 0; a++) {
+    if (G.tubes[a].units.length < 2) continue;
+    for (let b2 = a + 1; b2 < G.tubes.length; b2++) {
+      if (G.tubes[b2].units.length >= 2 && G.tubes[b2].units.length !== G.tubes[a].units.length) {
+        i = a; j = b2; break;
+      }
+    }
+  }
+  if (j < 0) {
+    const nonEmpty = G.tubes.map((t, k) => [t.units.length, k]).filter(x => x[0] > 0).map(x => x[1]);
+    i = nonEmpty[0]; j = nonEmpty[1];
+  }
+  const T1 = G.tubes[i], T2 = G.tubes[j];
+  const top1 = T1.units[0], top2 = T2.units[0];
+  const tail1 = T1.units.slice(1).join(','), tail2 = T2.units.slice(1).join(',');
+  const len1 = T1.units.length, len2 = T2.units.length;
+  G.tools.swap = 3; G.moves = 0;
+  const W0 = totalWater(D);
+  D.useSwap(i, j);
+  rep.ok('「随心互换」只换两根管的塔顶一杯（管长与其余水层原封不动，不是把整根管对调）',
+    T1.units[0] === top2 && T2.units[0] === top1
+    && T1.units.slice(1).join(',') === tail1 && T2.units.slice(1).join(',') === tail2
+    && T1.units.length === len1 && T2.units.length === len2,
+    '管' + i + '=[' + T1.units.join(',') + '] 管' + j + '=[' + T2.units.join(',') + ']');
+  rep.ok('「随心互换」不改变总水量、真消耗 1 次道具（换水 ≠ 造水）',
+    totalWater(D).sum === W0.sum && G.tools.swap === 2 && G.moves === 1,
+    '水 ' + W0.sum + '→' + totalWater(D).sum + '，道具 3→' + G.tools.swap + '，步数 ' + G.moves);
+
+  /* 空管：必须拒绝，且不扣道具、不动任何状态（否则玩家点一下白扣一次道具） */
+  G.tubes[0].units = []; D.layoutAll();
+  G.tools.swap = 2;
+  const pre = sig(D) + '|' + totalWater(D).sum;
+  D.useSwap(0, i === 0 ? j : i);
+  rep.ok('「随心互换」拒绝空管：不扣道具、两根管都不变（不白扣一次道具）',
+    G.tools.swap === 2 && sig(D) + '|' + totalWater(D).sum === pre,
+    '道具 2→' + G.tools.swap + '，各管长度 [' + G.tubes.map(t => t.units.length).join(',') + ']');
+});
+
+/* ============ 22. 多步撤销：撤销栈必须是 LIFO，逐层回到每一层的快照 ============
+   已有的撤销断言只做「单步前进 → 单步撤销」。如果撤销栈只保留 1 层
+   （比如 snapshot 里写成 G.history[0]=... 或把 30 层上限改成 1），单步撤销照样全绿，
+   但玩家连撤两次就错乱 —— 那才是「撤销坏了」的真实体感。这里连放 3 瓶、连撤 3 次，
+   每一次都必须精确落回该层的快照。 */
+guard(rep, '多步撤销', function () {
+  const g = fresh(); const D = g.DBG; const G = D.G;
+  enter(g);
+  withSeed(7700, () => D.gen(9));
+  g.frames(8); g.waitIdle(); g.frames(4);
+  G.undoLeft = 9;
+  const bottoms = G.tubes.map(t => (t.units.length ? t.units[0] : -1));
+  const marks = [sig(D)];                     // marks[0] = 开局
+  let placed = 0;
+  for (let step = 0; step < 3; step++) {
+    /* 只挑「放上去也不会被喝」的瓶子：喝了水会连锁收走，撤销语义就变成「回到喝满那一刻」 */
+    const b = G.bottles.find(x => x.place === 'grid' && !x.locked && x.gate < 0
+      && bottoms.indexOf(x.col) < 0 && D.gridPlayable(x));
+    if (!b || G.anim) break;
+    g.viewClick(b.x, b.y - 20); g.waitIdle(600); g.frames(4);
+    if (b.place !== 'counter') break;
+    placed++; marks.push(sig(D));
+  }
+  const badLayer = [];
+  for (let k = placed; k >= 1; k--) {          // 撤 k 次之后应当回到 marks[k-1]
+    D.doUndo(); g.frames(4);
+    if (sig(D) !== marks[k - 1]) {
+      badLayer.push('撤 ' + (placed - k + 1) + ' 次后 ≠ 第 ' + (k - 1) + ' 层快照（'
+        + firstDiff(marks[k - 1], sig(D)) + '）');
+    }
+  }
+  rep.ok('连放 ' + placed + ' 瓶 → 连撤 ' + placed + ' 次，每一次都精确回到该层快照（LIFO 逐层，不是只退 1 步）',
+    placed >= 3 && badLayer.length === 0,
+    (placed < 3 ? '有效样本只有 ' + placed + ' 步；' : '') + badLayer.slice(0, 3).join(' | '));
+  rep.ok('连续撤销 ' + placed + ' 次消耗 ' + placed + ' 次额度（不是免费无限撤）',
+    G.undoLeft === 9 - placed, 'undoLeft=' + G.undoLeft);
 });
 
 rep.done();

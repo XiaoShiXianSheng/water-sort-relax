@@ -344,6 +344,77 @@ const CASES = [
     find: 'G.reviveUsed=0; G.adUndo=0; G.moves=0;',
     repl: 'G.reviveUsed=0; G.moves=0;'
   },
+  /* ---------- 23:00 档新增的 10 条断言（主循环守恒 / 万能指 / 随心互换 / 多步撤销）----------
+     这四组是全项目此前**完全没有断言**的核心机制，逐条做回滚验证：
+     每条都必须能看到「指定改坏 → 指定断言 FAIL」，否则就是假绿。 */
+  {
+    name: 'completeJar() 不累加 G.clears（清完了却不算进度 → 玩家永远通不了关）',
+    suite: 'qa_ui.js', expect: /主循环：接满 3 口/,
+    find: '  G.clears++;',
+    repl: '  /* rollback-test: 故意不累加完成数 */'
+  },
+  {
+    name: 'completeJar() 不释放槽位（slot 残留 → 台面被"看不见的瓶子"占住）',
+    suite: 'qa_ui.js', expect: /主循环：接满 3 口/,
+    find: "b.place='gone'; b.done=false; b.fill=0; b.capT=0; b.slot=-1; b.doneT=0;",
+    repl: "b.place='gone'; b.done=false; b.fill=0; b.capT=0; b.slot=99; b.doneT=0;"
+  },
+  {
+    /* 这条专门验「守恒」那一条断言的独立效力：瓶子照样收走（第一条断言仍绿），
+       但管里的水没被扣掉 → 水量凭空 +1。 */
+    name: 'finishDrink() 喝掉的那杯不从管里扣（瓶子照收走，但水凭空变多）',
+    suite: 'qa_ui.js', expect: /主循环守恒/,
+    find: '  tube.units.splice(0,1); tube.drop=1;',
+    repl: '  /* rollback-test: 故意不扣管里的水（凭空造水） */'
+  },
+  {
+    name: 'useFinger() 挑选条件放宽成「任意格子里的瓶子」（能拿冰冻瓶 / 洞里的瓶 / 喝不到的颜色）',
+    suite: 'qa_ui.js', expect: /「万能指」搬上台面/,
+    find: "if(bb.place==='grid'&&!bb.locked&&bottoms.indexOf(bb.col)>=0&&gridPlayable(bb)){b=bb;break;}",
+    repl: "if(bb.place==='grid'){b=bb;break;}   /* rollback-test */"
+  },
+  {
+    name: 'useFinger() 不扣道具次数（白送 → 万能指变成无限道具）',
+    suite: 'qa_ui.js', expect: /「万能指」真消耗/,
+    find: '  G.tools.finger--; SFX.magic();',
+    repl: '  SFX.magic();   /* rollback-test */'
+  },
+  {
+    name: 'useFinger() 顺手把管里最上面一杯也喝掉（道具不该改变水量）',
+    suite: 'qa_ui.js', expect: /「万能指」只搬瓶子/,
+    find: '  G.tools.finger--; SFX.magic();',
+    repl: '  G.tools.finger--; if(G.tubes[0].units.length)G.tubes[0].units.splice(0,1); SFX.magic();'
+  },
+  {
+    name: 'useSwap() 把整根管对调（不是只换塔顶一杯）',
+    suite: 'qa_ui.js', expect: /「随心互换」只换两根管的塔顶一杯/,
+    find: '  var tmp=a.units[0];a.units[0]=b.units[0];b.units[0]=tmp;',
+    repl: '  var tmp=a.units;a.units=b.units;b.units=tmp;   /* rollback-test */'
+  },
+  {
+    name: 'useSwap() 把塔顶复制一份而不是交换（凭空多一杯水）',
+    suite: 'qa_ui.js', expect: /「随心互换」不改变总水量/,
+    find: '  a.drop=1;b.drop=1;',
+    repl: '  a.drop=1;b.drop=1;b.units.push(a.units[0]);   /* rollback-test: 复制而非交换 */'
+  },
+  {
+    name: 'useSwap() 空管也扣道具次数（玩家点一下白扣一次道具）',
+    suite: 'qa_ui.js', expect: /「随心互换」拒绝空管/,
+    find: "  if(!a.units.length||!b.units.length){toast('空管没法换');SFX.no();return;}",
+    repl: "  G.tools.swap--; if(!a.units.length||!b.units.length){toast('空管没法换');SFX.no();return;}"
+  },
+  {
+    name: 'snapshot() 的撤销栈只保留 1 层（连撤两次就错乱）',
+    suite: 'qa_ui.js', expect: /连放 3 瓶/,
+    find: '  if(G.history.length>30)G.history.shift();',
+    repl: '  if(G.history.length>1)G.history.shift();   /* rollback-test */'
+  },
+  {
+    name: 'doUndo() 不扣撤销额度（免费无限撤）',
+    suite: 'qa_ui.js', expect: /连续撤销 3 次消耗/,
+    find: '  applySnapshotObj(JSON.parse(G.history.pop()));\n  G.undoLeft--;\n  SFX.undo();',
+    repl: '  applySnapshotObj(JSON.parse(G.history.pop()));\n  SFX.undo();'
+  },
   {
     /* 真实事故：全局 core.autocrlf=true，一次 git rebase 就把主文件写成 CRLF、
        发布件与线上还是 LF → 门禁翻红，但内容一模一样。这条既验证 G8a 会 FAIL，
