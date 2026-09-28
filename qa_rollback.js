@@ -427,6 +427,52 @@ const CASES = [
        当前跑的是哪一版 —— 否则别人一发版这条就失效（2026-09-28 踩到：线上从
        137240B 换成 152420B，这条立刻变红，而代码一点没动）。 */
     liveServe: true
+  },
+
+  /* ---------- 09-29 02:00 档新增的 7 条设计不变量，逐条做回滚验证 ----------
+     每条都刻意挑「只让这一条红」的改法（除了注明交叉的那条），
+     否则分不清哪条断言真有独立效力。 */
+  {
+    name: 'levelPlan：过渡期第 6 关就把冰冻也上了（新手一次撞两种新干扰）',
+    suite: 'qa_design.js', expect: /过渡期 4~8 关/,
+    find: 'ice=(lv>=7)?1:0;',
+    repl: 'ice=(lv>=6)?1:0;   /* rollback-test: 门洞与冰冻同关新增 */'
+  },
+  {
+    name: 'levelPlan：稳态货架从 6×4=24 格缩成 5×4=20 格（第 19 关起不再恒定）',
+    suite: 'qa_design.js', expect: /稳态货架/,
+    find: 'else{pc=6;pr=4;}',
+    repl: 'else{pc=5;pr=4;}   /* rollback-test: 偷偷把稳态货架改小 */'
+  },
+  {
+    name: 'levelPlan：困难档额外交掉 1 个台面槽（槽位递进不再是 −1/−1，且掉到 4 以下）',
+    suite: 'qa_design.js', expect: /三档挑战「只调约束/,
+    find: 'if(lv>=6)gates=Math.min(gates+1,4);',
+    repl: 'if(lv>=6)gates=Math.min(gates+1,4);slots=slots-1;   /* rollback-test */'
+  },
+  {
+    name: 'genLevel：门洞候选从「≥3 个货架内方向」放宽到「≥2」（角落也能当门洞）',
+    suite: 'qa_design.js', expect: /门洞不选角落/,
+    find: 'if(dirsIn.length>=3)gateCellStart.push(gc0);',
+    repl: 'if(dirsIn.length>=2)gateCellStart.push(gc0);   /* rollback-test: 放开角落 */'
+  },
+  {
+    name: 'genLevel：门洞候选再收紧到「≥4 个货架内方向」（放不下就静默少放几个洞）',
+    suite: 'qa_design.js', expect: /实际门洞数 == 计划门洞数/,
+    find: 'if(dirsIn.length>=3)gateCellStart.push(gc0);',
+    repl: 'if(dirsIn.length>=4)gateCellStart.push(gc0);   /* rollback-test */'
+  },
+  {
+    name: 'genLevel：可解性兜底无条件执行（40 次自检没过就把冰冻整关撤掉）',
+    suite: 'qa_design.js', expect: /实际冰冻数 == 计划冰冻数/,
+    find: 'if(!solvableOK){',
+    repl: 'if(true){   /* rollback-test: 兜底永远执行 */'
+  },
+  {
+    name: 'levelPlan：第 18~20 关把台面槽收回去 1 个（靠砍槽位制造难度）',
+    suite: 'qa_design.js', expect: /普通档台面槽位随关卡单调不减/,
+    find: '    slots=Math.min(5+Math.floor(t/8),6);',
+    repl: '    slots=Math.min(5+Math.floor(t/8),6);if(lv>=18&&lv<=20)slots=5;   /* rollback-test */'
   }
 ];
 

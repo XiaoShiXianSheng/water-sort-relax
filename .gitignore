@@ -6,6 +6,8 @@ node_modules/
 _*.txt
 _*.html
 _*.log
+_*.js
+_*.png
 _chr_*/
 zz_*
 .run/

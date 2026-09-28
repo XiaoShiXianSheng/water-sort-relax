@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>promo</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:1920px; height:1080px; overflow:hidden; }
+  body {
+    font-family:"Microsoft YaHei","PingFang SC",sans-serif;
+    background:linear-gradient(135deg,#0a2540 0%,#0e3a5c 45%,#12557a 100%);
+    color:#fff; position:relative;
+  }
+  .bubble { position:absolute; border-radius:50%; opacity:.14; background:#bfe6ff; }
+  .left { position:absolute; left:110px; top:0; height:1080px; width:900px; display:flex; flex-direction:column; justify-content:center; }
+  .logo { display:flex; align-items:center; gap:28px; margin-bottom:38px; }
+  .logo .cube { width:96px; height:96px; border-radius:24px; background:linear-gradient(160deg,#38bdf8,#0ea5e9); display:flex; align-items:center; justify-content:center; font-size:52px; font-weight:900; color:#04283f; box-shadow:0 12px 40px rgba(56,189,248,.45); }
+  .logo h1 { font-size:88px; font-weight:900; letter-spacing:6px; }
+  .tag { font-size:40px; color:#9fd8ff; letter-spacing:10px; margin-bottom:52px; }
+  .feats { display:flex; flex-direction:column; gap:26px; }
+  .feat { display:flex; align-items:center; gap:20px; font-size:34px; color:#e8f6ff; }
+  .feat .dot { width:16px; height:16px; border-radius:50%; background:#38bdf8; box-shadow:0 0 16px #38bdf8; flex:none; }
+  .feat b { color:#7ddcff; }
+  .shots { position:absolute; right:120px; top:150px; display:flex; gap:40px; align-items:center; }
+  .phone { width:340px; height:680px; border-radius:40px; border:6px solid rgba(255,255,255,.25); overflow:hidden; box-shadow:0 30px 80px rgba(0,0,0,.5); background:#000; }
+  .phone img { width:100%; height:100%; object-fit:cover; display:block; }
+  .phone.back { transform:translateY(60px) scale(.92) rotate(3deg); opacity:.75; }
+  .foot { position:absolute; bottom:64px; left:110px; font-size:28px; color:#6fb6dd; letter-spacing:4px; }
+</style>
+</head>
+<body>
+  <div class="bubble" style="width:220px;height:220px;left:1400px;top:80px;"></div>
+  <div class="bubble" style="width:120px;height:120px;left:1700px;top:820px;"></div>
+  <div class="bubble" style="width:80px;height:80px;left:60px;top:120px;"></div>
+  <div class="bubble" style="width:300px;height:300px;left:980px;top:760px;"></div>
+
+  <div class="left">
+    <div class="logo"><div class="cube">水</div><h1>解压水消除</h1></div>
+    <div class="tag">接满 3 口 · 同色收瓶 · 秒懂秒玩</div>
+    <div class="feats">
+      <div class="feat"><div class="dot"></div><span><b>30+ 精心设计的关卡</b>，难度曲线平滑不劝退</span></div>
+      <div class="feat"><div class="dot"></div><span><b>保证不卡死</b>：卡住有提示、可撤销、广告复活</span></div>
+      <div class="feat"><div class="dot"></div><span><b>隐藏门洞 & 冰冻瓶</b>，越玩越上头</span></div>
+      <div class="feat"><div class="dot"></div><span><b>每日挑战</b> + 三档难度，天天有新局</span></div>
+    </div>
+  </div>
+
+  <div class="shots">
+    <div class="phone back"><img src="../screenshots/v4_16_win_stars_tier.png"></div>
+    <div class="phone"><img src="../screenshots/v4_13_play_lv30_cap26.png"></div>
+  </div>
+
+  <div class="foot">WATER SORT RELAX · 单机休闲 · 无网络也能玩</div>
+</body>
+</html>

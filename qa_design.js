@@ -18,6 +18,15 @@
  *   · 三档挑战严格更难（density 普通 < 困难 < 极限）
  *   · 教学关的挑战档仍保留 12 格 / 3 管 / 冰冻 ≤1（别把新手第一关变成劝退关）
  *
+ * 2026-09-29 02:00 档再补 6 条（同样每条都做过回滚验证，见 qa_rollback.js）：
+ *   · 过渡期 4~8 关的配置表精确 + 「干扰一次只加一种」（门洞与冰冻不得同关新增）
+ *   · 稳态货架硬钉死：第 19~40 关恒 24 格 / 4 行 / 每行 6（现有断言只跟 plan 比，plan 改了查不出）
+ *   · 三档挑战「只调约束、不加美术」：三档的格数/颜色/管数必须完全一致，
+ *     槽位只按 −1/−1（下限 4）、门洞只按 +1/+1（上限 4）、冰冻只按 +1 的上限 4 递进
+ *   · 门洞数必须与计划一致（生成器不许因为放不下就偷偷少放几个洞 = 难度静默降级）
+ *   · 冰冻数必须与计划一致（可解性兜底不许把冰冻静默清零 —— 实测 2000 局零漂移）
+ *   · 普通档台面槽位随关卡单调不减（设计承诺「不再靠砍槽位制造难上加难」）
+ *
  * 用法：node qa_design.js
  */
 const { loadGame, Reporter, guard } = require('./qa_lib.js');
@@ -47,13 +56,16 @@ guard(rep, '设计', function () {
     gateQ: [], iceLoose: [], gateStackOrder: [],
     /* 02:00 档新增：单局操作量 / 槽色配比 / 每色瓶数 / 冰冻进洞 / 洞口朝向 / 洞内瓶数 */
     volume: [], slotVsColor: [], colorBalance: [],
-    iceInGate: [], gateDir: [], gateWidth: []
+    iceInGate: [], gateDir: [], gateWidth: [],
+    /* 09-29 02:00 档新增：门洞不选角落 / 实际门洞数 / 实际冰冻数 */
+    gateCorner: [], gatePlan: [], icePlan: []
   };
   let maxOverflow = 0, overflowAt = 0;
   let maxEstSteps = 0, maxEstStepsAt = 0, maxWater = 0, maxWaterAt = 0;
 
   for (let lv = 1; lv <= LVMAX; lv++) {
     D.gen(lv);
+    const pl = D.plan(lv);        // 必须在 frames() 之前算好：下面几条不变量都要在生成期采样
     /* ⚠ 冰冻瓶不变量必须在「走帧之前」采：主循环每一帧都会跑 thawByNeighbors()，
        「开局就已两格空」的冰冻瓶会在第一帧当场化开 —— 走完帧再查，永远查不到。
        （这条断言的第一版就是这么假绿的：回滚验证把生成期的过滤条件整段删掉，
@@ -85,8 +97,28 @@ guard(rep, '设计', function () {
       const ib = D.G.bottles[igi];
       if (ib.locked > 0 && ib.gate >= 0) bad.iceInGate.push('L' + lv + ' cell' + ib.cell);
     }
+    /* --- 09-29 02:00 新增（同样在 frames() 之前采）---
+       ① 门洞不选角落：生成器只把「至少 3 个方向在货架内」的格子当候选（dirsIn>=3）。
+          角落只有 2 个可用朝向 → 箭头要么指界外、要么和唯一邻居（常是冰冻瓶）成环，
+          可解性自检的失败率飙升。这条守住 dirsIn>=3 这个门槛被改成 >=2 的情况。
+       ② 实际门洞数 == 计划门洞数：门洞选址用「DFS + 回溯」，放不下时会静默少放几个洞
+          （并删掉多出来的瓶子）—— 玩家不会崩、也不会报错，只会「这关比设计的简单」。
+          实测 2000 局零漂移，所以钉死等号；一旦破了就是难度静默降级。
+       ③ 实际冰冻数 == 计划冰冻数：可解性自检 40 次仍不过时，兜底会把**所有**冰冻瓶撤掉
+          （`if(!solvableOK){...locked=0...}`）。这是最隐蔽的一类降级：冰冻玩法整关消失，
+          但关卡仍然可解、仍然好看、测试也仍然全绿。必须由断言守。 */
+    for (let gk = 0; gk < D.G.gates.length; gk++) {
+      let nd = 0;
+      for (let dk = 0; dk < 4; dk++) if (D.neighborCell(D.G.gates[gk].cell, dk) >= 0) nd++;
+      if (nd < 3) bad.gateCorner.push('L' + lv + ' 洞' + gk + ' 只有 ' + nd + ' 个货架内方向（角落）');
+    }
+    if (D.G.gates.length !== pl.gates)
+      bad.gatePlan.push('L' + lv + ' 实际' + D.G.gates.length + '≠计划' + pl.gates + ' 个门洞');
+    const iceNow = D.G.bottles.filter(b => b.locked > 0).length;
+    if (iceNow !== pl.ice)
+      bad.icePlan.push('L' + lv + ' 实际' + iceNow + '≠计划' + pl.ice + ' 个冰冻瓶');
     g.frames(3);
-    const G = D.G, pl = D.plan(lv);
+    const G = D.G;
     const water = G.tubes.reduce((s, t) => s + t.units.length, 0);
     const need = G.bottles.reduce((s, b) => s + b.cap, 0);
     const layers = G.tubes.map(t => t.units.length);
@@ -266,6 +298,12 @@ guard(rep, '设计', function () {
   one('**洞口朝向合法**（在货架内 / 不朝另一个门洞 / 不朝冰冻瓶）', bad.gateDir);
   one('**冰冻瓶绝不藏在门洞里**（顺序锁 + 解冻双约束 = 玩家体感「这关不讲理」）', bad.iceInGate);
 
+  /* ---------- 09-29 02:00 档新增：3 条「生成器不许偷偷降级」的断言 ---------- */
+  one('**门洞不选角落**（每个门洞至少 3 个方向在货架内；角落只剩 2 个朝向 → 箭头指界外或与冰冻瓶成环）',
+    bad.gateCorner);
+  one('**实际门洞数 == 计划门洞数**（放不下就静默少放 = 难度偷偷降级；实测 2000 局零漂移）', bad.gatePlan);
+  one('**实际冰冻数 == 计划冰冻数**（可解性兜底不许把冰冻整关清零 —— 最隐蔽的一类降级）', bad.icePlan);
+
   /* ============ 节奏与多样性 ============
      V4.0 §6：1~3 关教学（恒 9 格、快速成功）→ 4~8 关过渡 → 9 关以后靠决策密度变难。
      所以「波浪」只在 9 关以后（第 2 个周期起）成立；教学期本来就是平的，不该套波浪。 */
@@ -316,6 +354,42 @@ guard(rep, '设计', function () {
   }
   rep.ok('教学期 1~3 关恒为 9 格 / 3 色 / 无门洞无冰冻', teachBad.length === 0, teachBad.join(' '));
 
+  /* ---------- 过渡期 4~8 关：配置表 + 「干扰一次只加一种」（V4.0 §6） ----------
+     设计的承诺是「一次只加一种复杂度，保留新手友好」：
+       L4~5  9 格 / 3 色 / 0 门洞 / 0 冰冻（和教学期同配置，只换形状）
+       L6   12 格 / 4 色 / 1 门洞 / 0 冰冻   ← 只引入「门洞」这一种干扰
+       L7~8 12 格 / 4 色 / 1 门洞 / 1 冰冻   ← 只引入「冰冻」这一种干扰
+     两条一起守：① 配置表精确；② 相邻两关之间，门洞与冰冻**不得同时新增**
+     （同时上两种新规则 = 新手在第 6 关一次撞两堵墙，这是最容易悄悄回归的地方）。 */
+  const eraBad = [];
+  const ERA48 = { 4: [9, 3, 0, 0], 5: [9, 3, 0, 0], 6: [12, 4, 1, 0], 7: [12, 4, 1, 1], 8: [12, 4, 1, 1] };
+  for (let lv = 4; lv <= 8; lv++) {
+    const p = D.plan(lv), e = ERA48[lv];
+    if (!(p.cells === e[0] && p.colors === e[1] && p.gates === e[2] && p.ice === e[3]))
+      eraBad.push('L' + lv + ' 实际格' + p.cells + '/色' + p.colors + '/洞' + p.gates + '/冰' + p.ice +
+        ' 期望格' + e[0] + '/色' + e[1] + '/洞' + e[2] + '/冰' + e[3]);
+    const q = D.plan(lv - 1);
+    if (p.gates > q.gates && p.ice > q.ice)
+      eraBad.push('L' + (lv - 1) + '→' + lv + ' 同时新增门洞与冰冻');
+  }
+  rep.ok('过渡期 4~8 关：配置表精确（9/9/12/12/12 格 · 3/3/4/4/4 色 · 0/0/1/1/1 洞 · 0/0/0/1/1 冰）' +
+    '且「干扰一次只加一种」', eraBad.length === 0, eraBad.join(' '));
+
+  /* ---------- 稳态货架硬钉死（README 明写的契约）----------
+     README 的承诺是「第 19 关起恒定 6 列 × 4 行 = 24 格、每行等长」。
+     ⚠ 这条必须**硬编码 24/4/6**，不能拿 levelPlan 的输出比自己：
+     现有 `格数严格按 levelPlan` 那条是 `G.cellCount !== pl.cells` —— plan 和实际一起改就查不出，
+     等于「把货架改小了测试还全绿」。所以这里钉死绝对值。 */
+  const steadyBad = [];
+  for (let lv = 19; lv <= LVMAX; lv++) {
+    const x = info[lv - 1];
+    const allSix = x.rowLen.length === 4 && x.rowLen.every(v => v === 6);
+    if (!(x.cells === 24 && x.rows === 4 && allSix))
+      steadyBad.push('L' + lv + ' 格' + x.cells + ' 行' + x.rows + ' 行长' + x.rowLen.join(','));
+  }
+  rep.ok('**稳态货架**：第 19~40 关恒 24 格 / 4 行 / 每行 6（硬编码契约，不跟着 levelPlan 走）',
+    steadyBad.length === 0, steadyBad.join(' '));
+
   /* 9 关以后难度必须体现在「决策密度」，而不是「棋盘更大」（V4.0 §5.1） */
   const dens = [];
   for (let lv = 1; lv <= LVMAX; lv++) dens.push(D.plan(lv).density);
@@ -329,6 +403,43 @@ guard(rep, '设计', function () {
     if (!(d1 > d0 && d2 > d1)) tierBad.push('L' + lv + ' ' + d0 + '/' + d1 + '/' + d2);
   }
   rep.ok('三档挑战严格更难（决策密度 普通 < 困难 < 极限）', tierBad.length === 0, tierBad.join(' '));
+
+  /* ---------- 三档挑战「只调约束、不加美术」（levelPlan 注释 ⑤ 的承诺）----------
+     设计承诺：困难/极限档只动「台面槽 / 门洞 / 冰冻」这三个约束，
+     **格子数、颜色数、水管数三档完全一致** —— 否则「挑战档」就变成了「换个更大的盘再多玩 3 分钟」，
+     玩家多花时间却没多拿思考量（这正是本项目踩过的老路：加格子加的是操作量，不是难度）。
+     并且槽位有下限 4（再少就真的无解感）。 */
+  const tierRule = [];
+  for (let lv = 4; lv <= LVMAX; lv++) {
+    const p0 = D.plan(lv, 0), p1 = D.plan(lv, 1), p2 = D.plan(lv, 2);
+    if (!(p0.cells === p1.cells && p1.cells === p2.cells &&
+      p0.colors === p1.colors && p1.colors === p2.colors &&
+      p0.tubes === p1.tubes && p1.tubes === p2.tubes))
+      tierRule.push('L' + lv + ' 三档改了棋盘：格' + p0.cells + '/' + p1.cells + '/' + p2.cells +
+        ' 色' + p0.colors + '/' + p1.colors + '/' + p2.colors + ' 管' + p0.tubes + '/' + p1.tubes + '/' + p2.tubes);
+    if (!(p1.slots === Math.max(4, p0.slots - 1) && p2.slots === Math.max(4, p1.slots - 1)))
+      tierRule.push('L' + lv + ' 槽递进异常 ' + p0.slots + '/' + p1.slots + '/' + p2.slots);
+    const wantG1 = lv >= 6 ? Math.min(4, p0.gates + 1) : p0.gates;
+    if (!(p1.gates === wantG1 && p2.gates === Math.min(4, p1.gates + 1)))
+      tierRule.push('L' + lv + ' 门洞递进异常 ' + p0.gates + '/' + p1.gates + '/' + p2.gates);
+    if (!(p2.ice === Math.min(4, p0.ice + 1)))
+      tierRule.push('L' + lv + ' 冰冻递进异常 ' + p0.ice + '/' + p1.ice + '/' + p2.ice);
+    if (p1.slots < 4 || p2.slots < 4) tierRule.push('L' + lv + ' 挑战档台面槽 < 4');
+  }
+  rep.ok('**三档挑战「只调约束、不加美术」**（格/色/管三档一致；槽 −1/−1 下限 4；洞 +1/+1 上限 4；冰 +1 上限 4）',
+    tierRule.length === 0, tierRule.join(' ').slice(0, 200));
+
+  /* ---------- 普通档台面槽位随关卡单调不减 ----------
+     levelPlan 注释 ④ 的承诺：「波浪保留，但峰值靠决策密度变难，**不再靠砍槽位**制造难上加难」。
+     槽位倒退（后期把台面槽收回去）会被 `槽 ≥ 颜色数` 那条挡掉一部分，
+     但当 槽 仍然 ≥ 色 时它就查不到了 —— 所以单调性是独立的一条。 */
+  const slotBack = [];
+  for (let lv = 2; lv <= LVMAX; lv++) {
+    if (info[lv - 1].slots < info[lv - 2].slots)
+      slotBack.push('L' + (lv - 1) + '→' + lv + ' 槽 ' + info[lv - 2].slots + '→' + info[lv - 1].slots);
+  }
+  rep.ok('**普通档台面槽位随关卡单调不减**（不靠砍槽位制造难度）', slotBack.length === 0,
+    slotBack.join(' ') + '　实测轨迹 ' + info[0].slots + '→' + info[LVMAX - 1].slots);
 
   /* 教学关（1~3）的挑战档不许把棋盘改大、管数改多，冰冻最多 1 个 —— 别把新手第一关变成劝退关 */
   const tierTeach = [];
@@ -382,6 +493,20 @@ guard(rep, '设计', function () {
   /* 操作量的绝对水位也打出来（不进断言，给人看趋势）：上限 96 水 / 220 步 */
   console.log('  （操作量最重：L' + maxWaterAt + ' 水' + maxWater + ' → 预估 ' + maxEstSteps +
     ' 步（L' + maxEstStepsAt + '）；天花板 96 水 / 220 步）');
+
+  /* 有效空槽不足的关卡也打出来（不进断言，给人看趋势）。
+     为什么要看这个：台面槽的**最后一个永远是广告解锁位**（`open:s2<slotsN-1`），
+     所以「有效空槽 = 总槽 − 1」。2026-09-29 的受控实验（只动槽位、其它变量全冻）显示：
+       有效空槽 − 颜色数 = 0  → 贪心首战通关率 84~88%
+       有效空槽 − 颜色数 = −1 → 贪心首战通关率 40~50%
+     即**通关率的主要决定因素不是棋盘大小，而是玩家手里有几个「多出来的」槽当退路**。 */
+  const deficit = [];
+  for (let lv = 1; lv <= LVMAX; lv++) {
+    const x = info[lv - 1], p = D.plan(lv);
+    if (x.slots - 1 < p.colors) deficit.push('L' + lv + '(有效' + (x.slots - 1) + '<色' + p.colors + ')');
+  }
+  console.log('  （有效空槽 < 颜色数（即没有多余退路）的关卡 ' + deficit.length + ' 个：' +
+    (deficit.length ? deficit.slice(0, 12).join(' ') + (deficit.length > 12 ? ' …' : '') : '无') + '）');
 
   /* 把 40 关的关键指标写出来，给人和 AI 复查用 */
   const lines = ['lv\t格\t行\t行长\t色\t洞\t冰\t槽\t管\t水\t需\t最大层\t密度\t预估步\ttile\tgridY0\t货架底'];
