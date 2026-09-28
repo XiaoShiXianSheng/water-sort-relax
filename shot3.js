@@ -15,7 +15,7 @@ const A = 'requestAnimationFrame(loop);';
 const i = html.lastIndexOf(A);
 html = html.slice(0, i)
   + 'window.__DBG={get G(){return G;},gen:genLevel,plan:levelPlan,startPlace:startPlace,'
-  + 'enterFail:enterFail,Store:Store,Track:Track};'
+  + 'enterFail:enterFail,Store:Store,Track:Track,hintOpts:hintOpts};'
   + html.slice(i);
 
 let setup = '';
@@ -104,10 +104,52 @@ if (MODE === 'title') {
 })();
 </script>`;
 } else if (MODE === 'hint') {
+  // 卡住的软提示（FIX-04）：文案下面那排按钮由产品自己的 hintOpts() 生成，
+  // 不在这里手写 —— 手写的截图会和真实代码长不一样，截图就失去验证作用。
+  // 注意：必须真的造一个「台面有瓶但接不到水」的局面，否则下一帧 checkStuck
+  // 会把注入的 hint 清掉（wantHint=false），截图里什么都没有。
   setup = `
 <script>
 (function(){ var D=window.__DBG; if(!D)return; D.gen(${LV}); var G=D.G;
-  ${hold("G.hint={a:'台面上的瓶子都接不到水了',b:'点「随心互换」换换管底，或点「撤销」退回一瓶'};")}
+  setTimeout(function(){
+    var b0=G.bottles.filter(function(b){return b.place==='grid'&&b.gate<0&&!b.locked;})[0];
+    if(!b0)return;
+    var ghost=[0,1,2,3,4,5].filter(function(c){return c!==b0.col;})[0];
+    G.slots.forEach(function(s){s.open=true;});
+    b0.place='counter'; b0.slot=0; b0.fill=1; b0.capT=1;
+    G.bottles.forEach(function(b){if(b.place==='grid')b.place='gone';});
+    G.tubes.forEach(function(t){t.units=[ghost];});
+  },60);
+  ${hold("G.hintHold=Math.max(G.hintHold,2);")}
+})();
+</script>`;
+} else if (MODE === 'failundo') {
+  // 失败面板 + 1.5 秒后淡入的「撤销一瓶」（FIX-04 第二档）
+  // 按钮显示条件是 G.history.length>0，所以先真走一步放置、把撤销栈填上
+  setup = `
+<script>
+(function(){ var D=window.__DBG; if(!D)return; D.gen(${LV}); var G=D.G;
+  setTimeout(function(){
+    var b0=G.bottles.filter(function(b){return b.place==='grid'&&b.gate<0&&!b.locked;})[0];
+    if(!b0)return;
+    var other=G.bottles.filter(function(b){return b.place==='grid'&&b.gate<0&&!b.locked&&b.col!==b0.col;})[0];
+    G.tubes.forEach(function(t){t.units=[other?other.col:b0.col];});
+    D.startPlace(b0);
+  },60);
+  setTimeout(function(){
+    var D2=window.__DBG; D2.G.anim=null;
+    D2.G.tools={clear:0,finger:0,swap:0}; D2.G.unlockLeft=0;
+    D2.enterFail('exhausted');
+  },400);
+  ${hold("if(G.fail&&G.fail.t<2.2)G.fail.t=2.2;")}
+})();
+</script>`;
+} else if (MODE === 'tools0') {
+  // B5：道具与撤销次数全部归零 —— 检查「名字」与「▶ 广告补次」不再画在同一位置
+  setup = `
+<script>
+(function(){ var D=window.__DBG; if(!D)return; D.gen(${LV});
+  ${hold("G.tools={clear:0,finger:0,swap:0}; G.undoLeft=0; G.toast=null; G.warn=null; G.mode=null;")}
 })();
 </script>`;
 } else if (MODE === 'play') {

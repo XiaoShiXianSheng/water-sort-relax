@@ -302,8 +302,9 @@ var AdService={
     if(!AdService.canShowRewarded(opts.force)){
       AdService.stats.capBlocked++;
       Track.log('ad_cap_blocked',{scene:scene,cap:CFG.rewardedSessionCap});
+      /* 只回调 onFail：上限触顶时上层会自己吐一条提示，
+         这里再补一条 onNotice 就会变成「两条 toast 互相覆盖」，最后一条还说是"没广告"，是句错话。 */
       if(opts.onFail)try{ opts.onFail('cap'); }catch(e){}
-      if(opts.onNotice)try{ opts.onNotice('cap'); }catch(e){}
       return false;
     }
     AdService.session.rewarded++;
@@ -481,6 +482,9 @@ var G={
   tierPick:false,    // 选档面板
   fail:null,         // {reason,t,safeIdx} 非空 = 失败面板（模态，冻结操作）
   reviveUsed:0,      // 本局已用广告复活次数（受 CFG.reviveLimit 限制）
+  adUndo:0,          // 本局「撤销次数用光 → 看广告补 1 次再退一步」的次数。
+                     // 单独记账、不并入 reviveUsed：复活是"整局回到安全局面"，
+                     // 这只是"退一步"，结算面板上「复活 N」不能把它算进去（数据会脏）。
   moves:0,           // 本局有效操作步数（放瓶/用道具/解锁/退回）
   toolsUsed:0,       // 本局道具使用次数（星级参考）
   restarted:0,       // 本局是否重开过（星级参考，只影响 3 星判定）
@@ -516,7 +520,7 @@ function levelPlan(lv,tier){
   var phase=(lv-1)%5;                              // 4 = 周期峰值（第 5/10/15/20… 关）
   var peak=(phase===4), breathe=(phase===0||phase===1);
   var theme=(lv%5===0);                            // 每 5 关 = 一个「主题关」
-  var cells,colors,gates,ice,slots,tubes;
+  var cells,colors,gates,ice,slots,tubes,planCols=0,planRows=0;
   if(lv<=3){                                       // 教学期
     cells=9; colors=3; gates=0; ice=0; slots=5; tubes=3;
   }else if(lv<=8){                                 // 过渡期：一次只加一种复杂度
@@ -528,15 +532,22 @@ function levelPlan(lv,tier){
     tubes=(lv>=7)?4:3;
   }else{                                           // 决策密度期
     var t=lv-9;
-    cells=Math.min(14+Math.floor(t*1.1),26);       // ← 封顶 26：停止单纯扩棋盘
-    cells=peak?cells:(breathe?cells-2:cells-1);
+    /* 布局 V3：列/行由关卡唯一决定，cells 恒等于「列×行」→ 每行等长。
+       波峰/放水的差异只放在门洞与冰冻上，不再动格子数（动格子会连带动水量）。 */
+    var pc,pr;
+    if(lv<=12){pc=5;pr=3;}                         // 15 格
+    else if(lv<=15){pc=6;pr=3;}                    // 18 格
+    else if(lv<=18){pc=5;pr=4;}                    // 20 格
+    else{pc=6;pr=4;}                               // 24 格（第 19 关起恒定稳态货架）
     colors=Math.min(4+Math.floor(t/6),6);
     gates=Math.min(1+Math.floor((t+1)/4),4);
     ice=Math.min(1+Math.floor(t/5),4);
     slots=Math.min(5+Math.floor(t/8),6);           // 空间约束：后期槽位收紧到 6
-    tubes=Math.min(4+Math.floor(t/3),9);
-    if(peak){cells+=1;gates=Math.min(gates+1,4);}
+    tubes=Math.min(4+Math.floor(t/3),7);           // 封顶 7：9 根时两端 2 根完全出屏且点不到
+    if(peak){gates=Math.min(gates+1,4);}
     else if(breathe){gates=Math.max(1,gates-1);ice=Math.max(0,ice-1);}
+    planCols=pc; planRows=pr;
+    cells=pc*pr;
   }
   if(tier>0&&lv<=3){cells=12;colors=4;gates=1;ice=0;slots=5;tubes=3;}   // 教学关的挑战档也要"能玩"
   if(tier>=1){                                     // 困难
@@ -550,15 +561,11 @@ function levelPlan(lv,tier){
   }
   if(cells>26)cells=26;                            // 硬上限：波动/档位都不得突破「停止扩棋盘」
   if(cells<6)cells=6;
-  /* 行数 3~5，列数 ≤7（7 列时格子还有 ~82px，再多就小到看不清）。
-     优先挑能整除的行数（行长度整齐），否则允许长短行混排。 */
-  var minR=Math.max(3,Math.ceil(cells/7)), maxR=Math.min(5,Math.floor(cells/4));
-  if(maxR<minR)maxR=minR;
-  var divs=[];
-  for(var r=minR;r<=maxR;r++)if(cells%r===0)divs.push(r);
+  /* 行/列一律「每行等长」（cells 必为 rows 的整数倍）。9 关以后由上面的阶梯给定，
+     同一关每次开局形状完全一致；教学/过渡期（9 格 / 12 格）都能被 3 整除 → 恒 3 行。 */
   var rows;
-  if(divs.length&&(divs.length>1||Math.random()<0.5))rows=divs[(Math.random()*divs.length)|0];
-  else rows=minR+((Math.random()*(maxR-minR+1))|0);
+  if(lv>=9){cells=planCols*planRows;rows=planRows;}
+  else{rows=3;}
   /* 决策密度分：颜色/门洞/冰冻/空间约束/格数/管数 的加权（用于测试断言难度真的在递进） */
   var density=colors*6+gates*7+ice*4+Math.max(0,7-slots)*5+Math.min(cells,26)*0.6+tubes*1.2;
   return {cells:cells,rows:rows,colors:colors,gates:gates,ice:ice,slots:slots,tubes:tubes,
@@ -567,11 +574,13 @@ function levelPlan(lv,tier){
 /* 水管根数：以关卡给的「目标根数 want」为主，只做两道合法性剪裁 ——
    ① 每根管至少 5 层（水太少时减管，否则管子短短一截很丑）
    ② 单管最多 26 层（水太多时加管，否则大半根管在屏幕外，连角标都救不回来）
+   ③ 根数封顶 7：720 宽下 7 根（tw72+gap32）正好铺满（x0=12）；8 根起最外侧的管被切、
+      9 根时两端 2 根完全出屏且点不到（tubeAt 命中盒与屏幕无交集）→ 假卖点，直接封顶。
    注意：这里【不再】保证管子不出屏 —— 高关卡水柱就是要顶出屏幕顶部（见 drawTube 的平口 + 渐隐）。 */
 function tubeCountFor(units,want){
-  var n=Math.max(3,Math.min(9,want||3));
+  var n=Math.max(3,Math.min(7,want||3));
   while(n>3&&Math.floor(units/n)<5)n--;
-  while(n<9&&Math.ceil(units/n)>26)n++;
+  while(n<7&&Math.ceil(units/n)>26)n++;
   return n;
 }
 function genLevel(lv,opts){
@@ -592,7 +601,7 @@ function genLevel(lv,opts){
   G.stuck=false; G.hint=false; G.mode=null;
   G.gates=[]; G.lvPick=false; G.warn=null; G.lvTap={n:0,t:0}; G.lastPour=null;
   if(opts.tier!==undefined)G.tier=opts.tier|0;
-  G.fail=null; G.tierPick=false; G.reviveUsed=0; G.moves=0; G.toolsUsed=0;
+  G.fail=null; G.tierPick=false; G.reviveUsed=0; G.adUndo=0; G.moves=0; G.toolsUsed=0;
   G.restarted=opts.restart?1:0; G.winStats=null; G.interPending=false; G.adBusy=false;
   G.daily=!!opts.daily; G.dailyDate=opts.date||'';
   G.hintHold=0; G.winStreak=G.winStreak||0;
@@ -885,23 +894,24 @@ function placeBottles(){
   }
 }
 
-/* ================= 快照 / 撤销 ================= */
-function snapshot(){
-  var s={tubes:G.tubes.map(function(t){return t.units.slice();}),
+/* ================= 快照 / 撤销 =================
+   captureState / applySnapshotObj 是这一块的**唯一一份**「局面 ⇄ 数据」互换：
+   snapshot(入栈)、doUndo(出栈)、restoreHistoryAt(复活回滚)、failUndoCommit(试算)
+   全部走它。以前三处各写一遍字段拷贝，改字段时漏一处就是「撤销后瓶子状态错位」。 */
+function captureState(){
+  return {tubes:G.tubes.map(function(t){return t.units.slice();}),
     bottles:G.bottles.map(function(b){return {col:b.col,cap:b.cap,fill:b.fill,locked:b.locked,place:b.place,slot:b.slot,cell:b.cell,gate:b.gate,q:b.q};}),
-    slots:G.slots.map(function(x){return {open:x.open};}),clears:G.clears,unlockLeft:G.unlockLeft};
-  G.history.push(JSON.stringify(s));
-  if(G.history.length>30)G.history.shift();
+    slots:G.slots.map(function(x){return {open:x.open};}),clears:G.clears,unlockLeft:G.unlockLeft,
+    /* 步数必须进快照：撤销要把 G.moves 也退回去，否则「放错 → 撤销」这种纯试错
+       会被永久记在步数账上，星级只惩罚一次失误却记了两步（见 applySnapshotObj）。 */
+    moves:G.moves};
 }
-function doUndo(){
-  if(G.anim||G.state!=='play')return;
-  if(!G.history.length||G.undoLeft<=0){toast('没有撤销次数了');SFX.no();return;}
-  var s=JSON.parse(G.history.pop());
+function applySnapshotObj(s){
   for(var i=0;i<G.tubes.length;i++)G.tubes[i].units=s.tubes[i].slice();
   for(var b=0;b<G.bottles.length;b++){
     var d=s.bottles[b],bb=G.bottles[b];
     bb.fill=d.fill;bb.locked=d.locked;bb.place=d.place;bb.slot=d.slot;bb.cell=d.cell;
-    bb.gate=(d.gate===undefined?-1:d.gate);bb.q=(d.q||0);
+    bb.gate=(d.gate===undefined?-1:d.gate);bb.q=(d.q||0);bb.shake=0;
     bb.capT=bb.place==='counter'?1:0;bb.done=false;bb.doneT=0;
   }
   for(var sl=0;sl<G.slots.length;sl++)G.slots[sl].open=s.slots[sl].open;
@@ -909,8 +919,22 @@ function doUndo(){
   /* 解锁次数必须跟着快照一起回滚：否则「解锁 → 撤销」会变成 unlockLeft 已扣、槽位又锁回去，
      这一关的免费解锁就永久消失了（玩家再也打不开那个槽）。 */
   if(s.unlockLeft!==undefined)G.unlockLeft=s.unlockLeft;
+  /* 步数跟着快照回滚：撤销 = 这一步没发生过，不是"又多走了一步"。
+     注意 startReturn 里仍然是 G.moves++（退回一瓶也是一步操作）——
+     否则 place(+1) 与 return(−1) 相消后 moves 恒等于瓶子数，星级指标当场失去意义。 */
+  if(s.moves!==undefined)G.moves=s.moves;
+  layoutAll();
+}
+function snapshot(){
+  G.history.push(JSON.stringify(captureState()));
+  if(G.history.length>30)G.history.shift();
+}
+function doUndo(){
+  if(G.anim||G.state!=='play')return;
+  if(!G.history.length||G.undoLeft<=0){toast('没有撤销次数了');SFX.no();return;}
+  applySnapshotObj(JSON.parse(G.history.pop()));
   G.undoLeft--;
-  layoutAll(); SFX.undo();
+  SFX.undo();
 }
 function toast(msg){G.toast={msg:msg,t:0};}
 /* 醒目横幅：比 toast 更大、停在台面上方、带抖动 —— 专门用于「点了但不行」这种
@@ -1033,7 +1057,9 @@ function adReward(scene,grant,fallback){
     onFallback:function(){ done(); if(fallback)try{ fallback(); }catch(e){} },
     onNotice:function(){ done(); toast('暂时没有广告，稍后再试'); SFX.no(); }
   });
-  if(!ok){ G.adBusy=false; toast('本局广告次数用完啦，下局再来'); SFX.no(); }
+  /* 文案改准：频控是「单次会话」级的，resetSession 全文件无调用，
+     所以「下局再来」是句谎话 —— 换一局并不会重置，得等下一次会话。 */
+  if(!ok){ G.adBusy=false; toast('本局的广告次数用完啦，换一局再来'); SFX.no(); }
   return ok;
 }
 function toolLabel(id){
@@ -1094,12 +1120,30 @@ function useSwap(i,j){
    入口：左上角「关卡 N」在 2.5 秒内连点 5 次。给测试/评审用，正式玩家基本碰不到。
    每页 30 关（5 列 × 6 行），共 3 页，够测到第 90 关。 */
 var LV_PANEL={
-  px:50, py0:265, pw:620, ph:780,
+  px:50, py0:265, pw:620, ph:900,
   bx:84, by:382, bw:104, bh:76, gap:8,
   pgy:898, pgh:62, bbx:84, bbw:164, nbx:472, nbw:164,
-  cX:250, cY:978, cW:220, cH:62
+  ey:990, eh:64, ex1:100, ex2:370, ew:250,   // 广告环境切换（TEST / ONLINE）
+  cX:250, cY:1078, cW:220, cH:62
 };
 var LV_PER_PAGE=30, LV_PAGES=3;
+/* 广告环境切换。故意不给它任何可见入口 —— 它藏在这个「连点 5 次才开」的测试面板里，
+   正式玩家碰不到，也不会给审核留下「应用内带调试开关」的话柄。
+   ★ 关键：点了 ONLINE 却因为没 SDK / 没 adUnitId 被自动降级时，必须把原因说出来，
+     否则测试会误以为「真实广告已经接通了」。 */
+var ENV_DEGRADE_TXT={'no-tap-runtime':'没检测到 TapTap SDK（不在 TapTap 容器内）',
+                     'no-ad-unit-id':'还没填 adUnitId（尚未开通广告位）'};
+function setEnvUI(want){
+  var got=AdService.setEnv(want);
+  SFX.tap();
+  Track.log('env_switch',{want:want,got:got,reason:AdService.degradeReason});
+  if(want==='online'&&got==='test'){
+    var why=ENV_DEGRADE_TXT[AdService.degradeReason]||AdService.degradeReason||'未知原因';
+    toast('ONLINE 不可用：'+why+' → 已退回 TEST');
+  }else{
+    toast('广告环境：'+(got==='online'?'ONLINE（真实 SDK）':'TEST（模拟看完）'));
+  }
+}
 function lvPickTap(vx,vy){
   var P=LV_PANEL, pg=G.lvPickPage||0;
   for(var i=0;i<LV_PER_PAGE;i++){
@@ -1113,6 +1157,12 @@ function lvPickTap(vx,vy){
   if(vy>=P.pgy&&vy<=P.pgy+P.pgh){
     if(vx>=P.bbx&&vx<=P.bbx+P.bbw){if(pg>0)G.lvPickPage=pg-1;SFX.tap();return;}
     if(vx>=P.nbx&&vx<=P.nbx+P.nbw){if(pg<LV_PAGES-1)G.lvPickPage=pg+1;SFX.tap();return;}
+  }
+  /* 广告环境切换（TEST 模拟看完 / ONLINE 真实 SDK）。坐标与下方绘制共用 LV_PANEL，
+     画的和点的必须是同一套，否则又是一个「看得见点不到」。 */
+  if(vy>=P.ey&&vy<=P.ey+P.eh){
+    if(vx>=P.ex1&&vx<=P.ex1+P.ew){setEnvUI('test');return;}
+    if(vx>=P.ex2&&vx<=P.ex2+P.ew){setEnvUI('online');return;}
   }
   if(vx>=P.cX&&vx<=P.cX+P.cW&&vy>=P.cY&&vy<=P.cY+P.cH){G.lvPick=false;SFX.tap();return;}
   if(vx<P.px||vx>P.px+P.pw||vy<P.py0||vy>P.py0+P.ph)G.lvPick=false;   // 点面板外也关掉
@@ -1128,7 +1178,7 @@ function drawLvPick(time){
   ctx.font='bold 38px '+FONT;ctx.fillStyle='#3a5570';
   ctx.fillText('🔧 测试选关',VW/2,322);
   ctx.font='22px '+FONT;ctx.fillStyle='#7d93a8';
-  ctx.fillText('点数字直接跳关（隐藏入口：连点左上角「关卡 N」5 次）',VW/2,362);
+  ctx.fillText('点数字跳关 · 底部切广告环境（隐藏入口：连点左上角「关卡 N」5 次）',VW/2,362);
   for(var i=0;i<LV_PER_PAGE;i++){
     var r=(i/5)|0, c=i%5;
     var bx=P.bx+c*(P.bw+P.gap), by=P.by+r*(P.bh+P.gap);
@@ -1152,6 +1202,24 @@ function drawLvPick(time){
   ctx.fillText('下一页 ▶',P.nbx+P.nbw/2,P.pgy+40);
   ctx.font='bold 25px '+FONT;ctx.fillStyle='#5a7488';
   ctx.fillText((pg+1)+' / '+LV_PAGES,VW/2,P.pgy+40);
+
+  /* 广告环境切换：TEST=模拟看完（可自动化测试） / ONLINE=真实 TapTap SDK。
+     当前档高亮成蓝色；被降级时把原因写在上一行，避免误判成「真实广告已接通」。 */
+  var eOn=(AdService.env==='online');
+  ctx.font='20px '+FONT;ctx.fillStyle='#7d93a8';
+  ctx.fillText(eOn?'当前：ONLINE（真实 TapTap 广告）'
+    :'当前：TEST（模拟看完）'+(AdService.degradeReason?('　·　'+AdService.degradeReason):''),VW/2,P.ey-12);
+  rr(ctx,P.ex1,P.ey,P.ew,P.eh,14);
+  ctx.fillStyle=eOn?'rgba(238,246,253,0.98)':'#4d9be8';ctx.fill();
+  ctx.strokeStyle=eOn?'rgba(150,180,210,0.9)':'#2f6fa8';ctx.lineWidth=3;ctx.stroke();
+  ctx.font='bold 26px '+FONT;ctx.fillStyle=eOn?'#3a5570':'#fff';
+  ctx.fillText('TEST 模拟看完',P.ex1+P.ew/2,P.ey+41);
+  rr(ctx,P.ex2,P.ey,P.ew,P.eh,14);
+  ctx.fillStyle=eOn?'#4d9be8':'rgba(238,246,253,0.98)';ctx.fill();
+  ctx.strokeStyle=eOn?'#2f6fa8':'rgba(150,180,210,0.9)';ctx.lineWidth=3;ctx.stroke();
+  ctx.font='bold 26px '+FONT;ctx.fillStyle=eOn?'#fff':'#3a5570';
+  ctx.fillText('ONLINE 真实 SDK',P.ex2+P.ew/2,P.ey+41);
+
   rr(ctx,P.cX,P.cY,P.cW,P.cH,14);
   ctx.fillStyle='#f0a04b';ctx.fill();
   ctx.font='bold 27px '+FONT;ctx.fillStyle='#fff';
@@ -1165,11 +1233,67 @@ function drawLvPick(time){
    ★ 复活必须真的恢复可玩状态：优先恢复失败前的安全快照（方案B），找不到就发一个
      真能解开死局的救援（方案C），最后还有一道「把接不到水的瓶子退回货架」的兜底 ——
      三段保证「复活后一定存在至少一个合法有效的决策」，杜绝「看完广告继续死」。 */
+/* 前三项的 y/h 一字未动（机器人与回归用例都点在这些坐标上），只在后面接第 4 项。
+   面板高度 470 → 538（392~930），第 4 项「撤销一瓶」是玩家反馈加的（FIX-04）：
+   真死局那一刻最容易流失，先给一次"我自己退一步"的机会；
+   撤销次数用光时它变成广告入口（把流失转成一次曝光）。 */
 var FAIL_OPTS=[
   {id:'revive', y:470,h:88,title:'▶ 看广告复活', sub:'回到最近的安全局面，继续这一局'},
   {id:'restart',y:570,h:88,title:'重新开始本关',  sub:'这一关从头再来'},
-  {id:'home',   y:670,h:88,title:'回首页',        sub:'先休息一下，稍后再来'}
+  {id:'home',   y:670,h:88,title:'回首页',        sub:'先休息一下，稍后再来'},
+  {id:'undo',   y:770,h:88,title:'↩ 撤销一瓶',    sub:'退回最后放上去的瓶子，接着玩'}
 ];
+/* ---- 失败面板上的「撤销一瓶」：弹窗后 1.5 秒才淡入（FIX-04）------------------
+   为什么是 1.5 秒：弹窗刚出来的 0~1.5 秒是玩家的情绪缓冲期，这时候把「再试一次」
+   怼到脸上等于逼他立刻做决定；1.5 秒后他开始找办法，这个按钮才出现。
+   淡入 0.35 秒，避免"凭空多一块"的突兀感。计时直接复用 G.fail.t（enterFail 起 0，
+   update 里逐帧累加），不再另起一个字段 —— 两个计时器必然有一天对不上。 */
+function failUndoShow(){ return !!(G.fail&&G.history.length>0); }
+function failUndoAlpha(){
+  if(!failUndoShow())return 0;
+  var t=(G.fail.t||0)-1.5;
+  return t<=0?0:(t>=0.35?1:t/0.35);
+}
+function failUndoTitle(){ return G.undoLeft>0?'↩ 撤销一瓶':'▶ 看广告 +1 撤销'; }
+function failUndoSub(){ return G.undoLeft>0?'退回最后放上去的瓶子，接着玩':'看完直接退回一瓶，接着玩'; }
+/* 点它：次数够就直接退一步；次数用光就走「看广告补 1 次」（不白送） */
+function failUndo(){
+  if(!G.fail)return;
+  if(!G.history.length){ toast('没有可以退回的步骤了'); SFX.no(); return; }
+  if(G.undoLeft<=0){
+    /* 这一支走的是广告链路 → 必须记进 G.adUndo，让星级套用同一条原则：
+       「看完广告不该还是三星」（与 reviveUsed 那条口径一致）。
+       用普通撤销次数退的那一步不记账 —— 玩家花的是每关 5 次的撤销额度，不是广告。 */
+    var grant=function(){ G.undoLeft++; G.adUndo++; failUndoCommit(); };   // 广告发的就是那 1 次撤销额度
+    adReward('undo',grant,grant);
+    return;
+  }
+  failUndoCommit();
+}
+/* 真正落定：先试算，只有「退回去之后局面真的还能继续」才扣次数 + 退出面板。
+   试算不通过就原样还原、不消耗次数 —— 免得玩家花掉最后一次撤销，结果还是死在那儿。 */
+function failUndoCommit(){
+  if(!G.history.length){ toast('没有可以退回的步骤了'); SFX.no(); return; }
+  var idx=G.history.length-1,s=null;
+  try{ s=JSON.parse(G.history[idx]); }catch(e){ s=null; }
+  if(!s){ toast('没有可以退回的步骤了'); SFX.no(); return; }
+  var bak=captureState(),fb=G.fail;
+  G.fail=null; G.stuck=false; G.hint=false; G.hintHold=0; G.mode=null;
+  applySnapshotObj(s);
+  /* 验收口径用 boardPlayable() 而不是 hasLegalDecision()：后者把「还能撤销」也算合法，
+     那样会出现「撤销完还是死棋盘、但面板关了」—— 正是要避免的结果。 */
+  if(!boardPlayable()){
+    applySnapshotObj(bak);                       // 原样还原，这一下不扣次数
+    G.fail=fb; G.stuck=true;
+    toast('退回这一步还是走不动，试试「重新开始」'); SFX.no();
+    Track.log('fail_undo',{ok:'0',left:G.undoLeft});
+    return;
+  }
+  G.undoLeft--;
+  G.history.length=idx;                          // 与 doUndo 一致：这一步作废
+  SFX.cap(); toast('退回一步，继续！');
+  Track.log('fail_undo',{ok:'1',left:G.undoLeft});
+}
 function waterLeft(){ var n=0; for(var i=0;i<G.tubes.length;i++)n+=G.tubes[i].units.length; return n; }
 function tubeBottomSet(){
   var m={},i;
@@ -1178,8 +1302,10 @@ function tubeBottomSet(){
 }
 function openSlotCount(){ var n=0; for(var i=0;i<G.slots.length;i++)if(G.slots[i].open)n++; return n; }
 function counterCount(){ var n=0; for(var i=0;i<G.bottles.length;i++)if(G.bottles[i].place==='counter')n++; return n; }
-/* 「还能不能做出一个合法有效的决策」—— 失败的判定标准，也是复活后的验收标准 */
-function hasLegalDecision(){
+/* 「棋盘本身还能往前推进吗」—— 不含「还能撤销」这一条。
+   单独拆出来是因为：撤销是「回到上一步」而不是「往前走」，把它算进合法性会出现
+   「撤销完还是死棋盘、却判定成可继续」的自欺（FIX-04 的验收必须用严格口径）。 */
+function boardPlayable(){
   if(G.state!=='play')return false;
   var bottoms=tubeBottomSet(),i;
   var canDrink=false,gridReady=false;
@@ -1190,11 +1316,17 @@ function hasLegalDecision(){
   }
   if(canDrink)return true;
   if(gridReady&&counterCount()<openSlotCount())return true;      // 能放瓶上台面
-  if(G.undoLeft>0&&G.history.length>0)return true;               // 能撤销
   if(G.tools.clear>0&&clearTargetExists())return true;
   if(G.tools.swap>0&&G.tubes.length>1)return true;
   if(G.tools.finger>0&&gridReady)return true;
   if(G.unlockLeft>0&&openSlotCount()<G.slots.length)return true;
+  return false;
+}
+/* 「还能不能做出一个合法有效的决策」—— 失败的判定标准，也是复活后的验收标准 */
+function hasLegalDecision(){
+  if(G.state!=='play')return false;
+  if(boardPlayable())return true;
+  if(G.undoLeft>0&&G.history.length>0)return true;               // 能撤销
   return false;
 }
 function clearTargetExists(){
@@ -1203,6 +1335,26 @@ function clearTargetExists(){
     if(cu.length&&clearJarFor(cu[0]))return true;
   }
   return false;
+}
+/* 软提示条上那排按钮（FIX-04）：只给「这一刻真的能用」的，最多 3 个，永远至少留 1 个能点。
+   撤销固定占位（用不了就画灰的）—— 玩家卡住时的第一反应就是找撤销，
+   连个可见的答案都不给，他会以为游戏坏了。 */
+function hintOpts(){
+  var undoOK=(G.undoLeft>0&&G.history.length>0);
+  var c=[
+    {id:'undo',   label:'撤销一瓶', sub:'退回最后放上去的瓶子', enabled:undoOK},
+    {id:'swap',   label:'随心互换', sub:'换一下管底的颜色',     enabled:G.tools.swap>0},
+    {id:'clear',  label:'魔法清除', sub:'清掉管底那杯水',       enabled:(G.tools.clear>0&&clearTargetExists())},
+    {id:'unlock', label:'解锁台面', sub:'再加一个台面槽位',     enabled:(G.unlockLeft>0&&lockedSlots().length>0)},
+    {id:'restart',label:'重开本关', sub:'这一关从头再来',       enabled:true}
+  ];
+  var pick=[c[0]],i;
+  for(i=1;i<=3;i++){ if(pick.length>=3)break; if(c[i].enabled)pick.push(c[i]); }
+  if(pick.length<3)pick.push(c[4]);                  // 「重开」永远兜底
+  var any=false;
+  for(i=0;i<pick.length;i++)if(pick[i].enabled)any=true;
+  if(!any)pick=[c[4]];                               // 走到这儿说明算法错了：强制补一个能点的
+  return pick;
 }
 /* 快照是否「还能继续推进」（用于挑一个安全的历史回滚点） */
 function snapshotPlayable(s){
@@ -1228,19 +1380,8 @@ function findSafeSnapshotIdx(){
 function restoreHistoryAt(idx){
   var raw=G.history[idx];
   if(!raw)return false;
-  var s=JSON.parse(raw);
-  for(var i=0;i<G.tubes.length;i++)G.tubes[i].units=s.tubes[i].slice();
-  for(var b=0;b<G.bottles.length;b++){
-    var d=s.bottles[b],bb=G.bottles[b];
-    bb.fill=d.fill;bb.locked=d.locked;bb.place=d.place;bb.slot=d.slot;bb.cell=d.cell;
-    bb.gate=(d.gate===undefined?-1:d.gate);bb.q=(d.q||0);bb.shake=0;
-    bb.capT=bb.place==='counter'?1:0;bb.done=false;bb.doneT=0;
-  }
-  for(var sl=0;sl<G.slots.length;sl++)G.slots[sl].open=s.slots[sl].open;
-  G.clears=s.clears;
-  if(s.unlockLeft!==undefined)G.unlockLeft=s.unlockLeft;   // 同上：解锁次数随快照回滚
+  applySnapshotObj(JSON.parse(raw));
   G.history=G.history.slice(0,idx);              // 之后的步骤作废，撤销栈与局面保持一致
-  layoutAll();
   return true;
 }
 /* 方案C：没有可用快照时，直接解掉当前死局。
@@ -1298,6 +1439,7 @@ function doRevive(){
 function failAction(id){
   if(id==='restart'){ genLevel(G.level,{restart:1}); return; }
   if(id==='home'){ goHome(); return; }
+  if(id==='undo'){ failUndo(); return; }
   if(id==='revive'){
     if(G.reviveUsed>=CFG.reviveLimit){ toast('本局复活次数用完啦，重开或回首页吧'); SFX.no(); return; }
     adReward('revive',function(){ doRevive(); },function(){
@@ -1358,7 +1500,10 @@ function checkStuck(){
   }
 
   /* 软提示（不挡操作）：台面上有瓶子但一瓶都喝不到 → 直接告诉玩家怎么办。
-     要「卡住持续 1 秒」才弹，避免瓶子刚喝完、下一口马上开始的瞬间闪一下。 */
+     要「卡住持续 1 秒」才弹，避免瓶子刚喝完、下一口马上开始的瞬间闪一下。
+     FIX-04：光给文字等于让玩家自己去底部工具栏里找按钮 —— 文案说的位置和可点的位置
+     是分离的（就是玩家反馈的那句「弹的是可以撤销提示」）。现在直接把能用的动作
+     做成按钮，按钮就在文案下面，点得到、看得见。 */
   var wantHint=counterHas&&(fs<0||!gridDrink);
   G.hintHold=wantHint?((G.hintHold||0)+(G.dt||0.016)):0;
   if(wantHint&&G.hintHold>=1.0){
@@ -1368,6 +1513,7 @@ function checkStuck(){
       :'点「重开」重开本关');
     G.hint=gridDrink?{a:'台面满了，但瓶子都接不到水',b:'点「撤销」退回一瓶，再把能喝的瓶子放上来'}
                     :{a:'台面上的瓶子都接不到水了',b:fixTxt};
+    G.hint.opts=hintOpts();
   }else G.hint=false;
 
   /* 硬死局（弹失败面板）：连一点求生手段都没有了 */
@@ -1392,6 +1538,9 @@ function checkStuck(){
 }
 function useFinger(){
   if(G.anim)return;
+  /* 先把「台面还有没有位置」问清楚再扣道具：以前是先 -- 再 startPlace，
+     而 startPlace 在台面满时会直接 return —— 结果道具没了、瓶子没动、还白挨一条横幅。 */
+  if(freeSlot()<0){toast('台面满了，先退回一个瓶子');SFX.no();return;}
   var bottoms=G.tubes.map(function(t){return bottomOf(t);});
   var b=null;
   for(var i=0;i<G.bottles.length;i++){
@@ -1501,6 +1650,8 @@ function handleTap(cx,cy){
     if(G.fail.t<0.6)return;                               // 情绪缓冲：短到不烦人，长到不误触
     for(var si=0;si<FAIL_OPTS.length;si++){
       var so=FAIL_OPTS[si];
+      /* 「撤销一瓶」要 1.5 秒后才淡入：淡入完成前它既没画出来，也点不到 */
+      if(so.id==='undo'&&failUndoAlpha()<=0)continue;
       if(vx>=100&&vx<=620&&vy>=so.y&&vy<=so.y+so.h){ failAction(so.id); return; }
     }
     return;
@@ -1512,6 +1663,8 @@ function handleTap(cx,cy){
     if(G.anim.type==='drink')finishDrink(); else snapAnim();
     if(G.anim)return;
   }
+  /* 软提示条上的真按钮（FIX-04）：几何与 drawHint 共用 hintRects()，画哪点哪 */
+  if(G.hint&&hintTap(vx,vy))return;
   // 隐藏选关面板（测试用）：模态，先吃掉所有点击
   if(G.lvPick){lvPickTap(vx,vy);return;}
   // 左上角「关卡 N」连续点 5 次（2.5 秒内）→ 打开隐藏选关
@@ -1519,11 +1672,18 @@ function handleTap(cx,cy){
     if(G.t-(G.lvTap.t||0)>2.5)G.lvTap.n=0;
     G.lvTap.t=G.t; G.lvTap.n++;
     if(G.lvTap.n>=5){G.lvTap.n=0;G.lvPick=true;G.lvPickPage=Math.max(0,Math.floor((G.level-1)/30));SFX.cap();}
-    else{toast('再点 '+(5-G.lvTap.n)+' 次进入选关（测试）');SFX.tap();}
+    else{SFX.tap();}          // 不给计数提示：玩家好奇连点会看见「（测试）」这种内部字样
     return;
   }
   // HUD 重开
-  if(vx>=590&&vx<=700&&vy>=28&&vy<=88){genLevel(G.level);return;}
+  /* HUD「重开」必须带上 daily/date/seed：以前裸调 genLevel(G.level)，
+     每日挑战中途点重开会被静默降级成普通关（徽标消失、结算不记当天成绩，玩家毫无察觉）。
+     同时补上 restart:1 —— 失败面板的重开是记重开的，HUD 重开不能免责。 */
+  if(vx>=590&&vx<=700&&vy>=28&&vy<=88){
+    genLevel(G.level,{restart:1,daily:G.daily,date:G.dailyDate,
+      tier:G.daily?0:undefined,seed:G.daily?dailySeed(G.dailyDate):undefined});
+    return;
+  }
   // 底部工具栏（三个道具 + 撤销 + 分享）
   var ti0=toolAt(v);
   if(ti0>=0){
@@ -2295,7 +2455,7 @@ function drawFailPanel(time){
   ctx.save();
   ctx.globalAlpha=a;
   ctx.translate(VW/2,470);ctx.scale(0.96+0.04*a,0.96+0.04*a);ctx.translate(-VW/2,-470);
-  rr(ctx,60,392,600,470,26);
+  rr(ctx,60,392,600,538,26);
   ctx.fillStyle='rgba(255,255,255,0.97)';ctx.fill();
   ctx.strokeStyle='rgba(96,138,178,0.9)';ctx.lineWidth=4;ctx.stroke();
   ctx.font='bold 44px '+FONT;ctx.textAlign='center';ctx.fillStyle='#e8734d';
@@ -2308,21 +2468,27 @@ function drawFailPanel(time){
   ctx.font='22px '+FONT;ctx.fillStyle='#8aa2b8';
   ctx.fillText('本局剩余复活次数：'+Math.max(0,CFG.reviveLimit-G.reviveUsed)+' / '+CFG.reviveLimit,VW/2,548);
   var clickable=f.t>0.6;                            // 缓冲期内不接受点击，避免误触
+  var ua=failUndoAlpha();
   for(var i=0;i<FAIL_OPTS.length;i++){
     var so=FAIL_OPTS[i];
-    var main=(so.id==='revive');
+    if(so.id==='undo'&&ua<=0)continue;              // 1.5 秒后才淡入，之前不占版面
+    var main=(so.id==='revive'),und=(so.id==='undo');
+    var title=und?failUndoTitle():so.title, sub=und?failUndoSub():so.sub;
+    ctx.globalAlpha=a*(und?ua:1);
     rr(ctx,100,so.y,520,so.h,18);
-    ctx.fillStyle=main?'#ffe9a8':(so.id==='restart'?'#e8eef4':'#f2f5f8');
+    ctx.fillStyle=main?'#ffe9a8':(so.id==='restart'?'#e8eef4':(und?'#e6f7ec':'#f2f5f8'));
     ctx.fill();
-    ctx.strokeStyle=main?'#c9972f':(so.id==='restart'?'#8aa2b8':'#c9d3da');
+    ctx.strokeStyle=main?'#c9972f':(so.id==='restart'?'#8aa2b8':(und?'#3f8f5f':'#c9d3da'));
     ctx.lineWidth=3;ctx.stroke();
-    ctx.font='bold 28px '+FONT;ctx.fillStyle=main?'#5a4210':(so.id==='restart'?'#3a5570':'#6a8296');
-    ctx.fillText(so.title,VW/2,so.y+36);
+    ctx.font='bold 28px '+FONT;
+    ctx.fillStyle=main?'#5a4210':(so.id==='restart'?'#3a5570':(und?'#2f6b45':'#6a8296'));
+    ctx.fillText(title,VW/2,so.y+36);
     ctx.font='20px '+FONT;
-    ctx.fillText(so.sub,VW/2,so.y+66);
+    ctx.fillText(sub,VW/2,so.y+66);
+    ctx.globalAlpha=a;
   }
   ctx.font='19px '+FONT;ctx.fillStyle='#a8b6c2';
-  ctx.fillText('广告只看你主动点的那些；看完一定回到「能继续玩」的局面',VW/2,806);
+  ctx.fillText('广告只看你主动点的那些；看完一定回到「能继续玩」的局面',VW/2,892);
   ctx.restore();
 }
 /* ---- 新手引导气泡（前 3 关各一条，看过就不再出现）V4.0 §17 ---- */
@@ -2354,7 +2520,10 @@ function drawTools(){
     ctx.font='30px sans-serif';ctx.textAlign='center';ctx.fillStyle='#5a4210';
     ctx.fillText(tb.icon,cx,TOOL_Y+38);
     ctx.font='bold 24px '+FONT;
-    ctx.fillText(tb.label,cx,TOOL_Y+74);
+    /* 两个分支会在同一坐标、同一基线再画一次「▶ 广告补次」——
+       撤销行 used=false（alpha=1）是**全不透明硬重叠**，而 undoLeft 每局必耗尽，
+       这是最常撞上的一条。这里让位：要显示补次提示时就不画原名。 */
+    if(!((isTool&&cnt<=0)||(tb.id==='undo'&&G.undoLeft<=0)))ctx.fillText(tb.label,cx,TOOL_Y+74);
     ctx.globalAlpha=1;
     if(isTool){
       if(cnt>0)drawCountBadge(x+TOOL_W-14,TOOL_Y+12,cnt);
@@ -2464,32 +2633,104 @@ function drawGateBottles(gi,rc,time){
   ctx.fillText('×'+rest,rc.x+rc.w-23,rc.y+rc.h-12);
   ctx.textAlign='center';
 }
-/* 软提示条（不挡操作）：台面上的瓶子都接不到水了 → 直接告诉玩家怎么办 */
+/* ---- 软提示条几何：绘制与命中**共用这一份** --------------------------------
+   本项目出过「画的和点的是两套坐标」的 bug，所以按钮矩形只允许从 hintRects() 出，
+   drawHint 和 hintTap 都不许自己再算一遍。
+   纵向范围锁在 498 ~ 632：上面 486 是水管命中盒的下沿（不能压水管），
+   下面 614 起是台面瓶子的瓶身（按钮最多压到瓶口一点点，货架在 766 以下，碰不到）。 */
+var HINT_Y0=498, HINT_TXT_H=92, HINT_BTN_TOP=72, HINT_BTN_H=52, HINT_BTN_PAD=14, HINT_BTN_GAP=10;
+function hintRects(){
+  var h=G.hint;
+  if(!h)return null;
+  ctx.save();
+  ctx.font='bold 26px '+FONT;
+  var w1=ctx.measureText(h.a||'').width;
+  ctx.font='23px '+FONT;
+  var w2=ctx.measureText(h.b||'').width;
+  ctx.restore();
+  var tw=Math.min(VW-40,Math.max(w1,w2)+92);
+  var x0=(VW-tw)/2;
+  var opts=(h.opts&&h.opts.length)?h.opts:null;
+  var out={x:x0,y:HINT_Y0,w:tw,h:(opts?(HINT_BTN_TOP+HINT_BTN_H+10):HINT_TXT_H),btns:[]};
+  if(opts){
+    var n=Math.min(3,opts.length);
+    var bw=(tw-HINT_BTN_PAD*2-HINT_BTN_GAP*(n-1))/n;
+    for(var i=0;i<n;i++){
+      out.btns.push({id:opts[i].id,enabled:!!opts[i].enabled,opt:opts[i],
+        x:x0+HINT_BTN_PAD+i*(bw+HINT_BTN_GAP),y:HINT_Y0+HINT_BTN_TOP,w:bw,h:HINT_BTN_H});
+    }
+  }
+  return out;
+}
+/* 「手指落在哪个按钮上」—— 纯查询，不执行动作。
+   和 hintTap 分开是因为：命中判定必须能被反复探（测试要挨个验证「画在这、点得到」），
+   而 tap 一探就把按钮按下去了，探第二个时局面已经变了。 */
+function hintHit(vx,vy){
+  var r=hintRects();
+  if(!r)return null;
+  for(var i=0;i<r.btns.length;i++){
+    var t=r.btns[i];
+    if(vx>=t.x&&vx<=t.x+t.w&&vy>=t.y&&vy<=t.y+t.h)return t;
+  }
+  return null;
+}
+/* 命中：命中框与 hintRects() 出来的矩形**逐像素同一份**，不另设一套 */
+function hintTap(vx,vy){
+  var t=hintHit(vx,vy);
+  if(!t)return false;                             // 按钮以外照旧穿透（提示条不挡操作）
+  if(!t.enabled){ toast('这个现在用不了'); SFX.no(); return true; }
+  hintAction(t.id);
+  return true;
+}
+function hintAction(id){
+  G.hint=false; G.hintHold=0;
+  if(id==='undo'){ doUndo(); return; }
+  if(id==='swap'){ G.mode='swap'; G.swapFirst=-1; toast('依次点两根水管，交换最下面那层'); SFX.magic(); return; }
+  if(id==='clear'){ G.mode='clear'; G.swapFirst=-1; toast('点一根水管，清除它最下面那层水'); SFX.magic(); return; }
+  if(id==='unlock'){ unlockSlot(); return; }
+  if(id==='restart'){ genLevel(G.level,{restart:1}); SFX.tap(); return; }
+  SFX.tap();
+}
+/* 软提示条（不挡操作）：台面上的瓶子都接不到水了 → 说清怎么办 + 直接给能点的按钮 */
 function drawHint(time){
   var h=G.hint;
   if(!h)return;
+  var r=hintRects();
   var pulse=0.5+0.5*Math.sin(time*4);
   ctx.save();
-  ctx.font='bold 26px '+FONT;ctx.textAlign='center';
-  var w1=ctx.measureText(h.a).width;
-  ctx.font='23px '+FONT;
-  var w2=ctx.measureText(h.b).width;
-  var tw=Math.min(VW-40,Math.max(w1,w2)+92), hh=92;
-  var x0=(VW-tw)/2, y0=498;
+  ctx.textAlign='center';
+  var x0=r.x,y0=r.y,tw=r.w,hh=r.h;
   ctx.globalAlpha=0.94+0.06*pulse;
   rr(ctx,x0,y0,tw,hh,20);
   ctx.fillStyle='#f07a2e';ctx.fill();
   ctx.strokeStyle='#fff';ctx.lineWidth=4*(0.55+0.45*pulse);ctx.stroke();
   ctx.globalAlpha=1;
-  ctx.beginPath();ctx.arc(x0+38,y0+hh/2,17,0,7);
+  ctx.beginPath();ctx.arc(x0+38,y0+38,17,0,7);
   ctx.fillStyle='#fff';ctx.fill();
   ctx.font='bold 24px '+FONT;ctx.fillStyle='#f07a2e';
-  ctx.fillText('!',x0+38,y0+hh/2+9);
+  ctx.fillText('!',x0+38,y0+47);
   ctx.font='bold 26px '+FONT;ctx.fillStyle='#fff';
-  ctx.fillText(h.a,VW/2+22,y0+40);
+  ctx.fillText(h.a,VW/2+22,y0+32);
   ctx.font='23px '+FONT;ctx.globalAlpha=0.95;
-  ctx.fillText(h.b,VW/2+22,y0+72);
+  ctx.fillText(h.b,VW/2+22,y0+62);
+  ctx.globalAlpha=1;
+  for(var i=0;i<r.btns.length;i++)drawHintBtn(r.btns[i]);
   ctx.restore();
+}
+function drawHintBtn(t){
+  var on=!!t.enabled,o=t.opt;
+  ctx.globalAlpha=on?1:0.55;
+  rr(ctx,t.x,t.y,t.w,t.h,14);
+  ctx.fillStyle=on?'#fff7e6':'rgba(255,255,255,0.32)';ctx.fill();
+  ctx.strokeStyle=on?'#fff':'rgba(255,255,255,0.45)';ctx.lineWidth=3;ctx.stroke();
+  var sub=(t.w>=150)?o.sub:'';                    // 挤不下就只留主标题，不糊成一团
+  ctx.font='bold 22px '+FONT;ctx.fillStyle=on?'#c9501a':'#7d5c45';
+  ctx.fillText(o.label,t.x+t.w/2,t.y+(sub?23:33));
+  if(sub){
+    ctx.font='16px '+FONT;ctx.fillStyle=on?'#a3552a':'#7d5c45';
+    ctx.fillText(sub,t.x+t.w/2,t.y+44);
+  }
+  ctx.globalAlpha=1;
 }
 function render(time){
   ctx.setTransform(dpr,0,0,dpr,0,0);
@@ -2609,10 +2850,17 @@ function saveProgress(){
 function levelDone(){
   G.state='win'; SFX.win();
   var par=G.par||99;
-  /* 星级：不惩罚解压玩家 —— 3 星=步数达标且没用道具且没重开；2 星=步数宽松达标；否则 1 星。
-     用过复活最多 2 星（避免"看完广告还是三星"这种自相矛盾的激励）。 */
-  var stars=(G.moves<=par&&G.toolsUsed===0&&!G.restarted)?3:(G.moves<=Math.round(par*1.5)?2:1);
-  if(G.reviveUsed>0&&stars>2)stars=2;
+  /* 星级：3 星=步数达标且没重开；2 星=步数宽松达标；否则 1 星。
+     这里**不再要求 0 道具**：par=max(10,round(N*1.4+洞数*2)) 相对理论最小步数 N 有十几步余量，
+     三件道具全用也才 +3 步，余量早容纳了；而"用了道具就没三星"会掐死变现 ——
+     玩家不敢用道具 → 道具永不耗尽 → 「看广告补次」这条路径永远触发不了。
+     !G.restarted 保留（全文唯一的 anti-reroll 门槛）。 */
+  var stars=(G.moves<=par&&!G.restarted)?3:(G.moves<=Math.round(par*1.5)?2:1);
+  /* 看过广告的都不该拿到三星 —— reviveUsed（整局回到安全局面）与
+     adUndo（撤销次数用光、看广告补 1 次再退一步）是同一条原则的两种形态，
+     口径必须一致，否则会出现「看完广告 → 三星」这种自相矛盾的激励。
+     用普通撤销次数退的那一步不在此列（花的是每关 5 次的额度）。 */
+  if((G.reviveUsed>0||G.adUndo>0)&&stars>2)stars=2;
   G.winStats={stars:stars,moves:G.moves,tools:G.toolsUsed,revive:G.reviveUsed,tier:G.tier,par:par,daily:!!G.daily};
   var key=String(G.level);
   var rec=Store.data.stars[key]||{normal:0,hard:0,extreme:0};
@@ -2632,7 +2880,7 @@ function levelDone(){
   AdService.session.wins=G.winStreak;
   G.interPending=(G.winStreak>=CFG.interstitialAfterWins);
   Track.log('level_complete',{stars:stars,moves:G.moves,tools:G.toolsUsed,tier:G.tier,par:par,
-    revives:G.reviveUsed,daily:G.daily?'1':'0'});
+    revives:G.reviveUsed,adUndo:G.adUndo,daily:G.daily?'1':'0'});   // 埋点里分开记，结算面板上只显示「复活 N」
   Track.log('moves',{n:G.moves,par:par});
 }
 /* ---- 日期键 / 每日挑战（固定种子，每天一个不同配置；V1 不做签到） ---- */

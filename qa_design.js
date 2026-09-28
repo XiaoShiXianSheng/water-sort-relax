@@ -240,7 +240,7 @@ guard(rep, '设计', function () {
   one('颜色数 3~6 且与 levelPlan 一致', bad.colors);
   one('每种颜色都有瓶子（没有永远用不上的水）', bad.colorCover);
   one('**水量守恒**：管中水总量 == 所有瓶子容量之和', bad.water);
-  one('水管 3~9 根（随关卡增长）', bad.tubes);
+  one('水管 3~7 根（随关卡增长；7 根正好铺满 720 宽，8 根起最外侧的管会被切、点不到）', bad.tubes);
   one('单管层数 ≤ 16（再多就是纯折磨）', bad.layers);
   one('台面槽 5~7（含 1 个广告解锁位）', bad.slots);
   one('门洞数不超 levelPlan', bad.gates);
@@ -270,14 +270,19 @@ guard(rep, '设计', function () {
      V4.0 §6：1~3 关教学（恒 9 格、快速成功）→ 4~8 关过渡 → 9 关以后靠决策密度变难。
      所以「波浪」只在 9 关以后（第 2 个周期起）成立；教学期本来就是平的，不该套波浪。 */
   const growth = info.map(x => x.cells);
+  /* ⚠ 波浪必须用「决策密度」衡量：方案 F 之后第 19 关起货架恒 24 格（每行等长），
+     cells 恒定 → 用格数判定波浪必然全违规（那是假的，不是产品问题）。
+     改判 density 后：波峰关（每周期第 5 关）门洞 +1、放水关门洞/冰冻 −1，密度自然分层。 */
+  const growthD = info.map(x => x.density);
   const waveBad = [];
-  for (let cyc = 1; cyc * 5 < growth.length; cyc++) {
-    const seg = growth.slice(cyc * 5, cyc * 5 + 5);
+  for (let cyc = 1; cyc * 5 < growthD.length; cyc++) {
+    const seg = growthD.slice(cyc * 5, cyc * 5 + 5);
     if (seg.length < 5) continue;
     if (!(seg[4] > seg[0] && seg[4] >= seg[1] && seg[4] >= seg[2] && seg[4] >= seg[3]))
       waveBad.push('#' + (cyc + 1) + '[' + seg.join(',') + ']');
   }
-  rep.ok('波浪节奏：9 关以后每 5 关一个「峰—谷—爬坡—峰值」周期', waveBad.length === 0, waveBad.join(' '));
+  rep.ok('波浪节奏：每 5 关一个周期，峰值关「决策密度」最高（固定等长货架后格数恒定，故用 density 衡量）',
+    waveBad.length === 0, waveBad.join(' '));
 
   /* 「波浪」不能只看格子数：放水关（每周期第 1、2 关）必须在**所有维度**上都比同周期峰值关轻，
      而且决策密度（density）要严格更低、至少两项指标严格更低。
@@ -344,9 +349,31 @@ guard(rep, '设计', function () {
   rep.ok('格数区间合理（9 起步，≤ 40 上限）',
     Math.min.apply(null, growth) >= 9 && Math.max.apply(null, growth) <= 40,
     Math.min.apply(null, growth) + '~' + Math.max.apply(null, growth));
-  rep.ok('管数确实涨到 9 根（第 90 关不再是 6 根的 bug 已修）',
-    Math.max.apply(null, info.map(x => x.tubes)) === 9,
+  rep.ok('管数涨到 7 根封顶（7 根正好铺满 720 宽；原 9 根有两根在屏外且点不到）',
+    Math.max.apply(null, info.map(x => x.tubes)) === 7,
     '最大 ' + Math.max.apply(null, info.map(x => x.tubes)));
+
+  /* 出屏管回归（本次漏测的根因之一）：管再多也必须「整根在屏内、且够点亮」。
+     历史 bug：9 根时两端 2 根完全出屏（x0=-92），tubeAt 命中盒与屏幕无交集 → 永远点不到，
+     但旧套件用虚拟坐标合成点击，所以 376 条全绿照样漏掉。这里用几何硬判据兜底：
+     命中盒 [t.x-8, t.x+tubeW+8] ∩ [0,VW] 必须非空，且可见宽度 ≥44px（最小可点尺寸）。
+     VW 从产品常量读，不写死 720。 */
+  const tubeGeomBad = [];
+  let tubeProbed = 0;
+  for (let lv = 1; lv <= 100; lv++) {
+    D.gen(lv); g.frames(2);
+    const G = D.G, tW = G.tubeW, VW = C.VW;
+    for (let ti = 0; ti < G.tubes.length; ti++) {
+      tubeProbed++;
+      const t = G.tubes[ti];
+      const hitL = t.x - 8, hitR = t.x + tW + 8;
+      const visW = Math.min(t.x + tW, VW) - Math.max(t.x, 0);
+      if (Math.min(hitR, VW) - Math.max(hitL, 0) <= 0 || visW < 44)
+        tubeGeomBad.push('L' + lv + ' 管' + ti + ' x' + t.x.toFixed(0) + ' 可见' + visW.toFixed(0) + 'px');
+    }
+  }
+  rep.ok('**出屏管回归**：1~100 关每根管的命中盒与 [0,VW] 交集非空、且可见宽度 ≥44px（'
+    + tubeProbed + ' 根管全量探针）', tubeGeomBad.length === 0, tubeGeomBad.slice(0, 6).join(' '));
 
   /* 水柱出屏：这是产品要的「压迫感」，只有 0 才算白做 */
   rep.warnIf('水柱能真的顶出屏幕顶部（有压迫感）', maxOverflow < 4,

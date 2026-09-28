@@ -719,4 +719,399 @@ guard(rep, '结算页-选档', function () {
   }
 });
 
+/* ============ 15. 水管可点性必须经得起「屏幕边界」 ============
+   这是本次漏测的根因（治本那条）：旧套件的 tubeMid() 直接用虚拟坐标 t.x+tubeW/2 合成点击，
+   **等于绕开屏幕边界** —— 9 根管时两端 2 根的坐标是 −56 / 776，手指永远做不到，
+   但测试照样「命中它自己」，于是 376 条全绿却漏掉「有两根管玩家根本点不到」。
+   这里改成：用「夹到屏幕内」的坐标走真实命中路径 tubeAt(vx,vy)（与 handleTap/魔法清除/互换同一条），
+   每根管都必须命中它自己 —— 不能是 −1，也不能串到别的管。 */
+guard(rep, '水管可点性', function () {
+  const g = fresh(); const D = g.DBG;
+  enter(g); g.frames(4);
+  const VW = D.consts().VW, BOTT_Y = D.consts().BOTT_Y;
+  const bad = [];
+  let probed = 0;
+  for (let lv = 1; lv <= 100; lv++) {
+    D.gen(lv); g.frames(2);
+    const G = D.G;
+    for (let i = 0; i < G.tubes.length; i++) {
+      probed++;
+      const t = G.tubes[i];
+      /* 手指能到的最接近这根管中心的点（出屏时夹到 0 / VW） */
+      const cx = Math.max(0, Math.min(VW, t.x + G.tubeW / 2));
+      const cy = BOTT_Y - t.h / 2;
+      const hit = D.tubeAt(cx, cy);
+      if (hit !== i) bad.push('L' + lv + ' 管' + i + '(x' + t.x.toFixed(0) + ') 夹屏点 vx' + cx.toFixed(0) + '→' + hit);
+    }
+  }
+  rep.ok('**水管命中路径**：1~100 关每根管用「夹到屏幕内」的坐标走真实 tubeAt → 命中它自己（'
+    + probed + ' 根管探针；不是 −1、也不串到别的管）', bad.length === 0, bad.slice(0, 6).join(' '));
+});
+
+/* ============ 16. FIX-04：卡住 / 死局时的「撤销」必须真的可点 ============
+   玩家原话：「台面放不下瓶子弹的是可以撤销提示，理论上是先弹游戏结束弹窗后，
+   几秒有一个可以撤销提示按钮」。两档都要落地：
+     ① 可救的卡住 → 软提示条上就地出真按钮（不再只是"点撤销"三个字）；
+     ② 真死局     → 失败面板先弹，1.5 秒后淡入「撤销一瓶」。
+   这一组还专门盯住"画的和点的不是一套坐标"这个老毛病：按钮矩形只允许从
+   hintRects() 出，测试直接拿它算出来的中心点去真点一下。 */
+function makeStuck(undoLeft) {
+  const g = fresh(); const D = g.DBG; const G = enter(g);
+  G.slots.forEach(s => { s.open = true; });
+  const b0 = G.bottles.find(x => x.place === 'grid' && x.gate < 0 && !x.locked);
+  /* 管底统一成一个「台上这瓶接不到」的颜色 → 放上去之后一瓶都喝不到 = 卡住 */
+  const ghost = [0, 1, 2, 3, 4, 5].find(c => c !== b0.col);
+  G.tubes.forEach(t => { t.units = [ghost]; });
+  g.viewClick(b0.x, b0.y - 20); g.waitIdle(); g.frames(6);   // 真的走一次放置 → 撤销栈非空
+  G.bottles.forEach(b => { if (b.place === 'grid') b.place = 'gone'; });
+  G.undoLeft = undoLeft;
+  G.hintHold = 1.5;
+  g.frames(3);
+  return g;
+}
+guard(rep, 'FIX-04 撤销提示', function () {
+  /* ---- ①a：卡住时软提示带按钮，且永远至少有一个能点 ---- */
+  {
+    const g = makeStuck(5); const D = g.DBG; const G = D.G;
+    rep.ok('FIX-04①a：卡住时软提示带真按钮（不再只是文字）',
+      !!G.hint && !!G.hint.opts && G.hint.opts.length >= 1,
+      JSON.stringify(G.hint && G.hint.opts));
+    rep.ok('FIX-04①a：至少 1 个 enabled 的按钮（永远给得出路）',
+      !!G.hint && G.hint.opts.some(o => o.enabled === true));
+    rep.ok('FIX-04①a：有撤销次数 + 有撤销栈 → 「撤销一瓶」是可用的',
+      !!G.hint && G.hint.opts.some(o => o.id === 'undo' && o.enabled === true));
+    rep.ok('FIX-04①a：按钮不超过 3 个（一排排得下）',
+      !!G.hint && G.hint.opts.length <= 3, String(G.hint && G.hint.opts.length));
+
+    /* ---- ①b：几何 = 命中（点中心必中、不出屏、不压水管/货架/彼此） ---- */
+    const r = D.hintRects(), C = D.consts();
+    const bad = [];
+    /* 用 hintHit（纯查询）而不是 hintTap：后者会真把按钮按下去，
+       探第二个按钮时局面已经变了 —— 那样探出来的"不命中"是假象。 */
+    r.btns.forEach((t, i) => {
+      const hit = D.hintHit(t.x + t.w / 2, t.y + t.h / 2);
+      if (!hit || hit.id !== t.id) bad.push('btn' + i + '(' + t.id + ')中心点不命中');
+      /* 顺带探四角内侧 2px：命中框必须整个覆盖画出来的方块 */
+      [[2, 2], [t.w - 2, 2], [2, t.h - 2], [t.w - 2, t.h - 2]].forEach(p => {
+        const h2 = D.hintHit(t.x + p[0], t.y + p[1]);
+        if (!h2 || h2.id !== t.id) bad.push('btn' + i + '(' + t.id + ')边角不命中');
+      });
+      if (t.x < 0 || t.x + t.w > C.VW || t.y < 0 || t.y + t.h > C.VH) bad.push('btn' + i + '出屏');
+      if (t.y < C.BOTT_Y + 16) bad.push('btn' + i + '压到水管命中区');
+      if (t.y + t.h > C.GRID_Y0) bad.push('btn' + i + '压到货架');
+    });
+    for (let i = 1; i < r.btns.length; i++) {
+      if (r.btns[i].x < r.btns[i - 1].x + r.btns[i - 1].w) bad.push('btn' + i + '与前一个重叠');
+    }
+    rep.ok('FIX-04①b：按钮矩形 = 命中矩形（点中心必中 / 不出屏 / 不压水管与货架 / 彼此不重叠）',
+      bad.length === 0, bad.join(' '));
+
+    /* ---- ①c：用手指真点一下（走 handleTap 全链路，不是直接调函数） ---- */
+    const ub = r.btns.filter(t => t.id === 'undo')[0];
+    const u0 = G.undoLeft, s0 = sig(D);
+    g.viewClick(ub.x + ub.w / 2, ub.y + ub.h / 2);
+    g.waitIdle(); g.frames(6);
+    rep.ok('FIX-04①c：点提示条上的「撤销一瓶」→ 真的退回一步并扣 1 次次数',
+      G.undoLeft === u0 - 1 && sig(D) !== s0,
+      'undoLeft ' + u0 + '→' + G.undoLeft + '；' + firstDiff(s0, sig(D)));
+    rep.ok('FIX-04①c：点完按钮提示条收起（不会一直杵在屏幕上）', !G.hint);
+  }
+
+  /* ---- ①d：不能用的按钮画成灰色，点了不生效 ---- */
+  {
+    const g = makeStuck(0); const D = g.DBG; const G = D.G;
+    G.history.length = 0;                       // 次数和撤销栈都没有 → 撤销必须是灰的
+    G.hintHold = 1.5; g.frames(3);
+    const r = D.hintRects();
+    const ub = r.btns.filter(t => t.id === 'undo')[0];
+    rep.ok('FIX-04①d：没次数 / 没撤销栈 → 「撤销一瓶」是灰的（enabled=false）',
+      !!ub && ub.enabled === false, JSON.stringify(r.btns.map(t => t.id + ':' + t.enabled)));
+    rep.ok('FIX-04①d：即使撤销灰了，也还剩「重开」这类能点的（兜底不落空）',
+      r.btns.some(t => t.enabled === true));
+    const u0 = G.undoLeft, s0 = sig(D);
+    g.viewClick(ub.x + ub.w / 2, ub.y + ub.h / 2);
+    g.waitIdle(); g.frames(6);
+    rep.ok('FIX-04①d：点灰按钮不生效（不扣次数、局面不变）',
+      G.undoLeft === u0 && sig(D) === s0);
+  }
+
+  /* ---- ②：失败面板的撤销按钮：1.5 秒后才出现，点了要真的能继续 ---- */
+  {
+    const g = fresh(); const D = g.DBG; const G = enter(g);
+    const b0 = G.bottles.find(x => x.place === 'grid' && x.gate < 0 && !x.locked);
+    /* 管底留一个「货架上还有、但台上这瓶接不到」的颜色：撤销之后棋盘仍是可继续的，
+       否则面板刚关就会二次判死，这条断言就成了自己跟自己打架。 */
+    const other = G.bottles.find(x => x.place === 'grid' && x.gate < 0 && !x.locked && x.col !== b0.col);
+    G.tubes.forEach(t => { t.units = [other ? other.col : b0.col]; });
+    g.viewClick(b0.x, b0.y - 20); g.waitIdle(); g.frames(6);   // 产出撤销栈
+    G.tools = { clear: 0, finger: 0, swap: 0 }; G.unlockLeft = 0;
+    D.enterFail('exhausted');
+    g.frames(4);
+    rep.ok('FIX-04②a：失败面板刚弹出（<1.5s）时撤销按钮还没出现（alpha=0）',
+      D.failUndoShow() === true && D.failUndoAlpha() === 0,
+      'show=' + D.failUndoShow() + ' alpha=' + D.failUndoAlpha());
+    const opt = D.FAIL_OPTS.filter(o => o.id === 'undo')[0];
+    const u0 = G.undoLeft;
+    g.viewClick(360, opt.y + opt.h / 2);                       // 提前点：必须点不动
+    g.frames(4);
+    rep.ok('FIX-04②a：淡入完成前点它 → 点不动（面板还在、次数没动）',
+      G.fail !== null && G.undoLeft === u0);
+    g.frames(110);                                             // 累计 >1.5s
+    rep.ok('FIX-04②a：1.5 秒后撤销按钮淡入（alpha>0）', D.failUndoAlpha() > 0,
+      'alpha=' + D.failUndoAlpha());
+    g.viewClick(360, opt.y + opt.h / 2);
+    g.waitIdle(); g.frames(8);
+    rep.ok('FIX-04②b：点「撤销一瓶」→ 退出失败面板、回到 play、局面真的可继续',
+      G.fail === null && G.state === 'play' && D.hasLegalDecision() === true,
+      'fail=' + (G.fail && G.fail.reason) + ' state=' + G.state);
+    rep.ok('FIX-04②b：这次撤销照常扣 1 次（不是免费无限撤）', G.undoLeft === u0 - 1,
+      u0 + '→' + G.undoLeft);
+  }
+
+  /* ---- ②c：撤销次数用光 → 文案变「看广告 +1 撤销」，走广告补次而不是白送 ---- */
+  {
+    const g = fresh(); const D = g.DBG; const G = enter(g);
+    const b0 = G.bottles.find(x => x.place === 'grid' && x.gate < 0 && !x.locked);
+    const other = G.bottles.find(x => x.place === 'grid' && x.gate < 0 && !x.locked && x.col !== b0.col);
+    G.tubes.forEach(t => { t.units = [other ? other.col : b0.col]; });
+    g.viewClick(b0.x, b0.y - 20); g.waitIdle(); g.frames(6);
+    G.undoLeft = 0;
+    G.tools = { clear: 0, finger: 0, swap: 0 }; G.unlockLeft = 0;
+    D.enterFail('exhausted');
+    g.frames(110);
+    const t = g.renderOnce();
+    rep.ok('FIX-04②c：撤销次数用光 → 按钮文案变成「看广告 +1 撤销」',
+      t.some(s => s.indexOf('看广告 +1 撤销') >= 0), JSON.stringify(t).slice(0, 120));
+    D.AdService.resetSession();
+    const u0 = G.undoLeft;                                     // 0
+    const opt = D.FAIL_OPTS.filter(o => o.id === 'undo')[0];
+    g.viewClick(360, opt.y + opt.h / 2);
+    g.waitIdle(); g.frames(10);
+    rep.ok('FIX-04②c：点它走广告补次 → 补到的 1 次随即被这次撤销用掉（补次不是白送、撤销不是无限）',
+      G.fail === null && G.undoLeft === u0,
+      'fail=' + (G.fail && G.fail.reason) + ' undoLeft=' + G.undoLeft + '(起点 ' + u0 + ')');
+  }
+
+  /* ---- ②d：撤销完还是死局 → 不退出面板、不白扣次数，只给提示 ---- */
+  {
+    const g = fresh(); const D = g.DBG; const G = enter(g);
+    const b0 = G.bottles.find(x => x.place === 'grid' && x.gate < 0 && !x.locked);
+    g.viewClick(b0.x, b0.y - 20); g.waitIdle(); g.frames(4);
+    G.tools = { clear: 0, finger: 0, swap: 0 }; G.unlockLeft = 0;
+    /* 一个「退回去也走不动」的棋盘：瓶子全收走、管底留水 */
+    G.bottles.forEach(b => { b.place = 'gone'; });
+    G.tubes.forEach(t => { t.units = [0, 0, 0]; });
+    G.history.push(JSON.stringify({
+      tubes: G.tubes.map(t => t.units.slice()),
+      bottles: G.bottles.map(b => ({ col: b.col, cap: b.cap, fill: b.fill, locked: b.locked,
+        place: b.place, slot: b.slot, cell: b.cell, gate: b.gate, q: b.q })),
+      slots: G.slots.map(s => ({ open: s.open })), clears: G.clears, unlockLeft: G.unlockLeft
+    }));
+    D.enterFail('exhausted');
+    g.frames(110);
+    const u0 = G.undoLeft;
+    const opt = D.FAIL_OPTS.filter(o => o.id === 'undo')[0];
+    g.viewClick(360, opt.y + opt.h / 2);
+    g.waitIdle(); g.frames(8);
+    rep.ok('FIX-04②d：撤销后仍是死局 → 不退出面板、不白扣次数、只给一句提示',
+      G.fail !== null && G.undoLeft === u0 && !!G.toast,
+      'fail=' + (G.fail && G.fail.reason) + ' undoLeft ' + u0 + '→' + G.undoLeft
+      + ' toast=' + (G.toast && G.toast.msg));
+  }
+
+  /* ---- ②e：面板四项的排布（新增的撤销按钮没压到别的选项 / 脚注 / 面板外） ---- */
+  {
+    const opts = fresh().DBG.FAIL_OPTS;
+    const bad = [];
+    for (let i = 1; i < opts.length; i++) {
+      if (opts[i].y < opts[i - 1].y + opts[i - 1].h) bad.push('第' + i + '项与上一项重叠');
+    }
+    opts.forEach(o => { if (o.y < 392 || o.y + o.h > 930) bad.push(o.id + ' 越出面板(392~930)'); });
+    if (!opts.some(o => o.id === 'undo')) bad.push('面板缺少 undo 项');
+    rep.ok('FIX-04②e：失败面板四项互不重叠、都落在面板内（撤销按钮没压到别的选项与脚注）',
+      bad.length === 0, bad.join(' '));
+  }
+});
+
+/* ============ 17. B 组：UX 评审「读代码读出来」的五个真 bug ============
+   这五条都不是审美意见，而是「点了会怎样」的账算错了，逐条配断言 + 回滚用例。 */
+guard(rep, 'B 组真 bug', function () {
+  /* ---- B1：台面满时点「万能指」不能白扣道具 ---- */
+  {
+    const g = fresh(); const D = g.DBG; const G = enter(g);
+    G.slots.forEach(s => { s.open = true; });
+    const pool = G.bottles.filter(b => b.place === 'grid' && b.gate < 0 && !b.locked);
+    pool.slice(0, G.slots.length).forEach((b, i) => { b.place = 'counter'; b.slot = i; b.fill = 0; });
+    /* 保证确实存在「能直接喝」的目标（否则 useFinger 会在 if(!b) 就退出，断言成假绿） */
+    const target = pool[G.slots.length];
+    G.tubes.forEach(t => { t.units = [target.col]; });
+    G.tools.finger = 1; G.anim = null; G.toast = null;
+    const f0 = G.tools.finger, s0 = sig(D);
+    const idx = D.TOOLBS.findIndex(t => t.id === 'finger');
+    const c = toolCenter(D, idx);
+    g.viewClick(c.x, c.y); g.frames(4);
+    rep.ok('B1：台面满时点「万能指」→ 不白扣道具（次数没少、瓶子没动、给了人话提示）',
+      G.tools.finger === f0 && sig(D) === s0 && !!G.toast,
+      'finger ' + f0 + '→' + G.tools.finger + '；toast=' + (G.toast && G.toast.msg));
+  }
+
+  /* ---- B2：撤销要把步数退回去；但「退回一瓶」仍然算一步 ---- */
+  {
+    const g = fresh(); const D = g.DBG; const G = enter(g);
+    const b0 = G.bottles.find(x => x.place === 'grid' && x.gate < 0 && !x.locked);
+    G.tubes.forEach(t => { t.units = [(b0.col + 1) % 6]; });   // 别让它接水，保持局面可控
+    const m0 = G.moves;
+    g.viewClick(b0.x, b0.y - 20); g.waitIdle(); g.frames(6);
+    const m1 = G.moves;
+    D.doUndo(); g.frames(2);
+    rep.ok('B2①：放一瓶 +1 步 → 撤销后步数回到放置前（撤销不是"又走一步"）',
+      m1 === m0 + 1 && G.moves === m0, m0 + ' → ' + m1 + ' → ' + G.moves);
+    /* 反向那条同样重要：startReturn 的 G.moves++ 若改成 --，place 与 return 相消后
+       moves 恒等于瓶子数，任何人任何打法都三星，星级指标当场死。 */
+    g.viewClick(b0.x, b0.y - 20); g.waitIdle(); g.frames(6);
+    const m2 = G.moves;
+    const jar = G.bottles.find(x => x.place === 'counter');
+    D.startReturn(jar); g.waitIdle(); g.frames(6);
+    rep.ok('B2②：退回一瓶仍然记 1 步（startReturn 是向前走一步，不是时间倒流）',
+      jar && G.moves === m2 + 1, m2 + ' → ' + G.moves);
+  }
+
+  /* ---- B3：广告上限触顶只吐一条提示，且文案不再承诺"下局" ---- */
+  {
+    const g = fresh(); const D = g.DBG; const G = enter(g);
+    const C = D.CFG;
+    D.AdService.resetSession();
+    let failN = 0, noticeN = 0;
+    for (let i = 0; i < C.rewardedSessionCap + 2; i++) {
+      D.AdService.showRewarded('tool_clear', { onFail: () => failN++, onNotice: () => noticeN++ });
+    }
+    rep.ok('B3①：上限触顶只回调 onFail、不再补一条 onNotice（两条 toast 不会互相覆盖）',
+      failN === 2 && noticeN === 0, 'onFail ' + failN + ' 次 / onNotice ' + noticeN + ' 次');
+    D.AdService.resetSession();
+    for (let i = 0; i < C.rewardedSessionCap; i++) D.refillTool('clear');
+    G.toast = null;
+    D.refillTool('clear');
+    rep.ok('B3②：触顶文案写「换一局再来」（频控是会话级的，resetSession 无调用，"下局"是句谎话）',
+      !!G.toast && G.toast.msg.indexOf('换一局再来') >= 0 && G.toast.msg.indexOf('下局') < 0,
+      G.toast && G.toast.msg);
+  }
+
+  /* ---- B4：每日挑战中途点 HUD「重开」不能被静默降级 ---- */
+  {
+    const g = fresh(); const D = g.DBG; const G = enter(g);
+    D.startDaily(); g.frames(6);
+    const s0 = sig(D), date0 = G.dailyDate, lv0 = G.level, t0 = G.tier;
+    g.viewClick(645, 58);                                   // HUD「重开」中心（590~700 / 28~88）
+    g.frames(8);
+    rep.ok('B4①：每日挑战中途 HUD 重开 → 仍是每日挑战（徽标字段/日期/关卡/档位都没丢、棋盘还是同一局）',
+      G.daily === true && G.dailyDate === date0 && G.level === lv0 && G.tier === t0 && sig(D) === s0,
+      'daily=' + G.daily + ' date=' + G.dailyDate + '；' + firstDiff(s0, sig(D)));
+    rep.ok('B4②：HUD 重开也记 restarted（与失败面板的重开同标准，不再双标）', G.restarted === 1,
+      'restarted=' + G.restarted);
+  }
+
+  /* ---- B5：道具栏「名字」与「▶ 广告补次」不再画在同一位置 ---- */
+  {
+    const g = fresh(); const D = g.DBG; const G = enter(g);
+    const labels = D.TOOLBS.map(t => t.label);
+    G.tools = { clear: 1, finger: 1, swap: 1 }; G.undoLeft = 5; G.toast = null; G.warn = null;
+    const tFull = g.renderOnce();
+    rep.ok('B5①：道具充足时四个名字照常显示（不是一刀切把名字删了）',
+      labels.every(l => tFull.indexOf(l) >= 0)
+      && tFull.filter(s => s === '▶ 广告补次').length === 0,
+      JSON.stringify(labels.filter(l => tFull.indexOf(l) < 0)));
+    G.tools = { clear: 0, finger: 0, swap: 0 }; G.undoLeft = 0;
+    const tEmpty = g.renderOnce();
+    const left = labels.filter(l => tEmpty.indexOf(l) >= 0);
+    rep.ok('B5②：道具与撤销次数归零时，原名让位给「▶ 广告补次」（撤销行是全不透明硬重叠，每局必现）',
+      left.length === 0 && tEmpty.filter(s => s === '▶ 广告补次').length === 4,
+      '仍在画的名字=' + JSON.stringify(left) + '；补次条数=' + tEmpty.filter(s => s === '▶ 广告补次').length);
+  }
+
+  /* ---- B6：三星不再要求 0 道具，但重开仍然挡三星 ---- */
+  {
+    const g = fresh(); const D = g.DBG; const G = enter(g);
+    G.par = 999; G.moves = 1; G.toolsUsed = 2; G.restarted = 0; G.reviveUsed = 0;
+    D.levelDone(); g.frames(2);
+    rep.ok('B6①：步数达标 + 用过道具 → 仍然三星（"用了道具就别想三星"掐死了道具消耗与广告补次）',
+      !!G.winStats && G.winStats.stars === 3, JSON.stringify(G.winStats));
+    const g2 = fresh(); const G2 = enter(g2);
+    G2.par = 999; G2.moves = 1; G2.toolsUsed = 0; G2.restarted = 1; G2.reviveUsed = 0;
+    g2.DBG.levelDone(); g2.frames(2);
+    rep.ok('B6②：重开过 → 最多 2 星（全文唯一的 anti-reroll 门槛保留）',
+      !!G2.winStats && G2.winStats.stars === 2, JSON.stringify(G2.winStats));
+  }
+
+  /* ---- B7：玩家连点关卡号不该看见「（测试）」这种内部字样 ---- */
+  {
+    const g = fresh(); const D = g.DBG; const G = enter(g);
+    G.lvTap = { n: 0, t: 0 }; G.lvPick = false; G.toast = null;
+    g.viewClick(105, 58); g.frames(2);
+    rep.ok('B7：连点关卡号不再弹「（测试）」内部字样（第 5 次打开面板本身就是反馈）',
+      G.toast === null, G.toast && G.toast.msg);
+    for (let k = 0; k < 4; k++) g.viewClick(105, 58);
+    g.frames(2);
+    rep.ok('B7：连点 5 次仍然能打开隐藏选关（入口没被一起删掉）', G.lvPick === true);
+  }
+});
+
+/* ============ 18. B8：看过广告的撤销，星级封顶 2（口径与 reviveUsed 一致） ============
+   failUndo 有两条路：撤销次数够 → 花每关 5 次的额度（不封顶）；
+   次数用光 → 走 adReward 看广告补 1 次（封顶 2，否则出现「看完广告 → 三星」，
+   与既有的「看过广告不该还是三星」原则直接冲突）。 */
+function makeFailUndoReady(undoLeft) {
+  const g = fresh(); const D = g.DBG; const G = enter(g);
+  const b0 = G.bottles.find(x => x.place === 'grid' && x.gate < 0 && !x.locked);
+  const other = G.bottles.find(x => x.place === 'grid' && x.gate < 0 && !x.locked && x.col !== b0.col);
+  G.tubes.forEach(t => { t.units = [other ? other.col : b0.col]; });   // 撤销之后棋盘仍可继续
+  g.viewClick(b0.x, b0.y - 20); g.waitIdle(); g.frames(6);             // 产出撤销栈
+  G.undoLeft = undoLeft;
+  G.tools = { clear: 0, finger: 0, swap: 0 }; G.unlockLeft = 0;
+  D.enterFail('exhausted');
+  g.frames(110);                                                       // 等撤销按钮淡入（>1.5s）
+  return g;
+}
+function clickFailUndo(g) {
+  const opt = g.DBG.FAIL_OPTS.filter(o => o.id === 'undo')[0];
+  g.viewClick(360, opt.y + opt.h / 2);
+  g.waitIdle(); g.frames(10);
+}
+guard(rep, 'B8 广告撤销封顶', function () {
+  /* ① 走广告的那次：撤销次数用光 → 看广告补 1 次 → 星级封顶 2 */
+  {
+    const g = makeFailUndoReady(0); const D = g.DBG; const G = D.G;
+    D.AdService.resetSession();
+    clickFailUndo(g);
+    rep.ok('B8①：撤销次数用光 → 走广告补次退一步 → 面板真的关了（这一步本身要成功）',
+      G.fail === null && G.adUndo === 1, 'fail=' + (G.fail && G.fail.reason) + ' adUndo=' + G.adUndo);
+    G.par = 999; G.moves = 1; G.toolsUsed = 0; G.restarted = 0; G.reviveUsed = 0;
+    D.levelDone(); g.frames(2);
+    rep.ok('B8①：看过广告的撤销 → 星级封顶 2（不会出现「看完广告 → 三星」的自相矛盾）',
+      !!G.winStats && G.winStats.stars === 2, JSON.stringify(G.winStats));
+    rep.ok('B8①：结算面板显示的仍是「复活 0」（adUndo 不混进 reviveUsed，数据不脏）',
+      !!G.winStats && G.winStats.revive === 0, JSON.stringify(G.winStats));
+  }
+
+  /* ② 用普通撤销次数的那次：不封顶 */
+  {
+    const g = makeFailUndoReady(5); const D = g.DBG; const G = D.G;
+    clickFailUndo(g);
+    rep.ok('B8②：用普通撤销次数退一步 → 面板关掉、adUndo 仍是 0（花的是每关 5 次的额度，不是广告）',
+      G.fail === null && G.adUndo === 0, 'fail=' + (G.fail && G.fail.reason) + ' adUndo=' + G.adUndo);
+    G.par = 999; G.moves = 1; G.toolsUsed = 0; G.restarted = 0; G.reviveUsed = 0;
+    D.levelDone(); g.frames(2);
+    rep.ok('B8②：用普通撤销次数的 failUndo → 星级不受影响（照常三星）',
+      !!G.winStats && G.winStats.stars === 3, JSON.stringify(G.winStats));
+  }
+
+  /* ③ 换一关 / 重开，adUndo 必须归零（不能把上一局的账带到下一局） */
+  {
+    const g = fresh(); const D = g.DBG; const G = enter(g);
+    G.adUndo = 3;
+    D.gen(G.level); g.frames(4);
+    rep.ok('B8③：genLevel 后 G.adUndo 归零（与 reviveUsed 一起按局重置）',
+      G.adUndo === 0 && G.reviveUsed === 0, 'adUndo=' + G.adUndo);
+  }
+});
+
 rep.done();

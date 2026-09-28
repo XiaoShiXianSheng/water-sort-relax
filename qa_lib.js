@@ -40,6 +40,9 @@ const INJECT = `window.__DBG={
   jarAtCounter:jarAtCounter, bottleAtGrid:bottleAtGrid, toolAt:toolAt,
   unlockBadgeAt:unlockBadgeAt, tubeAt:tubeAt, toVirtual:toVirtual,
   rowX0:rowX0, slotPos:slotPos, layoutAll:layoutAll,
+  /* B 组（UX 评审真 bug）：万能指 / 退回 / 通关结算 / 每日挑战种子 / 道具栏绘制 */
+  TOOLBS:TOOLBS, useFinger:useFinger, startReturn:startReturn, startPlace:startPlace,
+  levelDone:levelDone, dailySeed:dailySeed, drawTools:drawTools,
   snapAnim:snapAnim, lvPickTap:lvPickTap, LV_PANEL:LV_PANEL,
   WIN_UI:WIN_UI, TIER_UI:TIER_UI, TIER_NAME:TIER_NAME, checkAllGone:checkAllGone,
   drawBottle:drawBottle, drawJarCounter:drawJarCounter, drawGrid:drawGrid, drawSlot:drawSlot,
@@ -47,7 +50,12 @@ const INJECT = `window.__DBG={
   levelDone:levelDone, saveProgress:saveProgress, bootSession:bootSession,
   totalStars:totalStars, tierUnlocked:tierUnlocked, starsOf:starsOf,
   startDaily:startDaily, dateKey:dateKey, dailySeed:dailySeed, dailyDoneToday:dailyDoneToday,
-  enterFail:enterFail, doRevive:doRevive, hasLegalDecision:hasLegalDecision,
+  enterFail:enterFail, doRevive:doRevive, hasLegalDecision:hasLegalDecision, boardPlayable:boardPlayable,
+  /* FIX-04：软提示按钮 + 失败面板撤销按钮（绘制与命中必须共用 hintRects） */
+  FAIL_OPTS:FAIL_OPTS, hintRects:hintRects, hintHit:hintHit, hintTap:hintTap,
+  hintOpts:hintOpts, hintAction:hintAction,
+  failUndo:failUndo, failUndoShow:failUndoShow, failUndoAlpha:failUndoAlpha,
+  failUndoTitle:failUndoTitle, unlockSlot:unlockSlot, drawHint:drawHint, snapshot:snapshot,
   refillTool:refillTool, waterLeft:waterLeft, findSafeSnapshotIdx:findSafeSnapshotIdx, doUndo:doUndo,
   useClear:useClear, useSwap:useSwap, thawByNeighbors:thawByNeighbors, snapshot:snapshot,
   setView:function(w,h){ cw=w; ch=h; dpr=1;

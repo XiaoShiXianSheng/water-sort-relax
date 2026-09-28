@@ -493,7 +493,7 @@ try {
   chk('整体递增：第 30 关格子数 ≥ 第 20 关', c30 >= c20);
   chk('不会倒退：第 3 关格子数 ≥ 第 1 关', c3 >= c1);
   DBG.gen(8); frames(8);
-  chk('水管数在 3~9 之间（关卡驱动，不再只有 5~6 根）', DBG.G.tubes.length >= 3 && DBG.G.tubes.length <= 9);
+  chk('水管数在 3~7 之间（关卡驱动，7 根正好铺满 720 宽）', DBG.G.tubes.length >= 3 && DBG.G.tubes.length <= 7);
   chk('台面槽 5~7 个', DBG.G.slots.length >= 5 && DBG.G.slots.length <= 7);
   chk('第 8 关出现门洞', DBG.G.gates.length > 0);
   const usedCells = new Set(DBG.G.bottles.map(b => b.cell)).size;
@@ -512,8 +512,8 @@ try {
   const s1 = snap(1), s15 = snap(15), s25 = snap(25), s30 = snap(30), s30b = snap(30);
   chk('第 1 关 3 根管（新手关保持清爽）', s1.tubes === 3);
   chk('第 15 关至少 6 根管（原版这里只有 4 根）', s15.tubes >= 6);
-  chk('第 25 关至少 8 根管', s25.tubes >= 8);
-  chk('管数封顶 9 根（再多屏幕上排不开）', s30.tubes <= 9);
+  chk('第 25 关达到 7 根管上限（原版这里只有 4 根）', s25.tubes >= 7);
+  chk('管数封顶 7 根（7 根正好铺满 720 宽；8 根起最外侧的管会被切、点不到）', s30.tubes === 7);
   chk('水层高度下限 28（不再为了不出屏把水柱压扁到 14~19）', s1.uh >= 28 && s30.uh >= 28);
   chk('低关卡水柱不顶出画面（第 1 关看得见全貌）', s1.topY > TUBE_CUT_Y);
   chk('高关卡水柱真的顶出画面（第 30 关管顶越过 ' + TUBE_CUT_Y + '）', s30.topY < TUBE_CUT_Y);
@@ -1037,16 +1037,18 @@ try {
   let overCap = [];
   for (let lv = 1; lv <= 30; lv++) if (DBG.plan(lv).cells > 26) overCap.push('L' + lv);
   chk('棋盘硬上限 26 格生效（1~30 关全部不超）', overCap.length === 0);
-  /* 波浪保留：9 关以后（第 6~30 关，即周期 2~6）每个周期的峰值关格数不低于其余关 */
+  /* 波浪保留：9 关以后（第 6~30 关，即周期 2~6）每个周期的峰值关「决策密度」最高。
+     方案 F 之后第 19 关起货架恒 24 格（每行等长），cells 恒定 → 必须改用 density 口径，
+     否则固定等长货架会让这条断言永远报假违规。 */
   let waveBad = [];
   for (let cyc = 1; cyc < 6; cyc++) {
-    const seg = growth.slice(cyc * 5, cyc * 5 + 5);
+    const seg = density.slice(cyc * 5, cyc * 5 + 5);
     if (seg.length < 5) continue;
     const peak = seg[4];
     if (!(peak > seg[0] && peak > seg[1] && peak >= seg[2] && peak >= seg[3]))
       waveBad.push('#' + (cyc + 1) + '[' + seg.join(',') + ']');
   }
-  chk('9 关以后仍保留「波浪」节奏（每个 5 关周期的峰值关格数最大）', waveBad.length === 0);
+  chk('9 关以后仍保留「波浪」节奏（每个 5 关周期的峰值关决策密度最高）', waveBad.length === 0);
   if (waveBad.length) console.log('  异常周期: ' + waveBad.join(' '));
   chk('整体递增：第 30 关格子数 > 第 5 关', growth[29] > growth[4]);
   chk('行列组合多样：1~30 关至少出现 6 种不同的「行×列」', shapeSet.size >= 6);

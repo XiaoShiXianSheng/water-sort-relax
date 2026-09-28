@@ -57,14 +57,12 @@ const CASES = [
     repl: 'if(cb.gate>=0)continue;   /* rollback-test: 放开冰冻候选 */'
   },
   {
-    name: 'doUndo() 不回滚水管里的水',
+    /* doUndo / restoreHistoryAt / failUndoCommit 现在共用 applySnapshotObj，
+       所以「不回滚水管」要在这一处改坏 —— 一处坏，三条撤销路径一起坏。 */
+    name: 'applySnapshotObj() 不回滚水管里的水（撤销/复活回滚/失败面板撤销 三条路径同时失效）',
     suite: 'qa_ui.js', expect: /撤销回退后状态逐字段一致/,
-    find: "if(!G.history.length||G.undoLeft<=0){toast('没有撤销次数了');SFX.no();return;}\n"
-      + '  var s=JSON.parse(G.history.pop());\n'
-      + '  for(var i=0;i<G.tubes.length;i++)G.tubes[i].units=s.tubes[i].slice();',
-    repl: "if(!G.history.length||G.undoLeft<=0){toast('没有撤销次数了');SFX.no();return;}\n"
-      + '  var s=JSON.parse(G.history.pop());\n'
-      + '  /* rollback-test: 故意不回滚水管 */'
+    find: '  for(var i=0;i<G.tubes.length;i++)G.tubes[i].units=s.tubes[i].slice();',
+    repl: '  /* rollback-test: 故意不回滚水管 */'
   },
   {
     name: 'useClear() 漏掉「清掉的那杯倒进同色瓶」',
@@ -134,6 +132,21 @@ const CASES = [
     find: 'if(vx>=tbx-58&&vx<=tbx+58&&vy>=712&&vy<=780){',
     repl: 'if(false){'
   },
+  /* ---------- FIX-03：出屏管（本次漏测根因，两条治本断言都必须能抓它）----------
+     把 tubeCountFor 的封顶 7 还原成 9 → 高关卡又变成 9 根管，两端 2 根被推到屏外
+     （x0=-92，命中盒与 [0,VW] 无交集），正是用户报的「两根管点不到」。 */
+  {
+    name: '出屏管①（几何）：管数封顶还原成 9 根 → 两端出屏、命中盒与屏幕无交集',
+    suite: 'qa_design.js', expect: /出屏管回归/,
+    find: '  var n=Math.max(3,Math.min(7,want||3));',
+    repl: '  var n=9;   /* rollback-test: 还原成 9 根 */'
+  },
+  {
+    name: '出屏管②（命中路径）：同上，用「夹到屏幕内」的坐标走 tubeAt 点不到那 2 根',
+    suite: 'qa_ui.js', expect: /水管命中路径/,
+    find: '  var n=Math.max(3,Math.min(7,want||3));',
+    repl: '  var n=9;   /* rollback-test: 还原成 9 根 */'
+  },
 
   /* ---------- 05:00 档新增：性能之外的两件事（修 flaky + 上线门禁）----------
      注意：下面几条有的改的是**测试文件**、有的是**发布件**、有的干脆不改文件而是给一个
@@ -181,6 +194,156 @@ const CASES = [
     suite: 'qa_gate.js', expect: /线上是旧版或没同步/,
     noPatch: true, liveTamper: true
   },
+  /* ---------- FIX-04：卡住/死局时的「撤销」必须真的可点 ----------
+     六条分别盯住这段功能最容易被"做成假的"的六个地方：
+     按钮退化成文字 / 画得出来点不动 / 画的点的是两套坐标 / 撤销不扣次数 /
+     失败面板的撤销不等 1.5 秒就冒出来（或干脆永远不出现）/ 撤销完还是死局也放行。 */
+  {
+    name: '软提示退化成纯文字（G.hint 不再带 opts → 又回到"自己去工具栏找撤销"）',
+    suite: 'qa_ui.js', expect: /FIX-04①a：卡住时软提示带真按钮/,
+    find: '    G.hint.opts=hintOpts();',
+    repl: '    /* rollback-test: 退化成纯文字 */'
+  },
+  {
+    name: '提示条按钮画得出来但没接命中（点不动 —— 玩家反馈的原话就是这个）',
+    suite: 'qa_ui.js', expect: /FIX-04①c：点提示条上的「撤销一瓶」/,
+    find: '  if(G.hint&&hintTap(vx,vy))return;',
+    repl: '  /* rollback-test: 按钮没接线 */'
+  },
+  {
+    name: '画的和点的是两套坐标（命中框整体右移 30px —— 本项目出过的老毛病）',
+    suite: 'qa_ui.js', expect: /FIX-04①b/,
+    find: '    if(vx>=t.x&&vx<=t.x+t.w&&vy>=t.y&&vy<=t.y+t.h)return t;',
+    repl: '    if(vx>=t.x+30&&vx<=t.x+t.w&&vy>=t.y&&vy<=t.y+t.h)return t;   /* rollback-test */'
+  },
+  {
+    name: '失败面板的撤销按钮永远不淡入（alpha 恒 0 → 弹窗里根本没有这条路）',
+    suite: 'qa_ui.js', expect: /FIX-04②a/,
+    find: '  var t=(G.fail.t||0)-1.5;',
+    repl: '  var t=-1;   /* rollback-test: 永不淡入 */'
+  },
+  {
+    name: '失败面板的撤销按钮不等 1.5 秒、弹窗一出来就怼在玩家脸上',
+    suite: 'qa_ui.js', expect: /FIX-04②a/,
+    find: '  var t=(G.fail.t||0)-1.5;',
+    repl: '  var t=1;   /* rollback-test: 不等缓冲直接出现 */'
+  },
+  {
+    name: '失败面板撤销不扣次数（变成免费无限撤，撤销次数这个资源形同虚设）',
+    suite: 'qa_ui.js', expect: /FIX-04②b：这次撤销照常扣 1 次/,
+    find: '  G.undoLeft--;\n  G.history.length=idx;',
+    repl: '  G.history.length=idx;   /* rollback-test: 不扣次数 */'
+  },
+  {
+    name: '失败面板撤销不验收（退完还是死局也照样关面板 → 玩家对着死棋盘干等）',
+    suite: 'qa_ui.js', expect: /FIX-04②d/,
+    find: '  if(!boardPlayable()){',
+    repl: '  if(false){   /* rollback-test: 不验收 */'
+  },
+  {
+    name: '撤销次数用光时仍写「撤销一瓶」（等于白送，广告位没了）',
+    suite: 'qa_ui.js', expect: /FIX-04②c/,
+    find: "function failUndoTitle(){ return G.undoLeft>0?'↩ 撤销一瓶':'▶ 看广告 +1 撤销'; }",
+    repl: "function failUndoTitle(){ return '↩ 撤销一瓶'; }   /* rollback-test */"
+  },
+  /* ---------- B 组：UX 评审读代码读出来的五个真 bug + 三星判定 ----------
+     每条都配一个"改坏"用例：这些修法大多是"加一行前置判断 / 改一个条件"，
+     最容易被后来人当冗余删掉，而删掉之后旧断言照样全绿 —— 必须靠这里兜住。 */
+  {
+    name: 'B1：删掉 useFinger 的「台面满了」前置判断（道具白扣、瓶子不动、还弹横幅）',
+    suite: 'qa_ui.js', expect: /B1：台面满时点「万能指」/,
+    find: "  if(freeSlot()<0){toast('台面满了，先退回一个瓶子');SFX.no();return;}",
+    repl: '  /* rollback-test: 又回到先扣道具再被 startPlace 拒 */'
+  },
+  {
+    name: 'B2①：撤销不回滚步数（G.moves 只增不减，试错被永久记账）',
+    suite: 'qa_ui.js', expect: /B2①/,
+    find: '  if(s.moves!==undefined)G.moves=s.moves;',
+    repl: '  /* rollback-test: 步数不随快照回滚 */'
+  },
+  {
+    name: 'B2②：startReturn 改成 G.moves--（place/return 相消 → moves 恒等于瓶子数 → 人人三星）',
+    suite: 'qa_ui.js', expect: /B2②/,
+    find: "  snapshot();\n  G.moves++;\n  b.place='anim';\n  var rc=cellRect(b.cell);",
+    repl: "  snapshot();\n  G.moves--;\n  b.place='anim';\n  var rc=cellRect(b.cell);"
+  },
+  {
+    name: 'B3①：上限触顶又补一条 onNotice（两条 toast 互相覆盖，最后一句还是错的）',
+    suite: 'qa_ui.js', expect: /B3①/,
+    find: "      if(opts.onFail)try{ opts.onFail('cap'); }catch(e){}\n      return false;",
+    repl: "      if(opts.onFail)try{ opts.onFail('cap'); }catch(e){}\n"
+      + "      if(opts.onNotice)try{ opts.onNotice('cap'); }catch(e){}\n      return false;"
+  },
+  {
+    name: 'B3②：文案改回「下局再来」（resetSession 无调用，换一局并不重置 → 是句谎话）',
+    suite: 'qa_ui.js', expect: /B3②/,
+    find: "toast('本局的广告次数用完啦，换一局再来')",
+    repl: "toast('本局广告次数用完啦，下局再来')"
+  },
+  {
+    name: 'B4①：HUD 重开又裸调 genLevel（每日挑战被静默降级成普通关，玩家毫无察觉）',
+    suite: 'qa_ui.js', expect: /B4①/,
+    find: '    genLevel(G.level,{restart:1,daily:G.daily,date:G.dailyDate,',
+    repl: '    genLevel(G.level,{restart:1,'
+  },
+  {
+    name: 'B4②：HUD 重开丢掉 restart:1（走失败面板的人被扣星、HUD 重开的人免责 → 双标）',
+    suite: 'qa_ui.js', expect: /B4②/,
+    find: '    genLevel(G.level,{restart:1,daily:G.daily,date:G.dailyDate,',
+    repl: '    genLevel(G.level,{daily:G.daily,date:G.dailyDate,'
+  },
+  {
+    name: 'B5：道具栏名字无条件重画（与「▶ 广告补次」硬重叠；撤销行 alpha=1，每局必现）',
+    suite: 'qa_ui.js', expect: /B5②/,
+    find: "    if(!((isTool&&cnt<=0)||(tb.id==='undo'&&G.undoLeft<=0)))ctx.fillText(tb.label,cx,TOOL_Y+74);",
+    repl: '    ctx.fillText(tb.label,cx,TOOL_Y+74);'
+  },
+  {
+    name: 'B6①：三星又要求 0 道具（玩家不敢用道具 → 道具永不耗尽 → 广告补次永远触发不了）',
+    suite: 'qa_ui.js', expect: /B6①/,
+    find: '  var stars=(G.moves<=par&&!G.restarted)?3:',
+    repl: '  var stars=(G.moves<=par&&G.toolsUsed===0&&!G.restarted)?3:'
+  },
+  {
+    name: 'B6②：三星去掉 !G.restarted（全文唯一的 anti-reroll 门槛失守 → 反复重开刷三星）',
+    suite: 'qa_ui.js', expect: /B6②/,
+    find: '  var stars=(G.moves<=par&&!G.restarted)?3:',
+    repl: '  var stars=(G.moves<=par)?3:'
+  },
+  {
+    name: 'B7：连点关卡号又弹出「（测试）」字样（内部字样不该被玩家看见）',
+    suite: 'qa_ui.js', expect: /B7：连点关卡号/,
+    find: "    else{SFX.tap();}          // 不给计数提示：玩家好奇连点会看见「（测试）」这种内部字样",
+    repl: "    else{toast('再点 '+(5-G.lvTap.n)+' 次进入选关（测试）');SFX.tap();}"
+  },
+  /* ---------- B8：看过广告的撤销，星级封顶 2 ----------
+     四条分别盯住：计数器不记 / 封顶条件不认 adUndo / 计数器记错地方（普通撤销也被封顶）/
+     换关不归零。第三条尤其重要 —— 它防的是"把 adUndo++ 顺手放进 failUndoCommit"，
+     那样花普通撤销额度的玩家也会被扣星，正是这条改动最容易走岔的地方。 */
+  {
+    name: 'B8：广告撤销不记 adUndo（看完广告照样三星，与 reviveUsed 那条原则冲突）',
+    suite: 'qa_ui.js', expect: /B8①：看过广告的撤销/,
+    find: 'var grant=function(){ G.undoLeft++; G.adUndo++; failUndoCommit(); };',
+    repl: 'var grant=function(){ G.undoLeft++; failUndoCommit(); };'
+  },
+  {
+    name: 'B8：星级封顶条件不认 adUndo（只认 reviveUsed）',
+    suite: 'qa_ui.js', expect: /B8①：看过广告的撤销/,
+    find: '  if((G.reviveUsed>0||G.adUndo>0)&&stars>2)stars=2;',
+    repl: '  if(G.reviveUsed>0&&stars>2)stars=2;'
+  },
+  {
+    name: 'B8：adUndo++ 记错地方（放进 failUndoCommit → 花普通撤销额度的玩家也被扣星）',
+    suite: 'qa_ui.js', expect: /B8②：用普通撤销次数的 failUndo/,
+    find: "  SFX.cap(); toast('退回一步，继续！');",
+    repl: "  G.adUndo++;\n  SFX.cap(); toast('退回一步，继续！');"
+  },
+  {
+    name: 'B8：换关/重开不重置 adUndo（上一局的广告账带到下一局）',
+    suite: 'qa_ui.js', expect: /B8③/,
+    find: 'G.reviveUsed=0; G.adUndo=0; G.moves=0;',
+    repl: 'G.reviveUsed=0; G.moves=0;'
+  },
   {
     /* 真实事故：全局 core.autocrlf=true，一次 git rebase 就把主文件写成 CRLF、
        发布件与线上还是 LF → 门禁翻红，但内容一模一样。这条既验证 G8a 会 FAIL，
@@ -188,7 +351,11 @@ const CASES = [
     name: '门禁 G8a：发布件只差换行符（CRLF vs LF，内容一致但字节不等）',
     file: 'publish_water/index.html',
     suite: 'qa_gate.js', expect: /只差换行符/,
-    crlfTamper: true
+    crlfTamper: true,
+    /* 「线上 LF / 本地 CRLF」这一对改用本机确定性站点提供，不再依赖真线上站点
+       当前跑的是哪一版 —— 否则别人一发版这条就失效（2026-09-28 踩到：线上从
+       137240B 换成 152420B，这条立刻变红，而代码一点没动）。 */
+    liveServe: true
   }
 ];
 
@@ -227,10 +394,19 @@ const HELPER_CODE = [
   'var s=http.createServer(function(q,r){r.writeHead(200,{"Content-Type":"text/html; charset=utf-8"});r.end(t);});',
   's.listen(0,"127.0.0.1",function(){console.log("PORT="+s.address().port);});'
 ].join('');
-function startTamperServer() {
+/* 原样转发发布件（不做任何改写，且按 Buffer 读 → 保住原始 LF 字节）。
+   给「只差换行符」那条例用：它要的是「线上是 LF、本地是 CRLF」这一对，
+   靠真线上站点的当前版本来凑是不可靠的 —— 别人一发版这条就失效（踩过一次）。 */
+const SERVE_CODE = [
+  'var http=require("http"),fs=require("fs"),path=require("path");',
+  'var pub=fs.readFileSync(path.join(process.env.TAMPER_ROOT,"publish_water","index.html"));',
+  'var s=http.createServer(function(q,r){r.writeHead(200,{"Content-Type":"text/html; charset=utf-8"});r.end(pub);});',
+  's.listen(0,"127.0.0.1",function(){console.log("PORT="+s.address().port);});'
+].join('');
+function startServer(code) {
   return new Promise(resolve => {
     const env = Object.assign({}, process.env, { TAMPER_ROOT: ROOT });
-    const proc = cp.spawn(NODE, ['-e', HELPER_CODE], { env: env, stdio: ['ignore', 'pipe', 'ignore'] });
+    const proc = cp.spawn(NODE, ['-e', code], { env: env, stdio: ['ignore', 'pipe', 'ignore'] });
     let done = false;
     const finish = v => { if (!done) { done = true; resolve(v); } };
     proc.stdout.on('data', d => {
@@ -263,10 +439,22 @@ for (const c of CASES) {
   let env = c.env || {};
   let tamper = null;
   if (c.liveTamper) {
-    tamper = await startTamperServer();
+    tamper = await startServer(HELPER_CODE);
     if (!tamper.url) {
       bad++;
       rows.push({ ok: false, name: c.name, why: '起不了本地篡改站点，这条用例没跑（不能算通过）' });
+      if (tamper.proc) { try { tamper.proc.kill(); } catch (e) { } }
+      continue;
+    }
+    env = Object.assign({}, env, { LIVE_URL: tamper.url });
+  }
+  if (c.liveServe) {
+    /* 必须在 CRLF 改写**之前**启动：这个服务启动时读一次文件，读到的是原始 LF 字节，
+       本地那份随后被写成 CRLF —— 正好凑成「线上 LF / 本地 CRLF」这一对。 */
+    tamper = await startServer(SERVE_CODE);
+    if (!tamper.url) {
+      bad++;
+      rows.push({ ok: false, name: c.name, why: '起不了本地转发站点，这条用例没跑（不能算通过）' });
       if (tamper.proc) { try { tamper.proc.kill(); } catch (e) { } }
       continue;
     }
