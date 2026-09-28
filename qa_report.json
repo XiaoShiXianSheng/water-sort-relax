@@ -1,14 +1,14 @@
 {
-  "at": "2026-09-27T21:36:12.065Z",
-  "green": true,
+  "at": "2026-09-28T07:43:16.781Z",
+  "green": false,
   "gate": {
-    "ok": true,
+    "ok": false,
     "items": [
       {
         "id": "G1",
         "name": "全部套件 0 FAIL",
-        "ok": true,
-        "detail": "399 项断言全过"
+        "ok": false,
+        "detail": "有 1 项失败（见上表）"
       },
       {
         "id": "G2",
@@ -61,14 +61,14 @@
       {
         "id": "G8b",
         "name": "线上字节与本地一致（带 ?t= 破 CDN 缓存）",
-        "ok": true,
-        "detail": "线上 136672B / md5 b27e82d4b2c8f9f78919ea0f152e7c56 与发布件逐字节相同"
+        "ok": false,
+        "detail": "线上 152352B / md5 516536f2ad7bb1a2cb14e0f878a39b60　vs 本地发布件 136672B / md5 b27e82d4b2c8f9f78919ea0f152e7c56　→ 线上是旧版或没同步"
       }
     ]
   },
   "total": {
-    "pass": 399,
-    "fail": 0,
+    "pass": 398,
+    "fail": 1,
     "warn": 0
   },
   "suites": [
@@ -78,7 +78,7 @@
       "pass": 165,
       "fail": 0,
       "warn": 0,
-      "ms": 2217,
+      "ms": 2401,
       "fails": [],
       "warns": [],
       "unstable": false
@@ -89,7 +89,7 @@
       "pass": 66,
       "fail": 0,
       "warn": 0,
-      "ms": 502,
+      "ms": 490,
       "fails": [],
       "warns": [],
       "unstable": false
@@ -100,7 +100,7 @@
       "pass": 31,
       "fail": 0,
       "warn": 0,
-      "ms": 337,
+      "ms": 393,
       "fails": [],
       "warns": [],
       "unstable": false
@@ -111,7 +111,7 @@
       "pass": 42,
       "fail": 0,
       "warn": 0,
-      "ms": 435,
+      "ms": 445,
       "fails": [],
       "warns": [],
       "unstable": false
@@ -122,7 +122,7 @@
       "pass": 49,
       "fail": 0,
       "warn": 0,
-      "ms": 3003,
+      "ms": 1536,
       "fails": [],
       "warns": [],
       "unstable": false
@@ -133,7 +133,7 @@
       "pass": 40,
       "fail": 0,
       "warn": 0,
-      "ms": 88219,
+      "ms": 74163,
       "fails": [],
       "warns": [],
       "unstable": false,
@@ -184,11 +184,13 @@
     {
       "key": "gate",
       "name": "上线门禁（体积 / ES5 / 依赖 / 可解性 / 线上一致）",
-      "pass": 6,
-      "fail": 0,
+      "pass": 5,
+      "fail": 1,
       "warn": 0,
-      "ms": 1200,
-      "fails": [],
+      "ms": 1064,
+      "fails": [
+        "[G8b] 线上字节与本地一致（带 ?t= 破 CDN 缓存） → 线上 152352B / md5 516536f2ad7bb1a2cb14e0f878a39b60　vs 本地发布件 136672B / md5 b27e82d4b2c8f9f78919ea0f152e7c56　→ 线上是旧版或没同步"
+      ],
       "warns": [],
       "unstable": false
     }
