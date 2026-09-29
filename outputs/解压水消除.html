@@ -133,8 +133,10 @@ function toolX(i){return TOOL_X0+i*(TOOL_W+TOOL_GAP);}
 
 var CFG={
   version:'4.0.0',                         // 对外版本号：随每条埋点上报，出事时能区分线上跑的是哪一版
-  env:'test',                              // 'test'(默认：模拟完成，供开发/自动化测试) | 'online'(真实 SDK)
-  adUnit:{rewarded:'',interstitial:''},    // 在 TapTap 开发者中心 → 商店 → 小游戏广告 开通并创建广告位后填入
+  env:'online',                            // 'online'(默认：真机有 tap 就真实拉广告) | 'test'(模拟完成，供开发/自动化测试)
+                                           // 自动降级：无 window.tap → test(no-tap-runtime)；无 adUnitId → test(no-ad-unit-id)。
+                                           // 所以本地浏览器/Node 测试环境永远是 test，真机永远走 online，不需要手动改代码。
+  adUnit:{rewarded:'1067564',interstitial:'1067565'},  // 广告位ID：在 Dirichlet 媒体平台 ssp.dirichlet.cn 创建（2026-09-29）；留空则自动降级 TEST
   rewardedSessionCap:3,                    // 单会话激励视频上限（初始实验值，不是行业真理）
   interstitialSessionCap:1,                // 单会话插屏上限
   interstitialCooldown:300,                // 插屏冷却（秒）：官方建议 ≥180s，这里取 300s 更克制

@@ -497,6 +497,28 @@ const CASES = [
     suite: 'qa_smoke_live.js', expect: /主循环在跑/,
     find: '  }\n  requestAnimationFrame(loop);\n}',
     repl: '  }\n  /* rollback-test: 故意不排下一帧 */\n}'
+  },
+
+  /* ---------- 09-29 广告接入档新增 2 条：一次"零收益事故"的防回归 ----------
+     事故经过：广告位 ID 已经填好了，但 CFG.env 还是 'test' → 真机上跑的是模拟广告，
+     一个广告费都收不到，而且**不报任何错**（游戏照常玩）。这类"配置型静默失效"
+     最难靠人眼发现，所以两条断言各配一个回滚用例。 */
+  {
+    /* ⚠️ find 必须吃满整行：第一次写的时候只匹配到「就真实拉广告)」，
+       行尾的 `| 'test'(模拟完成，供开发/自动化测试)` 被留了下来，
+       于是改坏后的文件变成 `env:'test', /*…*/ | 'test'(模拟完成…)` → 全角逗号语法错误
+       → 套件 0 PASS / 6 FAIL，看起来像"改坏没 FAIL"，实际是"文件根本没解析成功"。
+       回滚用例本身也会写错，这就是为什么它必须自己先跑通。 */
+    name: '广告总开关被改回 test（真机跑模拟广告 → 静默零收益）',
+    suite: 'qa_biz.js', expect: /出厂 env 默认值是 online/,
+    find: "  env:'online',                            // 'online'(默认：真机有 tap 就真实拉广告) | 'test'(模拟完成，供开发/自动化测试)",
+    repl: "  env:'test',   /* rollback-test: 改回模拟广告 */"
+  },
+  {
+    name: '无 tap 时不再降级（本地/Node 环境被当成真机跑 online → 测试体系被污染）',
+    suite: 'qa_biz.js', expect: /无 tap 运行时 → 自动降级 test/,
+    find: "      if(!AdService.hasTap()){ AdService.env='test'; AdService.degradeReason='no-tap-runtime'; }",
+    repl: "      if(false){ AdService.env='test'; AdService.degradeReason='no-tap-runtime'; }   /* rollback-test */"
   }
 ];
 

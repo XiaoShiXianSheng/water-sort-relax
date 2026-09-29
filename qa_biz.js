@@ -54,7 +54,7 @@ guard(rep, '广告-Test', function () {
   const g = boot(6);
   const A = g.DBG.AdService, C = g.DBG.CFG, T = g.DBG.Track;
   C.env = 'test'; A.setEnv('test');
-  rep.ok('默认环境是 test（未开通广告位时不产生真实收入）', A.env === 'test');
+  rep.ok('显式切 test → 广告环境为 test（模拟完成，不产生真实收入）', A.env === 'test');
 
   /* 1.1 正常完成 → 发奖，且埋点齐全 */
   A.resetSession(); T.reset();
@@ -119,6 +119,16 @@ guard(rep, '广告-Test', function () {
 guard(rep, '广告-Online', function () {
   const g = boot(6);
   const A = g.DBG.AdService, C = g.DBG.CFG, T = g.DBG.Track;
+
+  /* 2.0 出厂开关必须是 online —— 这一条是"防零收益"红线。
+     2026-09-29 复盘：默认值曾是 'test'，就算广告位 ID 填好了，真机上仍然跑模拟广告
+     = 一个广告费都收不到，而且没有任何报错，只有看代码才发现。改成默认 online 后，
+     靠 AdService.init() 的自动降级保证测试环境不受影响（下面 2.0b 就是降级路径的断言）。 */
+  rep.ok('出厂 env 默认值是 online（防止真机跑模拟广告导致零收益）', C.env === 'online', '实际 ' + C.env);
+  /* 2.0b 无 tap 运行时 → 必须自动降级 test。这是"本地/Node 测试不被污染"的保证，
+     之前只测了 no-ad-unit-id，这条 no-tap-runtime 一直是空的。 */
+  rep.ok('无 tap 运行时 → 自动降级 test 且记录 no-tap-runtime',
+    A.env === 'test' && A.degradeReason === 'no-tap-runtime', A.env + '/' + A.degradeReason);
 
   /* 2.1 没有 adUnitId 时必须自动降级成 test（绝不能让线上白屏/卡死） */
   C.adUnit.rewarded = '';
