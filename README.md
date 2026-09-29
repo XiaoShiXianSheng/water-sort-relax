@@ -16,8 +16,8 @@
 ## 当前最终开发口径
 
 - **最终开发提示词**：[`outputs/解压水消除_WorkBuddy最终开发提示词_V4.0.md`](outputs/解压水消除_WorkBuddy最终开发提示词_V4.0.md)
-- 状态：**V4.0 开发完成**。P0 18/18、P1 6/6 全部落地，`--gate` 口径 476 项（8 套件）0 失败，机器人 1~40 关全通（固定种子可复现），
-  九张界面截图已做视觉校验；`node qa_run.js --gate` 11 条上线硬条件全过；真机项待复测（见验收报告 §5）。
+- 状态：**V4.0 开发完成 + 广告变现链路已接通**。P0 18/18、P1 6/6 全部落地，`--gate` 口径 480 项（8 套件）0 失败，机器人 1~40 关全通（固定种子可复现），
+  九张界面截图已做视觉校验；`node qa_run.js --gate` 13 条上线硬条件全过；真机项待复测（见验收报告 §5）。
 - V4.0 已统一第二轮复核后的关键修正：开发 GO 但商业验证仍有开放项；不做签到系统；广告频控参数配置化；V1 不做倒计时失败；复活必须恢复真正可玩的安全状态。
 
 ## 这次想要的评审方向
@@ -73,11 +73,20 @@
 node qa_run.js            # 全部（含机器人，1~3 分钟）
 node qa_run.js --quick    # 跳过机器人，约 5 秒
 REPS=3 node qa_run.js     # 快速套件重跑 3 遍，专抓「时好时坏」的 flaky
-node qa_run.js --gate     # 上线门禁：全跑 + 11 条硬条件，不过就「禁止上线」（退出码 3）
-node qa_rollback.js       # 回滚验证：故意改坏产品代码 → 确认对应断言真的会 FAIL（71 个用例）
+node qa_run.js --gate     # 上线门禁：全跑 + 13 条硬条件，不过就「禁止上线」（退出码 3）
+node qa_rollback.js       # 回滚验证：故意改坏产品代码 → 确认对应断言真的会 FAIL（74 个用例）
 node qa_perf.js           # 低端机性能体检：真 Chrome 逐帧计时
 node qa_smoke_live.js     # 真浏览器白屏体检：4 关 × 90 帧
 ```
+
+> ⚠ **发布副本不在版本库里**（`.gitignore` 忽略了 `publish_water/index.html` 和 `publish_taptap/index.html`
+> —— 它们只是主文件的字节副本，可再生）。所以**新克隆下来直接跑 `--gate`，G8a 会红**，
+> 那是在提醒你「副本还没生成」，不是代码坏了。改完主文件后先同步再跑：
+>
+> ```bash
+> cp outputs/解压水消除.html publish_water/index.html
+> cp outputs/解压水消除.html publish_taptap/index.html
+> ```
 
 | 套件 | 文件 | 项数 | 守什么 |
 |---|---|---|---|

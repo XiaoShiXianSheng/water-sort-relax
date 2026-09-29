@@ -183,11 +183,26 @@ const CASES = [
     repl: 'for(key in occ)return false;return false;   /* rollback-test */'
   },
   {
+    /* expect 跟着 G8a 的报错文案改过：G8a 现在一次列全部副本，
+       单份不一致时的措辞是「<副本> <md5>（<n>B）≠ 主文件 <md5>」。 */
     name: '门禁 G8a：改了主文件没同步发布件',
     file: 'publish_water/index.html',
-    suite: 'qa_gate.js', expect: /≠ 发布件/,
+    suite: 'qa_gate.js', expect: /≠ 主文件/,
     find: '</body>',
     repl: '<!--rollback-test: 发布件落后于主文件--></body>'
+  },
+  {
+    /* 同一个坑的第二次（2026-09-29）：发布副本从 1 个变成 2 个
+       （publish_water 给线上站点，publish_taptap 给「重新打包上传」取件）。
+       只查第一个目录的门禁，会让第二个目录悄悄落后 —— 而它恰恰是上传包的取件处，
+       落后就意味着把「没有广告位 ID 的旧版」重新打进去 = 又一次静默零收益。
+       这条用 GATE_NO_LIVE=1 跑：验的是本地副本一致性，不该被真线上当前版本干扰。 */
+    name: '门禁 G8a：publish_taptap/index.html 落后于主文件（第二个发布目录漏同步）',
+    file: 'publish_taptap/index.html',
+    suite: 'qa_gate.js', expect: /publish_taptap\/index\.html/,
+    find: '</body>',
+    repl: '<!--rollback-test: taptap 打包目录落后于主文件--></body>',
+    env: { GATE_NO_LIVE: '1' }
   },
   {
     name: '门禁 G8b：线上跑的是旧版（本地起一个故意不一致的站点）',
@@ -505,10 +520,14 @@ const CASES = [
      最难靠人眼发现，所以两条断言各配一个回滚用例。 */
   {
     /* ⚠️ find 必须吃满整行：第一次写的时候只匹配到「就真实拉广告)」，
-       行尾的 `| 'test'(模拟完成，供开发/自动化测试)` 被留了下来，
-       于是改坏后的文件变成 `env:'test', /*…*/ | 'test'(模拟完成…)` → 全角逗号语法错误
+       行尾的「| 'test'(模拟完成，供开发/自动化测试)」被留了下来，
+       于是改坏后的文件变成「env:'test', [残留注释] | 'test'(模拟完成…)」→ 全角逗号语法错误
        → 套件 0 PASS / 6 FAIL，看起来像"改坏没 FAIL"，实际是"文件根本没解析成功"。
-       回滚用例本身也会写错，这就是为什么它必须自己先跑通。 */
+       回滚用例本身也会写错，这就是为什么它必须自己先跑通。
+       ★ 二次教训（2026-09-29）：这段注释最初直接写了内层注释标记 `斜杠星号 … 星号斜杠`，
+         那个「星号斜杠」把**外层块注释提前闭合了** → 后面半行成了裸代码 →
+         整个 qa_rollback.js 一跑就 SyntaxError，却没人发现（它是独立跑的，不在 qa_run 里）。
+         现在 qa_gate.js 多了 G10：对所有 QA 脚本做语法自检，这类"验证器自己烂掉"当场变红。 */
     name: '广告总开关被改回 test（真机跑模拟广告 → 静默零收益）',
     suite: 'qa_biz.js', expect: /出厂 env 默认值是 online/,
     find: "  env:'online',                            // 'online'(默认：真机有 tap 就真实拉广告) | 'test'(模拟完成，供开发/自动化测试)",

@@ -28,6 +28,12 @@ const crypto = require('crypto');
 const ROOT = __dirname;
 const GAME = process.env.GAME || path.join(ROOT, 'outputs', '解压水消除.html');
 const PUB = process.env.PUB || path.join(ROOT, 'publish_water', 'index.html');
+/* G8a 必须盯住**每一个**「会被拿去部署/上传的副本」，不是只盯一个目录。
+   踩过两次同一个坑：第一次 publish_water 漏同步（线上停在旧版），
+   第二次 publish_taptap 漏同步（一旦重新打包，就会把没有广告位 ID 的旧版打进去 → 静默零收益）。 */
+const PUB_COPIES = (process.env.PUB_COPIES ||
+  ['publish_water/index.html', 'publish_taptap/index.html'].join(',')).split(',');
+const ZIP_DIR = process.env.ZIP_DIR || path.join(ROOT, 'outputs');
 const LIVE_URL = process.env.LIVE_URL || 'https://water-sort-relax.app.workbuddy.host/';
 const MAX_KB = +(process.env.MAX_KB || 200);
 const SOLVE_REPS = +(process.env.GATE_SOLVE_REPS || 3);
@@ -54,6 +60,31 @@ function eolOnly(a, b) {
   return na === nb;
 }
 const EOL_HINT = '　⚠ 内容其实**完全一致**，只差换行符（CRLF vs LF）—— 检查 `core.autocrlf` 与 `.gitattributes`';
+
+/* ============ 从 zip 里取条目原始字节（给 G8c 用）============
+ * 坑（第一次就踩了）：zip 常用「通用位标记 bit3」把 size 挪到 data descriptor，
+ * 此时**本地头里的 csize 是 0**，照着本地头读会解压报 "unexpected end of file"。
+ * 所以必须走「中央目录 PK\x01\x02」拿真实 size 与本地头偏移，再回本地头算数据起点。 */
+function zipEntry(buf, wantName) {
+  const PK_CD = Buffer.from('PK\x01\x02', 'binary');
+  const PK_LF = Buffer.from('PK\x03\x04', 'binary');
+  let i = 0, found = null;
+  while (!found && (i = buf.indexOf(PK_CD, i)) >= 0) {
+    const nlen = buf.readUInt16LE(i + 28), elen = buf.readUInt16LE(i + 30), clen = buf.readUInt16LE(i + 32);
+    const name = buf.slice(i + 46, i + 46 + nlen).toString('utf8');
+    if (name === wantName) {
+      found = { method: buf.readUInt16LE(i + 10), csize: buf.readUInt32LE(i + 20), lho: buf.readUInt32LE(i + 42) };
+    }
+    i += 46 + nlen + elen + clen;
+  }
+  if (!found) return null;
+  const j = buf.indexOf(PK_LF, found.lho);
+  if (j < 0) return null;
+  const dstart = j + 30 + buf.readUInt16LE(j + 26) + buf.readUInt16LE(j + 28);
+  let raw = buf.slice(dstart, dstart + found.csize);
+  try { if (found.method === 8) raw = zlib.inflateRawSync(raw); } catch (e) { return null; }
+  return { raw: raw, md5: crypto.createHash('md5').update(raw).digest('hex') };
+}
 
 /* ============ G4 用：剥掉注释 / 字符串 / 正则，只留真正的代码 ============ */
 function stripLits(src) {
@@ -230,23 +261,30 @@ function fetchLive(url, depth) {
     item('G6', '1~40 关全部可解', false, '执行异常：' + (e && e.message));
   }
 
-  /* ---- G8 线上字节与本地一致 ---- */
+  /* ---- G8a 所有发布副本都必须与主文件逐字节一致 ---- */
   const hashes = {};
-  ['outputs/解压水消除.html', 'publish_water/index.html'].forEach(p => {
-    try { const b = fs.readFileSync(path.join(ROOT, p)); hashes[p] = { n: b.length, md5: crypto.createHash('md5').update(b).digest('hex') }; }
+  PUB_COPIES.forEach(p => {
+    try { const b = fs.readFileSync(path.join(ROOT, p)); hashes[p] = { n: b.length, md5: crypto.createHash('md5').update(b).digest('hex'), buf: b }; }
     catch (e) { hashes[p] = null; }
   });
-  const pubSame = hashes['outputs/解压水消除.html'] && hashes['publish_water/index.html']
-    && hashes['outputs/解压水消除.html'].md5 === hashes['publish_water/index.html'].md5;
+  const mainMd5 = (function () {
+    /* 用**原始字节**算 md5，不要走 readFileSync(utf8) 再 Buffer.from 回去 ——
+       万一文件里混进非法 UTF-8 序列，round-trip 会改字节，门禁就会冤判发布件不同步。 */
+    try { return { buf: fs.readFileSync(GAME), md5: crypto.createHash('md5').update(fs.readFileSync(GAME)).digest('hex') }; }
+    catch (e) { return null; }
+  })();
+  const mainBuf = mainMd5 ? mainMd5.buf : null;
+  const mainHash = mainMd5 ? mainMd5.md5 : null;
+  const badCopies = PUB_COPIES.filter(p => !hashes[p] || !mainHash || hashes[p].md5 !== mainHash);
+  const pubSame = !!mainHash && badCopies.length === 0;
 
-  const selfBuf2 = hashes['outputs/解压水消除.html'] ? fs.readFileSync(path.join(ROOT, 'outputs/解压水消除.html')) : null;
-  const pubBuf2 = hashes['publish_water/index.html'] ? fs.readFileSync(path.join(ROOT, 'publish_water/index.html')) : null;
-  item('G8a', '发布件与主文件字节一致（改了主文件必须同步发布目录）', !!pubSame,
-    pubSame ? 'md5 ' + hashes['publish_water/index.html'].md5 + '（' + hashes['publish_water/index.html'].n + 'B）'
-      : (hashes['publish_water/index.html']
-        ? '主文件 ' + hashes['outputs/解压水消除.html'].md5 + ' ≠ 发布件 ' + hashes['publish_water/index.html'].md5
-        + (eolOnly(selfBuf2, pubBuf2) ? EOL_HINT : '')
-        : '发布目录里没有 index.html：' + PUB));
+  const pubBuf2 = hashes['publish_water/index.html'] ? hashes['publish_water/index.html'].buf : null;
+  item('G8a', '所有发布副本与主文件字节一致（改了主文件必须同步每一个发布目录）', pubSame,
+    pubSame ? PUB_COPIES.length + ' 份副本全部 md5 ' + mainHash + '（' + (mainBuf ? mainBuf.length : 0) + 'B）'
+      : '不一致：' + badCopies.map(p => !hashes[p]
+        ? p + '（读不到）'
+        : p + ' ' + hashes[p].md5 + '（' + hashes[p].n + 'B）≠ 主文件 ' + mainHash
+        + (eolOnly(mainBuf, hashes[p].buf) ? EOL_HINT : '')).join('　|　'));
 
   if (NO_LIVE) {
     warn('G8b', '线上字节与本地一致', '--no-live：本次不联网验证，**这条门禁等于没跑**');
@@ -266,6 +304,54 @@ function fetchLive(url, depth) {
           + '　→ 线上是旧版或没同步'
           + (eolOnly(r.buf, pubBuf2) ? EOL_HINT : ''));
     }
+  }
+
+  /* ---- G8c 上传包（zip）里的 index.html 必须与主文件一致 ----
+     为什么单独一条：包内是 deflate 压过的，**肉眼完全看不出是哪个版本**。
+     踩到的场景：publish_taptap/index.html 是旧版（没有广告位 ID），
+     真正的 zip 当时恰好是对的 —— 但只要有人「重新打个包」，就会把旧版打进去，
+     真机上跑 true 广告却没有广告位 ID → 又一次静默零收益。
+     所以：目录里每一个含 index.html 的 zip，都拆开比 md5。 */
+  let zips = [];
+  try { zips = fs.readdirSync(ZIP_DIR).filter(f => /\.zip$/i.test(f)); } catch (e) { }
+  const zipOK = [], zipBad = [], zipSkip = [];
+  zips.forEach(f => {
+    let e = null;
+    try { e = zipEntry(fs.readFileSync(path.join(ZIP_DIR, f)), 'index.html'); } catch (err) { e = null; }
+    if (!e) { zipSkip.push(f); return; }
+    if (mainBuf && e.raw.equals(mainBuf)) zipOK.push(f + '（' + e.raw.length + 'B md5 ' + e.md5 + '）');
+    else zipBad.push(f + '（包内 md5 ' + e.md5 + ' ≠ 主文件 ' + mainHash + '）');
+  });
+  if (zips.length === 0) {
+    warn('G8c', '上传包内的 index.html 与主文件一致', ZIP_DIR + ' 里没有 zip，这条门禁等于没跑');
+  } else {
+    item('G8c', '所有上传包内的 index.html 与主文件一致（拆包比 md5，肉眼看不出版本）', zipBad.length === 0,
+      (zipOK.length ? '已核对：' + zipOK.join('、') : '没有含 index.html 的包')
+      + (zipSkip.length ? '；不含 index.html 未核对：' + zipSkip.join('、') : '')
+      + (zipBad.length ? '；❌ 版本不一致：' + zipBad.join('，') : ''));
+  }
+
+  /* ---- G10：QA 脚本自身语法自检 ----
+     为什么单开一条：2026-09-29 发现 qa_rollback.js 里一段注释嵌了内层块注释标记，
+     把外层块注释**提前闭合** → 后面半行成了裸代码 → 一跑就 SyntaxError。
+     而 qa_rollback.js 是**独立运行**的（不在 qa_run.js 里），所以「回滚验证早就死了」
+     这件事没有任何地方会报出来 —— 那之后所有"回滚全绿"的说法都是无效的。
+     **验证器本身必须先被验证**：这条对所有以 qa_ 或 test_ 开头的脚本做纯语法编译（不执行）。
+     ★ 写这条注释时又把同一个错犯了一遍 —— 写了「qa_ 星号 斜杠 test_ 星号」这种简写，
+       其中「星号斜杠」立刻闭合了块注释，qa_gate.js 当场 SyntaxError。
+       所以：**块注释里绝对不要再出现斜杠星号 / 星号斜杠这对字符**，只写中文描述。 */
+  try {
+    const vm = require('vm');
+    const files = fs.readdirSync(ROOT).filter(f => /^(qa_|test_)[^/]*\.js$/.test(f)).sort();
+    const bad = [];
+    files.forEach(f => {
+      try { new vm.Script(fs.readFileSync(path.join(ROOT, f), 'utf8'), { filename: f }); }
+      catch (e) { bad.push(f + '（' + (e && e.message) + '）'); }
+    });
+    item('G10', 'QA 脚本自身语法自检（验证器必须先能被验证）', bad.length === 0 && files.length > 0,
+      bad.length ? bad.join('；') : files.length + ' 个 QA 脚本全部通过语法编译：' + files.join(' '));
+  } catch (e) {
+    item('G10', 'QA 脚本自身语法自检', false, '执行异常：' + (e && e.message));
   }
 
   const ok = items.every(x => x.ok);

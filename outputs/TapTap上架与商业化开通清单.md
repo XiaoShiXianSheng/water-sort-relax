@@ -155,12 +155,27 @@ unzip -l ../解压水消除_v4.0.0.zip
 已准备好的包（免打包，直接用）：
 
 ```
-outputs/tap_upload_v4.1.zip     ← 约 83 KB
+outputs/tap_upload_v4.1_adonline.zip     ← 135 KB
 包内结构（根目录，没有多余层级）：
-  index.html        152352 B   ← 游戏本体，单文件自包含
-  icon_512.png        27086 B
-  UPLOAD_NOTES.txt     1144 B
+  index.html        152702 B   ← 游戏本体，单文件自包含（含广告位 ID；CFG.env 出厂即 online）
+  icon_512.png       76695 B   ← 单行标题版图标
+  UPLOAD_NOTES.txt    2392 B
 ```
+
+> ⚠ **打包目录的历史坑（2026-09-29 抓到）**：`publish_taptap/index.html` 一度落后于主文件
+> —— 里面 `env:'test'`、`adUnit:{rewarded:'',interstitial:''}`，**没有广告位 ID**。
+> 当时真正的 zip 恰好是对的，所以没出事；但只要有人「重新打个包」，就会把旧版打进去
+> = 真机跑真实广告却没有广告位 ID = **静默零收益**（游戏照常能玩，不报任何错）。
+>
+> 现在两道门禁同时盯住这件事，改完主文件必须同步**两个**发布目录再打包：
+> ```bash
+> cp outputs/解压水消除.html publish_water/index.html
+> cp outputs/解压水消除.html publish_taptap/index.html
+> cd publish_taptap && "C:/Windows/System32/tar.exe" -a -cf ../outputs/tap_upload_v4.1_adonline.zip index.html icon_512.png UPLOAD_NOTES.txt
+> node ../qa_gate.js --no-live     # G8a 查全部发布副本 / G8c 拆开每个 zip 比 md5
+> ```
+> 旧的 4 个包（`tap_upload_v4.1.zip` / `_clean` / `_dir` / `_tar`，都是加广告前的旧版）
+> 已移到 `outputs/_archive_旧版上传包/`，**不要再拿它们上传**。
 
 手动上传步骤（照做）：
 
