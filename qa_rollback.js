@@ -538,6 +538,61 @@ const CASES = [
     suite: 'qa_biz.js', expect: /无 tap 运行时 → 自动降级 test/,
     find: "      if(!AdService.hasTap()){ AdService.env='test'; AdService.degradeReason='no-tap-runtime'; }",
     repl: "      if(false){ AdService.env='test'; AdService.degradeReason='no-tap-runtime'; }   /* rollback-test */"
+  },
+
+  /* ---------- 2026-09-30 02:00 档新增的 8 条「难度预算 / 曲线」断言 ----------
+     延续上一档的做法：每条新断言配一条**尽量只让它自己红**的改坏方式，
+     这样才分得出哪条断言真有独立效力（有几条会顺带连坐别的断言，下面注明）。 */
+  {
+    name: 'levelPlan：第 21~22 关台面槽砍到 4（有效空槽 − 颜色数 = −3 → 必输关）',
+    suite: 'qa_design.js', expect: /必输关/,
+    find: '    slots=Math.min(5+Math.floor(t/8),6);',
+    repl: '    slots=Math.min(5+Math.floor(t/8),6);if(lv>=21&&lv<=22)slots=4;   /* rollback-test */'
+  },
+  {
+    name: 'levelPlan：台面槽预算膨胀到 7（多一个槽 = 首战通关率 43% → 88%，难度被抹平）',
+    suite: 'qa_design.js', expect: /槽位预算不许膨胀/,
+    find: '    slots=Math.min(5+Math.floor(t/8),6);',
+    repl: '    slots=Math.min(6+Math.floor(t/8),7);   /* rollback-test */'
+  },
+  {
+    name: 'levelPlan：第 9~12 关货架从 5×3=15 格砍成 3×3=9 格（第 12→13 关格数跳 9 个 = 曲线断崖）',
+    suite: 'qa_design.js', expect: /难度参数逐关不跳变/,
+    find: 'if(lv<=12){pc=5;pr=3;}',
+    repl: 'if(lv<=12){pc=3;pr=3;}   /* rollback-test */'
+  },
+  {
+    name: 'levelPlan：第 38 关起门洞上限压到 2（后两个周期的峰值关比前面还简单）',
+    suite: 'qa_design.js', expect: /跨周期峰值关不许变简单/,
+    find: 'gates=Math.min(1+Math.floor((t+1)/4),4);',
+    repl: 'gates=Math.min(1+Math.floor((t+1)/4),lv>=38?2:4);   /* rollback-test */'
+  },
+  {
+    name: 'levelPlan：第 9~12 关门洞与冰冻同时归零（后半程变纯送分的无干扰局）',
+    suite: 'qa_design.js', expect: /第 9 关起干扰不许归零/,
+    find: '    gates=Math.min(1+Math.floor((t+1)/4),4);\n    ice=Math.min(1+Math.floor(t/5),4);',
+    repl: '    gates=lv>=13?Math.min(1+Math.floor((t+1)/4),4):0;\n'
+      + '    ice=lv>=13?Math.min(1+Math.floor(t/5),4):0;   /* rollback-test */'
+  },
+  {
+    name: 'tubeCountFor：管数一律多加 3 根（第 1 关的管只剩 4 层水 —— 短短一截很难看）',
+    suite: 'qa_design.js', expect: /每根管开局都装/,
+    find: '  while(n<7&&Math.ceil(units/n)>26)n++;\n  return n;\n}',
+    repl: '  while(n<7&&Math.ceil(units/n)>26)n++;\n  return Math.min(7,n+3);\n}   /* rollback-test */'
+  },
+  {
+    name: 'gridPlayable()：可点判定多加一个条件（三成的瓶子开局点不到 = 开局没事可做）',
+    suite: 'qa_design.js', expect: /开局可点占比/,
+    find: "return b.place==='grid'&&!b.locked&&gateFront(b)&&!gateBlocked(b);",
+    repl: "return b.place==='grid'&&!b.locked&&gateFront(b)&&!gateBlocked(b)&&(b.cell%3===0);   /* rollback-test */"
+  },
+  {
+    /* 这条刻意选「plan 和实际一起改」的改法：格数断言拿实际比计划，两边一起变小是查不出的，
+       只有硬编码绝对值的「中期货架阶梯」能抓到 —— 与稳态货架那条是同一个道理。 */
+    name: 'levelPlan：第 13~15 关货架从 6×3=18 格砍成 5×3=15 格（plan 与实际一起变，旧断言查不出）',
+    suite: 'qa_design.js', expect: /中期货架阶梯硬钉死/,
+    find: 'else if(lv<=15){pc=6;pr=3;}',
+    repl: 'else if(lv<=15){pc=5;pr=3;}   /* rollback-test */'
   }
 ];
 
