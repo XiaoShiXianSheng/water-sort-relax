@@ -40,6 +40,17 @@
  *   · **中期货架阶梯硬钉死**：第 9~12 关恒 15 格 / 13~15 关恒 18 格 / 16~18 关恒 20 格
  *     （硬编码，不跟 levelPlan 比 —— 否则 plan 和实际一起改就查不出，与「稳态货架」同理）
  *
+ * 2026-10-01 02:00 档再补 7 条（探针口径：1~90 关 × 3 档 = 270 次生成，独立两轮零违规；每条都做过回滚验证）：
+ *   · **广告解锁位唯一且在末位**（每关每档恰好 1 个未解锁槽且是最后一个）
+ *     —— 「有效空槽 = 总槽 − 1」这个全项目难度结论、以及唯一的台面变现位，都建立在这一行上
+ *   · **逐色水量守恒**（每种颜色的管中水量 == 该色瓶数 × 3）—— 比「总量守恒」强，抓「总数对、结构错」
+ *   · **不存在纯色管**（≥2 层的管至少 2 种颜色；整根同色 = 一步接完的假难度）
+ *   · **开局台面为空 + 单局初始额度固定**（台面 0 瓶 / clears 0 / 撤销 5 / 解锁 1 / 道具各 1）
+ *   · **难度在第 24 关完全触顶**（24~90 关参数只由周期相位决定：峰值/常规 24格/4行/6色/7管/6槽/4洞/4冰、
+ *     放水 3洞/3冰）—— 面板有 90 关但 24 关后只是同难度换布局，这是「对外文案不能写越往后越难」的代码依据
+ *   · **三档「实际门洞/冰冻数 == 计划」**（原断言只跑普通档，困难/极限同样有静默降级路径）
+ *   · **挑战档难度开关下限**（有效空槽 − 色 ≥ −3；受控实验 −2 已让贪心首战归零，−4 彻底没退路）
+ *
  * 用法：node qa_design.js
  */
 const { loadGame, Reporter, guard } = require('./qa_lib.js');
@@ -515,9 +526,10 @@ guard(rep, '设计', function () {
   rep.ok('9 关以后决策密度递增（第 30 关 > 第 10 关）', dens[29] > dens[9], dens[29] + ' vs ' + dens[9]);
 
   /* 三档挑战（普通 / 困难 / 极限）必须「真的更难」：density 严格递增。
-     否则「困难」只是换个名字、玩家多花时间却没多拿难度，三档系统的意义就没了。 */
+     否则「困难」只是换个名字、玩家多花时间却没多拿难度，三档系统的意义就没了。
+     ⚠ 范围扩到 90 关（面板全部关卡）：只调 levelPlan，零生成成本。 */
   const tierBad = [];
-  for (let lv = 1; lv <= LVMAX; lv++) {
+  for (let lv = 1; lv <= 90; lv++) {
     const d0 = D.plan(lv, 0).density, d1 = D.plan(lv, 1).density, d2 = D.plan(lv, 2).density;
     if (!(d1 > d0 && d2 > d1)) tierBad.push('L' + lv + ' ' + d0 + '/' + d1 + '/' + d2);
   }
@@ -529,7 +541,7 @@ guard(rep, '设计', function () {
      玩家多花时间却没多拿思考量（这正是本项目踩过的老路：加格子加的是操作量，不是难度）。
      并且槽位有下限 4（再少就真的无解感）。 */
   const tierRule = [];
-  for (let lv = 4; lv <= LVMAX; lv++) {
+  for (let lv = 4; lv <= 90; lv++) {
     const p0 = D.plan(lv, 0), p1 = D.plan(lv, 1), p2 = D.plan(lv, 2);
     if (!(p0.cells === p1.cells && p1.cells === p2.cells &&
       p0.colors === p1.colors && p1.colors === p2.colors &&
@@ -604,6 +616,116 @@ guard(rep, '设计', function () {
   }
   rep.ok('**出屏管回归**：1~100 关每根管的命中盒与 [0,VW] 交集非空、且可见宽度 ≥44px（'
     + tubeProbed + ' 根管全量探针）', tubeGeomBad.length === 0, tubeGeomBad.slice(0, 6).join(' '));
+
+  /* ============ 2026-10-01 02:00 档新增：7 条「还没被断言保护」的设计规则 ============
+     探针口径：1~90 关 × 3 档位 = 270 次生成，独立跑两轮（不同随机源）零违规才敢钉等号。
+     每一条都同时回答一个「它到底能抓什么」——
+     ① 广告解锁位唯一且在末位：整个「有效空槽 = 总槽 − 1」的推导、以及唯一的台面变现位，
+        都建立在 `open: s2 < slotsN-1` 这一行上。它被改成「多个锁」或「锁在首位」，
+        所有难度结论瞬间失效，而且画面上看不出报错。
+     ② 逐色水量守恒：`水总量 == 瓶容量总和` 只能保证「总数对」，某色多 3 滴、另一色少 3 滴
+        照样全绿 —— 那意味着某种颜色的水永远接不完（这关不可解，但总量断言查不出）。
+     ③ 不存在纯色管：整根管只有一种颜色 = 一步就能接完，是白送的假难度。
+        生成器的洗牌退化（例如 shuffle 被换成不洗）只会表现为「关卡变简单」，不报错。
+     ④ 开局台面为空 + 单局初始额度固定：台面残留上一局的瓶子、或者道具额度漂移，
+        玩家第一眼看到的就是错的；这类问题必须先采（genLevel 之后、frames 之前）。
+     ⑤ 难度在第 24 关完全触顶：面板有 90 关，但 24 关之后所有上限都到顶了，
+        第 25~90 关只是同难度下的不同布局。没有这条断言，谁把上限继续抬高都不会被发现，
+        而「对外文案不能写越往后越难」这句话就失去了代码依据。
+     ⑥ 三档「实际门洞/冰冻数 == 计划」：原有两条只跑默认（普通）档 —— 困难/极限档
+        同样有「放不下就静默少放」的降级路径，现在一并守住。
+     ⑦ 挑战档难度开关下限：受控实验里 `有效空槽 − 颜色数 = −2` 已让贪心首战归零，
+        挑战档故意少槽，允许掉到 −2（困难）/ −3（极限），但不许更深（−4 就彻底没有退路了）。 */
+  const v2 = {
+    slotAd: [], perColor: [], pureTube: [], initState: [], plateau: [], tierPlan: [], tierFloor: []
+  };
+  let gen270 = 0, iceNearGateN = 0;
+  const effTier = {};                      /* 三档的「有效空槽 − 色」分布 */
+  const PLATEAU_FROM = 24;                 /* 所有上限到顶的关卡：24 关 */
+  const PLATEAU_SIG = { peak: '24/4/6/7/6/4/4', breathe: '24/4/6/7/6/3/3' };
+  for (let lv = 1; lv <= 90; lv++) {
+    for (let tier = 0; tier <= 2; tier++) {
+      D.gen(lv, { tier: tier });
+      gen270++;
+      const pl = D.plan(lv, tier), G2 = D.G;
+      const key = 'L' + lv + 'T' + tier;
+      /* ① 广告解锁位：恰好 1 个未解锁、且在末位、总数 == 计划槽数 */
+      const lockedN = G2.slots.filter(s => !s.open).length;
+      if (!(lockedN === 1 && G2.slots[G2.slots.length - 1].open === false && G2.slots.length === pl.slots))
+        v2.slotAd.push(key + ' 槽' + G2.slots.length + '(计划' + pl.slots + ') 未解锁' + lockedN +
+          ' 末位open=' + G2.slots[G2.slots.length - 1].open);
+      /* ② 逐色水量守恒 */
+      const perTube = {}, perBot = {};
+      for (let ti = 0; ti < G2.tubes.length; ti++) {
+        const us = G2.tubes[ti].units;
+        for (let ui = 0; ui < us.length; ui++) perTube[us[ui]] = (perTube[us[ui]] || 0) + 1;
+      }
+      for (let bi = 0; bi < G2.bottles.length; bi++) perBot[G2.bottles[bi].col] = (perBot[G2.bottles[bi].col] || 0) + 1;
+      const allCols = {};
+      Object.keys(perTube).forEach(c => allCols[c] = 1);
+      Object.keys(perBot).forEach(c => allCols[c] = 1);
+      Object.keys(allCols).forEach(c => {
+        const need2 = (perBot[c] || 0) * 3, have = perTube[c] || 0;
+        if (need2 !== have) v2.perColor.push(key + ' 色' + c + ' 管中' + have + '滴 ≠ 该色瓶' + (perBot[c] || 0) + '×3=' + need2);
+      });
+      /* ③ 不存在纯色管（只有 1 层的管不算：那是必然「纯色」） */
+      for (let ti = 0; ti < G2.tubes.length; ti++) {
+        const us = G2.tubes[ti].units;
+        if (us.length > 1 && us.every(u => u === us[0]))
+          v2.pureTube.push(key + ' 管' + ti + ' 整根全同色' + us[0] + '×' + us.length);
+      }
+      /* ④ 开局台面为空 + 单局初始额度固定 */
+      const onCounter = G2.bottles.filter(b => b.place === 'counter').length;
+      if (!(onCounter === 0 && G2.clears === 0 && G2.undoLeft === 5 && G2.unlockLeft === 1 &&
+        G2.tools.clear === 1 && G2.tools.finger === 1 && G2.tools.swap === 1))
+        v2.initState.push(key + ' 台面瓶' + onCounter + ' clears' + G2.clears + ' 撤销' + G2.undoLeft +
+          ' 解锁' + G2.unlockLeft + ' 道具' + G2.tools.clear + '/' + G2.tools.finger + '/' + G2.tools.swap);
+      /* ⑤ 难度触顶：24 关之后每关的参数只由「周期相位」决定。
+         ⚠ 只对普通档（tier 0）成立 —— 挑战档按定义就会砍槽、加干扰（那条由 tierRule 守）。 */
+      if (tier === 0 && lv >= PLATEAU_FROM) {
+        const ph = (lv - 1) % 5;
+        const want = (ph === 0 || ph === 1) ? PLATEAU_SIG.breathe : PLATEAU_SIG.peak;
+        const got = [G2.cellCount, G2.gridRows, pl.colors, G2.tubes.length, G2.slots.length,
+          G2.gates.length, G2.bottles.filter(b => b.locked > 0).length].join('/');
+        if (got !== want) v2.plateau.push(key + ' 相位' + ph + ' 实际' + got + ' ≠ 触顶值' + want);
+      }
+      /* ⑥ 三档「实际 == 计划」 */
+      if (G2.gates.length !== pl.gates)
+        v2.tierPlan.push(key + ' 洞' + G2.gates.length + '≠' + pl.gates);
+      const iceN2 = G2.bottles.filter(b => b.locked > 0).length;
+      if (iceN2 !== pl.ice) v2.tierPlan.push(key + ' 冰' + iceN2 + '≠' + pl.ice);
+      /* ⑦ 挑战档难度开关下限 + 分布统计 */
+      const eff2 = G2.slots.length - 1 - pl.colors;
+      const ek = String(eff2);
+      if (!effTier[tier]) effTier[tier] = {};
+      effTier[tier][ek] = (effTier[tier][ek] || 0) + 1;
+      if (tier > 0 && eff2 < -3)
+        v2.tierFloor.push(key + ' 有效空槽' + (G2.slots.length - 1) + ' − 色' + pl.colors + ' = ' + eff2);
+      /* 顺手数一下「冰冻瓶紧贴门洞」的形态（设计允许，只做趋势，不判定） */
+      for (let gi = 0; gi < G2.gates.length; gi++) {
+        for (let d = 0; d < 4; d++) {
+          const nc = D.neighborCell(G2.gates[gi].cell, d);
+          if (nc >= 0 && D.iceAt(nc)) iceNearGateN++;
+        }
+      }
+    }
+  }
+  one('**广告解锁位唯一且在末位**（每关每档恰好 1 个未解锁槽、且是最后一个；整个「有效空槽 = 总槽 − 1」都建立在这行上）',
+    v2.slotAd, '　' + gen270 + ' 次生成');
+  one('**逐色水量守恒**（每种颜色的管中水量 == 该色瓶子数 × 3；比总量守恒强，能抓「总数对、结构错」）',
+    v2.perColor);
+  one('**不存在纯色管**（≥2 层的管至少含 2 种颜色；整根同色 = 白送一步的假难度）', v2.pureTube);
+  one('**开局台面为空 + 单局初始额度固定**（台面 0 瓶 / clears 0 / 撤销 5 / 解锁 1 / 道具各 1）', v2.initState);
+  one('**难度在第 ' + PLATEAU_FROM + ' 关完全触顶**（' + PLATEAU_FROM + '~90 关参数只由周期相位决定：峰值/常规 = '
+    + PLATEAU_SIG.peak + '、放水 = ' + PLATEAU_SIG.breathe + '；面板剩下的关卡只是同难度的不同布局）', v2.plateau);
+  one('**三档「实际门洞/冰冻数 == 计划」**（原断言只跑普通档；困难/极限同样有「放不下就静默少放」的降级路径）',
+    v2.tierPlan, '　' + gen270 + ' 次生成');
+  one('**挑战档难度开关下限**（有效空槽 − 颜色数 ≥ −3；受控实验 −2 已让贪心首战归零，−4 就彻底没有退路）',
+    v2.tierFloor);
+  console.log('  （三档「有效空槽 − 颜色数」分布：普通 ' + JSON.stringify(effTier[0]) +
+    ' ｜困难 ' + JSON.stringify(effTier[1]) + ' ｜极限 ' + JSON.stringify(effTier[2]) + '）');
+  console.log('  （三档共 ' + gen270 + ' 次生成；冰冻瓶紧贴门洞的形态出现 ' + iceNearGateN +
+    ' 次 —— 设计允许（只有「洞口箭头朝冰冻瓶」被禁止，已由另一条断言守））');
 
   /* 水柱出屏：这是产品要的「压迫感」，只有 0 才算白做 */
   rep.warnIf('水柱能真的顶出屏幕顶部（有压迫感）', maxOverflow < 4,

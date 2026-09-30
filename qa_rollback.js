@@ -631,6 +631,71 @@ const CASES = [
     suite: 'qa_gate.js', expect: /读不到/,
     find: 'var LV_PER_PAGE=30, LV_PAGES=3;',
     repl: 'var LV_PER_PAGE=30, LV_PAGES=2+1;   /* rollback-test: 值仍是 3，但断言读不出来 */'
+  },
+
+  /* ---------- 2026-10-01 02:00 档新增：7 条「设计不变量」断言，逐条做回滚验证 ----------
+     这 7 条的共同特征是「改坏了不会报错、不会崩、画面也看不出」，
+     所以每一条都必须证明自己有牙齿（改坏 → 对应断言必须红）。 */
+  {
+    /* ① 广告解锁位：`open:s2<slotsN-1` 这一行同时决定「台面变现位」和全项目的
+       「有效空槽 = 总槽 − 1」难度结论。改成全部免费 → 变现位消失、难度结论失效。 */
+    name: '台面槽全部免费开放（唯一的广告解锁位消失，「有效空槽 = 总槽 − 1」整条推导失效）',
+    suite: 'qa_design.js', expect: /广告解锁位唯一且在末位/,
+    find: 'for(var s2=0;s2<slotsN;s2++)G.slots.push({open:s2<slotsN-1});',
+    repl: 'for(var s2=0;s2<slotsN;s2++)G.slots.push({open:true});   /* rollback-test: 全部免费 */'
+  },
+  {
+    /* ② 逐色水量守恒：只把液体池的第一滴换成别的颜色 —— **总量分毫未变**，
+       旧的「水量守恒（总量）」「瓶数」「可解性」都可能照旧，只有逐色断言能抓。 */
+    name: '液体池里某一滴被换成别的颜色（总量守恒分毫未变，只有「逐色守恒」能抓）',
+    suite: 'qa_design.js', expect: /逐色水量守恒/,
+    find: 'for(var b=0;b<bottles.length;b++)for(var u=0;u<bottles[b].cap;u++)pool.push(bottles[b].col);',
+    repl: 'for(var b=0;b<bottles.length;b++)for(var u=0;u<bottles[b].cap;u++)pool.push(bottles[b].col);\n'
+      + '  pool[0]=(pool[0]+1)%C;   /* rollback-test: 一滴换色 */'
+  },
+  {
+    /* ③ 纯色管：把第一根管整根改成同一种颜色 —— 一步就能接完的白送局。
+       洗牌退化就长这样：不报错、不崩，只是「关卡悄悄变简单」。 */
+    name: '第一根管整根被写成同一种颜色（纯色管 = 一步接完的白送局）',
+    suite: 'qa_design.js', expect: /不存在纯色管/,
+    find: 'var units=pool.slice(p,p+sizes[t]); p+=sizes[t];',
+    repl: 'var units=pool.slice(p,p+sizes[t]); p+=sizes[t];\n'
+      + '    if(t===0)for(var uz=0;uz<units.length;uz++)units[uz]=pool[0];   /* rollback-test: 纯色管 */'
+  },
+  {
+    /* ④ 单局初始额度：撤销次数从 5 改成 4。这是每关重置的固定值，
+       玩家第一局就该拿到 5 次 —— 漂移了不会有任何别的断言发现。 */
+    name: '单局初始撤销次数从 5 改成 4（初始额度漂移，其它断言全都看不见）',
+    suite: 'qa_design.js', expect: /开局台面为空/,
+    find: 'G.undoLeft=5; G.unlockLeft=1; G.tools={clear:1,finger:1,swap:1};',
+    repl: 'G.undoLeft=4; G.unlockLeft=1; G.tools={clear:1,finger:1,swap:1};   /* rollback-test: 少给 1 次撤销 */'
+  },
+  {
+    /* ⑤ 难度触顶：把冰冻上限从 4 抬到 5（只在第 29 关之后生效）。
+       单关数值全都合法、三档递进也仍然成立，只有「难度在第 24 关完全触顶」能抓 ——
+       这条守的是「对外文案不能写越往后越难」的代码依据。 */
+    name: 'levelPlan：冰冻上限从 4 抬到 5（第 29 关起后期还能再变难，触顶契约被破坏）',
+    suite: 'qa_design.js', expect: /难度在第 24 关完全触顶/,
+    find: 'ice=Math.min(1+Math.floor(t/5),4);',
+    repl: 'ice=Math.min(1+Math.floor(t/5),5);   /* rollback-test: 上限抬高 */'
+  },
+  {
+    /* ⑥ 三档「实际 == 计划」：只在**挑战档**里把门洞整关撤掉（普通档不动）。
+       这样原有的「实际门洞数 == 计划门洞数」（只跑普通档）照样全绿 ——
+       这条用例本身就在证明「把断言扩到三档」是有增量的，不是重复劳动。 */
+    name: '挑战档（困难/极限）的门洞被整关撤掉（原断言只跑普通档 → 它照样全绿，看不见）',
+    suite: 'qa_design.js', expect: /三档「实际门洞/,
+    find: 'var maxGates=plan.gates;',
+    repl: 'var maxGates=G.tier>0?0:plan.gates;   /* rollback-test: 挑战档没有门洞 */'
+  },
+  {
+    /* ⑦ 挑战档难度开关下限：极限档一次砍 2 个槽（而不是 1 个）。
+       受控实验里 −2 已让贪心首战归零，−4 就彻底没有退路 —— 属于「点了必输」的形态。 */
+    name: '极限档一次砍 2 个台面槽（有效空槽 − 色 = −4，掉出「必输区」下限）',
+    suite: 'qa_design.js', expect: /挑战档难度开关下限/,
+    find: 'gates=Math.min(gates+1,4);\n    ice=Math.min(ice+1,4);',
+    repl: 'gates=Math.min(gates+1,4);\n    ice=Math.min(ice+1,4);\n'
+      + '    slots=Math.max(2,slots-2);   /* rollback-test: 极限档再砍一刀 */'
   }
 ];
 
