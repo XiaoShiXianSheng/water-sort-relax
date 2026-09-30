@@ -696,6 +696,46 @@ const CASES = [
     find: 'gates=Math.min(gates+1,4);\n    ice=Math.min(ice+1,4);',
     repl: 'gates=Math.min(gates+1,4);\n    ice=Math.min(ice+1,4);\n'
       + '    slots=Math.max(2,slots-2);   /* rollback-test: 极限档再砍一刀 */'
+  },
+
+  /* ---------- 2026-10-01 05:00 档新增：两条真浏览器门禁（G12 断网 / G13 端到端点击）----------
+     这两条的共同点是「假 canvas 套件天生看不见」：一个只在断网时暴露，一个只在真 DOM 事件下暴露。
+     所以用例特意挑**假 canvas 完全抓不到、只有真浏览器能抓**的改法。 */
+  {
+    /* G12 的牙齿：把远端贴图当成主循环的启动前置条件（真实事故形态 ——
+       "首屏等资源加载完再开始画"这句话谁都写得出来，联网时毫无异样）。
+       断网冒烟里 onload 永远不会来 → 一帧都不出 → 「主循环在跑」必须红。
+       注：这里必须跑**断网**那一趟，正常网络的冒烟在同一个坏死版本下也会红，
+       但它红的原因和这一条无关（所以这条用例的价值是"证明断网这一趟真的在判东西"）。 */
+    name: '门禁 G12：主循环等一张远端贴图才启动（联网看不出，一断网就一帧都不出）',
+    suite: 'qa_smoke_live.js', expect: /主循环在跑/,
+    env: { SMK_OFFLINE: '1', SMK_OUT: '_rb_smoke.json', LV_SET: '1' },
+    find: 'if(URL_LVL){genLevel(URL_LVL);}\nrequestAnimationFrame(loop);',
+    repl: 'if(URL_LVL){genLevel(URL_LVL);}\n'
+      + "var __rbg=new Image();__rbg.onload=function(){requestAnimationFrame(loop);};\n"
+      + "__rbg.src='https://cdn.invalid/bg.png';   /* rollback-test: 主循环等远端贴图 */"
+  },
+  {
+    /* G12 的「不是空转」自检：垫片假报已安装（实际没拦）。
+       页面不报告 netOff 时，那一趟的 5 条断言其实全在**正常网络**下跑的 ——
+       门禁会变成一条"看着在跑、其实什么都没测"的假绿，所以必须 FAIL。 */
+    name: '门禁 G12：断网垫片假报已安装（页面不报 netOff → 那一趟等于没断网，必须拒绝放行）',
+    file: 'qa_smoke_live.js', suite: 'qa_smoke_live.js', expect: /断网模式已生效/,
+    env: { SMK_OFFLINE: '1', SMK_OUT: '_rb_smoke.json', LV_SET: '1' },
+    find: "'  window.__SMK_NET_OFF=true;',",
+    repl: "'  window.__SMK_NET_OFF=false;',   /* rollback-test: 垫片假报 */"
+  },
+  {
+    /* G13 的牙齿，而且这条专门证明「G13 有 qa_ui 给不了的增量」：
+       删掉 canvas 的**触屏入口**（真机是手指，不是鼠标）。
+       qa_ui 是直接调 handleTap(vx,vy) 的 —— 它照样全绿；只有真 DOM 事件那条链路会红。
+       这正是"游戏能玩，就是点不动"这类事故，假 canvas 永远抓不到。 */
+    name: '门禁 G13：canvas 的触屏入口被删（qa_ui 直接调 handleTap 全绿，只有真触摸事件能抓）',
+    suite: 'qa_smoke_live.js', expect: /真的进第 1 关/,
+    env: { SMK_OUT: '_rb_smoke.json', LV_SET: '0,1' },
+    find: "canvas.addEventListener('touchstart',function(e){if(e.cancelable)e.preventDefault();"
+      + "var t=e.changedTouches[0];if(t)handleTap(t.clientX,t.clientY);},{passive:false});",
+    repl: '/* rollback-test: 触屏入口被删（真机点不动） */'
   }
 ];
 

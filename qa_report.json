@@ -1,5 +1,5 @@
 {
-  "at": "2026-09-30T18:12:58.525Z",
+  "at": "2026-09-30T21:14:19.799Z",
   "green": true,
   "gate": {
     "ok": true,
@@ -8,7 +8,7 @@
         "id": "G1",
         "name": "全部套件 0 FAIL",
         "ok": true,
-        "detail": "497 项断言全过"
+        "detail": "526 项断言全过"
       },
       {
         "id": "G2",
@@ -20,7 +20,7 @@
         "id": "G2b",
         "name": "没有套件崩溃 / 静默跳过",
         "ok": true,
-        "detail": "8 个套件全部产出结论"
+        "detail": "9 个套件全部产出结论"
       },
       {
         "id": "G3",
@@ -78,9 +78,9 @@
       },
       {
         "id": "G9",
-        "name": "真浏览器启动冒烟（4 关 × 90 帧：无错误 / 非白屏 / 主循环在跑）",
+        "name": "真浏览器启动冒烟（5 趟 × 90 帧：无错误 / 非白屏 / 主循环在跑）",
         "ok": true,
-        "detail": "20 项全过（Chrome headless 360×640，见 _smoke.json）"
+        "detail": "28 项全过（Chrome headless 360×640，见 _smoke.json）"
       },
       {
         "id": "G10",
@@ -93,11 +93,23 @@
         "name": "出厂广告位 ID 已填（两个都非空且没被注释掉；空了会静默降级成模拟广告 = 零收益）",
         "ok": true,
         "detail": "激励视频 1067564 / 插屏 1067565　（⚠ 平台侧仍需确认推广位属性为「正式」）"
+      },
+      {
+        "id": "G12",
+        "name": "断网冒烟：外部网络 100% 失败时仍能正常开局（零依赖不是自述）",
+        "ok": true,
+        "detail": "21 项全过（外部请求拦截明细见 _offline.json）"
+      },
+      {
+        "id": "G13",
+        "name": "真浏览器端到端：真触摸事件点「开始游戏」进第 1 关 + 点货架瓶飞上台面",
+        "ok": true,
+        "detail": "标题页→第 1 关=true　点瓶子上台面=true　canvas 在视口原点=true　输入通道=touch"
       }
     ]
   },
   "total": {
-    "pass": 497,
+    "pass": 526,
     "fail": 0,
     "warn": 0
   },
@@ -108,7 +120,7 @@
       "pass": 165,
       "fail": 0,
       "warn": 0,
-      "ms": 2961,
+      "ms": 3204,
       "fails": [],
       "warns": [],
       "unstable": false
@@ -119,7 +131,7 @@
       "pass": 68,
       "fail": 0,
       "warn": 0,
-      "ms": 745,
+      "ms": 613,
       "fails": [],
       "warns": [],
       "unstable": false
@@ -130,7 +142,7 @@
       "pass": 31,
       "fail": 0,
       "warn": 0,
-      "ms": 403,
+      "ms": 455,
       "fails": [],
       "warns": [],
       "unstable": false
@@ -141,7 +153,7 @@
       "pass": 65,
       "fail": 0,
       "warn": 0,
-      "ms": 819,
+      "ms": 1261,
       "fails": [],
       "warns": [],
       "unstable": false
@@ -152,7 +164,7 @@
       "pass": 98,
       "fail": 0,
       "warn": 0,
-      "ms": 2732,
+      "ms": 4218,
       "fails": [],
       "warns": [],
       "unstable": false
@@ -163,7 +175,7 @@
       "pass": 40,
       "fail": 0,
       "warn": 0,
-      "ms": 110564,
+      "ms": 163161,
       "fails": [],
       "warns": [],
       "unstable": false,
@@ -217,18 +229,29 @@
       "pass": 10,
       "fail": 0,
       "warn": 0,
-      "ms": 1128,
+      "ms": 14709,
       "fails": [],
       "warns": [],
       "unstable": false
     },
     {
       "key": "smoke",
-      "name": "真浏览器冒烟（Chrome 360×640 · 4 关 × 90 帧 · 非白屏）",
-      "pass": 20,
+      "name": "真浏览器冒烟（Chrome 360×640 · 5 趟 × 90 帧 · 含标题页端到端点击）",
+      "pass": 28,
       "fail": 0,
       "warn": 0,
-      "ms": 10603,
+      "ms": 19164,
+      "fails": [],
+      "warns": [],
+      "unstable": false
+    },
+    {
+      "key": "smokeOffline",
+      "name": "断网冒烟（外部网络全断 · 3 趟 × 90 帧 · 含标题页端到端）",
+      "pass": 21,
+      "fail": 0,
+      "warn": 0,
+      "ms": 12712,
       "fails": [],
       "warns": [],
       "unstable": false

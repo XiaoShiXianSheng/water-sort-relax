@@ -14,7 +14,8 @@
  *     文件级与线上级（体积 / ES5 / 依赖 / 可解性 / 线上字节）由 qa_gate.js 算并写 _gate.json，
  *     本文件只负责汇总成一张「能不能上线」的表 —— 判据集中在 qa_gate.js，别在这里重复实现。
  *  5. `--gate` 还会多跑两个 gateOnly 套件：qa_gate.js（文件/线上级判据）与
- *     qa_smoke_live.js（真浏览器冒烟 → G9）。它们只在门禁下跑，`--quick` 与默认两档口径不变。
+ *     qa_smoke_live.js —— 后者被跑**两趟**（正常网络 → G9/G13、断网 → G12）。
+ *     它们只在门禁下跑，`--quick` 与默认两档口径不变。
  */
 const { spawnSync } = require('child_process');
 const fs = require('fs');
@@ -42,7 +43,14 @@ const SUITES = [
   /* 真浏览器冒烟（G9）：前面所有套件都跑在**假 canvas** 上，谁也证明不了"真机不是白屏"。
      它只在 --gate 下跑（默认与 --quick 的口径保持不变），且**只判对/错不判快慢** ——
      帧耗时在共享机器上会抖，塞进门禁会让门禁自己时红时绿，性能交给 qa_perf.js 单独量。 */
-  { key: 'smoke', name: '真浏览器冒烟（Chrome 360×640 · 4 关 × 90 帧 · 非白屏）', file: 'qa_smoke_live.js', kind: 'qa', fast: false, gateOnly: true }
+  { key: 'smoke', name: '真浏览器冒烟（Chrome 360×640 · 5 趟 × 90 帧 · 含标题页端到端点击）', file: 'qa_smoke_live.js', kind: 'qa', fast: false, gateOnly: true },
+  /* 断网冒烟（G12）：**同一个套件文件，换一组环境变量再跑一趟** ——
+     把页面里的远程 http(s) 请求全部拦掉（垫片记账），在"外部网络 100% 失败"下
+     重跑同一批断言。守的是产品承诺"零依赖单文件"：谁哪天悄悄挂了远程字体/贴图/统计，
+     联网时一切正常、玩家一断网就白屏 —— 静态扫描（G4/G5）和假 canvas 都看不见。
+     能进门禁的理由同上：**只判对错**（能不能开局、有没有报错），与机器快慢无关。 */
+  { key: 'smokeOffline', name: '断网冒烟（外部网络全断 · 3 趟 × 90 帧 · 含标题页端到端）', file: 'qa_smoke_live.js', kind: 'qa', fast: false, gateOnly: true,
+    env: { SMK_OFFLINE: '1', SMK_OUT: '_offline.json', LV_SET: '0,30,1' } }
 ];
 
 function runSuite(s) {
@@ -65,6 +73,9 @@ function runSuite(s) {
     const j = JSON.parse(m[1]);
     res.pass = j.pass; res.fail = j.fail; res.warn = j.warn;
     res.fails = j.fails || []; res.warns = j.warns || [];
+    /* extra：套件自报的"确实跑在什么模式 / 有什么正面证据"（G12 靠它证明这趟真断网，
+       G13 靠它证明端到端那条链路真跑过）。没有 extra 就当"没验证"，门禁会判 FAIL。 */
+    res.extra = j.extra || null;
     return res;
   }
 
@@ -175,14 +186,42 @@ if (GATE) {
     gadd('G9', '真浏览器启动冒烟（4 关 × 90 帧：无错误 / 非白屏 / 主循环在跑）', false,
       '冒烟套件没跑 —— 「没验证」不算通过');
   } else {
-    gadd('G9', '真浏览器启动冒烟（4 关 × 90 帧：无错误 / 非白屏 / 主循环在跑）', smokeRes.fail === 0,
+    gadd('G9', '真浏览器启动冒烟（5 趟 × 90 帧：无错误 / 非白屏 / 主循环在跑）', smokeRes.fail === 0,
       smokeRes.fail === 0
         ? smokeRes.pass + ' 项全过（Chrome headless 360×640，见 _smoke.json）'
         : smokeRes.fails.slice(0, 2).join('；'));
   }
 
-  /* 按编号排一下：门禁表要能一眼从 G1 读到 G11，别让「后加的条件」插在中间 */
-  const ORDER = ['G1', 'G2', 'G2b', 'G3', 'G4', 'G5', 'G6', 'G6b', 'G7', 'G8a', 'G8b', 'G8c', 'G9', 'G10', 'G11'];
+  /* G12 断网冒烟：产品的卖点是"零依赖单文件"，但"零依赖"不能靠自述 ——
+     要在外部网络 100% 失败的环境下把同一批断言重跑一遍。
+     谁哪天悄悄挂了远程字体/贴图/统计脚本，联网时全绿、玩家一断网就白屏，
+     而 G4/G5 是静态扫描（JS 拼出来的 URL 扫不到）、G9 跑在正常网络下（根本看不出来）。
+     ★ 它**不**断言"外部请求数必须为 0"：埋点上报是 fire-and-forget，是允许存在的，
+     这条要证明的是"请求失败不会把游戏带崩"。 */
+  const offRes = results.find(r => r.key === 'smokeOffline');
+  const offEx = offRes && offRes.extra;
+  gadd('G12', '断网冒烟：外部网络 100% 失败时仍能正常开局（零依赖不是自述）',
+    !!offRes && offRes.fail === 0 && !!offEx && offEx.mode === 'offline' && offEx.netOff === true,
+    !offRes ? '断网冒烟套件没跑 —— 「没验证」不算通过'
+      : (!offEx || !offEx.mode) ? '这套件没自报模式 → 无法确认它真的断网了，按不许上线处理'
+        : offEx.mode !== 'offline' ? '这趟跑在 ' + offEx.mode + ' 模式（不是断网）→ 门禁空转'
+          : offEx.netOff !== true ? '断网垫片没生效（页面没报告 netOff）→ 这趟等于在正常网络下跑的'
+            : offRes.pass + ' 项全过（外部请求拦截明细见 _offline.json）');
+
+  /* G13 真浏览器端到端点击：qa_ui 是**直接调 handleTap(vx,vy)** 的（假 canvas + 直接调函数），
+     它证明不了「canvas 真的铺在 (0,0)、listener 真的注册上了、真机 dpr 换算没歪」——
+     "游戏能玩，就是点不动"这类事故没有任何后续，所以必须是真 DOM 事件。
+     证据必须**正面存在**：套件没回传端到端结果时判 FAIL（没验证 ≠ 通过）。 */
+  const smEx = smokeRes && smokeRes.extra;
+  const e2 = smEx && smEx.e2e;
+  gadd('G13', '真浏览器端到端：真触摸事件点「开始游戏」进第 1 关 + 点货架瓶飞上台面',
+    !!(e2 && e2.titleFirst && e2.rectAtOrigin && e2.titleToPlay && e2.bottleMoved),
+    !e2 ? '冒烟套件没回传端到端结果（标题页那条链路没跑）→ 没证据不算通过'
+      : '标题页→第 1 关=' + e2.titleToPlay + '　点瓶子上台面=' + e2.bottleMoved
+        + '　canvas 在视口原点=' + e2.rectAtOrigin + '　输入通道=' + e2.inputPath);
+
+  /* 按编号排一下：门禁表要能一眼从 G1 读到 G13，别让「后加的条件」插在中间 */
+  const ORDER = ['G1', 'G2', 'G2b', 'G3', 'G4', 'G5', 'G6', 'G6b', 'G7', 'G8a', 'G8b', 'G8c', 'G9', 'G10', 'G11', 'G12', 'G13'];
   gateItems.sort((a, b) => {
     const ia = ORDER.indexOf(a.id), ib = ORDER.indexOf(b.id);
     return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
