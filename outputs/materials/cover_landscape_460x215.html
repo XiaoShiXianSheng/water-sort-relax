@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<style>
+  html, body {
+    width: 460px;
+    height: 215px;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    background: #0b609f;
+    font-family: "Microsoft YaHei", "PingFang SC", "Noto Sans SC", sans-serif;
+  }
+  #stage { width: 460px; height: 215px; display: block; }
+</style>
+</head>
+<body>
+<svg id="stage" viewBox="0 0 460 215" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bgGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#17a2e0"/>
+      <stop offset="1" stop-color="#0b609f"/>
+    </linearGradient>
+    <linearGradient id="glassBody" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.12"/>
+      <stop offset="0.5" stop-color="#ffffff" stop-opacity="0.04"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0.12"/>
+    </linearGradient>
+    <linearGradient id="shelfGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.22"/>
+      <stop offset="1" stop-color="#0a4f86" stop-opacity="0.55"/>
+    </linearGradient>
+    <linearGradient id="hiTop" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.4"/>
+      <stop offset="0.25" stop-color="#ffffff" stop-opacity="0.05"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+    <clipPath id="bottleInterior">
+      <rect x="-12" y="4" width="24" height="97" rx="9" ry="9"/>
+    </clipPath>
+    <filter id="titleShadow" x="-20%" y="-40%" width="140%" height="200%">
+      <feDropShadow dx="0" dy="2" stdDeviation="2.5" flood-color="#06294a" flood-opacity="0.6"/>
+    </filter>
+  </defs>
+
+  <rect x="0" y="0" width="460" height="215" fill="url(#bgGrad)"/>
+
+  <g fill="#ffffff" fill-opacity="0.12">
+    <circle cx="40" cy="170" r="9"/>
+    <circle cx="430" cy="60" r="8"/>
+    <circle cx="300" cy="200" r="6"/>
+  </g>
+
+  <rect x="70" y="198" width="320" height="13" rx="6" ry="6" fill="url(#shelfGrad)" stroke="#bfe6ff" stroke-opacity="0.4" stroke-width="1.2"/>
+
+  <!-- 管1 cx=120 -->
+  <g transform="translate(120,95)">
+    <rect x="-15" y="0" width="30" height="105" rx="12" ry="12" fill="url(#glassBody)" stroke="#dff3ff" stroke-opacity="0.6" stroke-width="1.6"/>
+    <rect x="-7" y="-12" width="14" height="16" rx="4" ry="4" fill="url(#glassBody)" stroke="#dff3ff" stroke-opacity="0.55" stroke-width="1.4"/>
+    <ellipse cx="0" cy="-12" rx="7" ry="2.5" fill="#0b609f" fill-opacity="0.55"/>
+    <g clip-path="url(#bottleInterior)">
+      <rect x="-12" y="4"   width="24" height="32" fill="#ff85c2"/>
+      <rect x="-12" y="36"  width="24" height="32" fill="#ffb648"/>
+      <rect x="-12" y="68"  width="24" height="33" fill="#3f8cff"/>
+      <rect x="-12" y="4"   width="24" height="32" fill="url(#hiTop)"/>
+      <rect x="-9" y="8" width="5" height="92" rx="2.5" fill="#ffffff" fill-opacity="0.25"/>
+    </g>
+  </g>
+
+  <!-- 管2 cx=230 -->
+  <g transform="translate(230,95)">
+    <rect x="-15" y="0" width="30" height="105" rx="12" ry="12" fill="url(#glassBody)" stroke="#dff3ff" stroke-opacity="0.6" stroke-width="1.6"/>
+    <rect x="-7" y="-12" width="14" height="16" rx="4" ry="4" fill="url(#glassBody)" stroke="#dff3ff" stroke-opacity="0.55" stroke-width="1.4"/>
+    <ellipse cx="0" cy="-12" rx="7" ry="2.5" fill="#0b609f" fill-opacity="0.55"/>
+    <g clip-path="url(#bottleInterior)">
+      <rect x="-12" y="4"   width="24" height="32" fill="#3ec46d"/>
+      <rect x="-12" y="36"  width="24" height="32" fill="#9b6bf5"/>
+      <rect x="-12" y="68"  width="24" height="33" fill="#ff5d6c"/>
+      <rect x="-12" y="4"   width="24" height="32" fill="url(#hiTop)"/>
+      <rect x="-9" y="8" width="5" height="92" rx="2.5" fill="#ffffff" fill-opacity="0.25"/>
+    </g>
+  </g>
+
+  <!-- 管3 cx=340 -->
+  <g transform="translate(340,95)">
+    <rect x="-15" y="0" width="30" height="105" rx="12" ry="12" fill="url(#glassBody)" stroke="#dff3ff" stroke-opacity="0.6" stroke-width="1.6"/>
+    <rect x="-7" y="-12" width="14" height="16" rx="4" ry="4" fill="url(#glassBody)" stroke="#dff3ff" stroke-opacity="0.55" stroke-width="1.4"/>
+    <ellipse cx="0" cy="-12" rx="7" ry="2.5" fill="#0b609f" fill-opacity="0.55"/>
+    <g clip-path="url(#bottleInterior)">
+      <rect x="-12" y="4"   width="24" height="32" fill="#3f8cff"/>
+      <rect x="-12" y="36"  width="24" height="32" fill="#3ec46d"/>
+      <rect x="-12" y="68"  width="24" height="33" fill="#ffb648"/>
+      <rect x="-12" y="4"   width="24" height="32" fill="url(#hiTop)"/>
+      <rect x="-9" y="8" width="5" height="92" rx="2.5" fill="#ffffff" fill-opacity="0.25"/>
+    </g>
+  </g>
+
+  <text x="230" y="56" text-anchor="middle"
+        font-family="'Microsoft YaHei','PingFang SC','Noto Sans SC',sans-serif"
+        font-size="40" font-weight="700"
+        fill="#ffffff" stroke="#06294a" stroke-width="4" paint-order="stroke"
+        letter-spacing="3" filter="url(#titleShadow)">解压水消除</text>
+</svg>
+</body>
+</html>

@@ -17,6 +17,24 @@
 >
 > 👉 **给 GPT / 豆包做评审，请用最新这份：`outputs/给GPT和豆包_V4.1_本轮修复验证.md`**
 
+> 🟢 **2026-09-29 物料已补齐 —— 填后台请直接看 `outputs/TapTap后台文案_复制即用.md`**
+>
+> 那份文件里的每一节都是可直接复制粘贴的成品（简介 / 详细介绍 / 更新日志 / 开发者的话 /
+> 分类标签关键词 / 适龄分级 / 物料清单与文件路径 / 隐私政策公网 URL），
+> 并且数字全部是对着线上代码现场核实过的。**本文档 §1.3 的文案草稿与 §6.2 的
+> Changelog 已经过期，不要再用**（§6.2 那份写的是代码内部细节，不适合直接给玩家看）。
+>
+> 本轮补上的物料：
+> - 实机录屏 `outputs/materials/gameplay_lv17_720x1280.mp4`（21.3s / 720×1280 / H.264 / 638 帧，已双路验证不是静态图）
+> - 宣传图 16:9 合规版 `outputs/materials/promo_16x9_v2_1920x1080.png`（1920×1080 / 714KB；旧版 `promo_16x9.html` 违规已弃用）
+> - 隐私政策 `outputs/legal/privacy.html` + 用户协议 `outputs/legal/terms.html`，已挂公网：
+>   `https://water-sort-relax.app.workbuddy.host/privacy.html` 与 `/terms.html`
+> - 封面族 + 游戏库壁纸（生成中，见上文那份文案文件的物料清单）
+>
+> ⚠️ **同时发现一个产品问题**：选关面板写着 90 关，但**难度参数在第 30 关就全部触顶**，
+> 第 31~90 关的难度完全相同（只有布局不同）。细节与三个处理选项见
+> `outputs/TapTap后台文案_复制即用.md` 第 8 节。**文案里不要再写「越往后越难」。**
+
 
 > 适用对象：独立开发者本人，拿着这份清单在 TapTap 开发者中心一步步点。
 > 版本基线：**V4.0.0**（对应代码提交 `6e05988`）
@@ -71,7 +89,7 @@ var CFG={
 | 1 | 游戏包（单文件 HTML） | ✅ 有：`publish_water/index.html` | 见第 2 节打包 |
 | 2 | 游戏截图 720×1280 竖屏 | ✅ 有 9 张：`screenshots/v4_10_home_progress.png` ~ `v4_18_level_select.png`（首页/教学/普通对局/第30关/失败复活面板/三档面板/结算/提示条/选关） | 直接用。**张数上限、是否必须 720×1280、是否接受 PNG** → 以 TapTap 开发者中心上传页的提示为准 |
 | 3 | 游戏图标 512×512 | ❌ **缺** | 从 `screenshots/v4_10_home_progress.png` 截方形主体，或用任意画图工具做一张纯色底 + 水管/水滴图形。**尺寸、圆角、是否要透明通道** → 以平台上传页为准。我可以帮你生成一张 SVG 源图，说一声 |
-| 4 | 宣传图 / 横幅 | ❌ 缺（不确定平台是否强制） | 先不准备，等后台提示要再补 |
+| 4 | 宣传图 / 横幅 | 🟡 有 1 张横版：`outputs/materials/promo_1920x1080.png`（1920×1080） | **规格未确认**：游戏是竖屏，平台可能要竖版宣传图。已备好源文件 `promo_16x9.html`，说一声就出竖版（1080×1920） |
 
 ### 1.2 文案
 
@@ -119,27 +137,46 @@ var CFG={
 
 ### 2.1 这是个什么包
 
-- 单个 HTML 文件，134 KB。HTML + CSS + JS 全在一个文件里，**不引任何外部 js/css/图片/字体/音频**。
+- 单个 HTML 文件，149 KB。HTML + CSS + JS 全在一个文件里，**不引任何外部 js/css/图片/字体/音频**。
 - 音效是 WebAudio 现场合成的（没有 mp3 文件），美术全是 Canvas 画的（没有图片文件）。
 - 所以：**打包 = 把一个 HTML 文件塞进 zip，就这么简单。**
 
 ### 2.2 打包步骤（照做）
 
+> ⚠️ **本机没有 `zip` 命令**（2026-09-29 实测）。用 Windows 自带的 `tar.exe`（bsdtar），
+> 它带 `-a` 时会按扩展名自动选 zip 格式，生成的包结构与 `zip` 一致。
+
 ```bash
-# 1) 确认发布副本和主文件字节一致（已一致，每次改完代码再跑一次）
 cd C:/Users/Administrator/WorkBuddy/2026-09-26-02-50-51
+
+# 1) 同步【两个】发布副本（少同步一个就会触发门禁 G8a）
 cp outputs/解压水消除.html publish_water/index.html
+cp outputs/解压水消除.html publish_taptap/index.html
 
-# 2) 核对大小 / md5
-ls -l publish_water/index.html
-md5sum outputs/解压水消除.html publish_water/index.html   # 两个值必须一样
+# 2) 打包：入口必须是根目录的 index.html，不能套文件夹
+cd publish_taptap
+"C:/Windows/System32/tar.exe" -a -cf ../outputs/tap_upload_v4.1_adonline.zip \
+    index.html icon_512.png UPLOAD_NOTES.txt
 
-# 3) 打 zip（index.html 必须在 zip 根目录，不能套一层文件夹）
-cd publish_water
-zip -r ../解压水消除_v4.0.0.zip index.html
+# 3) 出门禁（它会拆包比 md5，肉眼看不出版本差异）
+cd .. && node qa_gate.js --no-live
+```
 
-# 4) 检查 zip 结构：必须是 "index.html"，不能是 "publish_water/index.html"
-unzip -l ../解压水消除_v4.0.0.zip
+<details>
+<summary>为什么第 3 步不能省（两个真实事故）</summary>
+
+- **G8a**：`publish_taptap/index.html` 一度落后于主文件 —— 里面是 `env:'test'`、
+  `adUnit:{rewarded:'',interstitial:''}`，**没有广告位 ID**。这个目录正是「重新打个包」的取件处，
+  谁重打一次就会把旧版打进去 → 真机跑真实广告却拿不到 adUnitId → **静默零收益**。
+- **G8c**：`outputs/` 里曾躺着 4 个加广告前的旧包，包里是 deflate 压过的内容，
+  `grep` 和肉眼都看不出是哪个版本。旧包现已移入 `outputs/_archive_旧版上传包/`。
+
+</details>
+
+```bash
+# 4) 确认包结构（可选，肉眼确认一次）
+unzip -l ../outputs/tap_upload_v4.1_adonline.zip
+# 期望看到：index.html / icon_512.png / UPLOAD_NOTES.txt，都在根目录
 ```
 
 **第 4 步如果看到 `publish_water/index.html`，就是打错了，重打。** 这是 H5 小游戏最常见的一次性退包原因。

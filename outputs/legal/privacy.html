@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>隐私政策 · 解压水消除</title>
+<!--
+  ======================================================================
+  发布前配置（上线提示，可保留为公示信息或删除本注释）
+  ----------------------------------------------------------------------
+  本页只有两处需要你填写的占位符，均在本页顶部「发布信息」卡片中：
+    1) 【开发者名称】 —— 替换为你的开发者 / 主体名称
+    2) 【联系邮箱】     —— 替换为你的联系邮箱
+  除这两处外，全文已完整、可直接上线，无任何其他待填标记。
+  生效日期：2026-09-29   版本：v1.0
+  ======================================================================
+-->
+<style>
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: linear-gradient(180deg, #17a2e0 0%, #0b609f 100%);
+    background-attachment: fixed;
+    color: #eaf4ff;
+    font-family: "Microsoft YaHei", "PingFang SC", "Noto Sans SC", sans-serif;
+    font-size: 16px;
+    line-height: 1.75;
+    -webkit-font-smoothing: antialiased;
+  }
+  .container { max-width: 720px; margin: 0 auto; padding: 22px 16px 64px; }
+  header h1 {
+    font-size: 26px;
+    margin: 8px 0 4px;
+    letter-spacing: 1px;
+    text-shadow: 0 2px 8px rgba(0,0,0,0.25);
+  }
+  header .sub { font-size: 14px; opacity: 0.85; margin: 0 0 6px; }
+  .meta { font-size: 13px; opacity: 0.8; margin: 0 0 14px; }
+
+  .card {
+    background: rgba(255, 255, 255, 0.09);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 14px;
+    padding: 18px 20px;
+    margin: 14px 0;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+    -webkit-backdrop-filter: blur(3px);
+    backdrop-filter: blur(3px);
+  }
+  .card.config { background: rgba(255, 255, 255, 0.14); }
+  .config-title { font-size: 14px; font-weight: 700; margin: 0 0 8px; color: #fff; }
+  .config p { margin: 4px 0; font-size: 15px; }
+
+  nav.toc {
+    background: rgba(255, 255, 255, 0.07);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 14px;
+    padding: 14px 16px;
+    margin: 14px 0;
+  }
+  nav.toc .toc-title { font-size: 14px; font-weight: 700; margin: 0 0 8px; }
+  nav.toc a {
+    display: inline-block;
+    color: #cfeaff;
+    text-decoration: none;
+    margin: 4px 10px 4px 0;
+    padding: 3px 10px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.1);
+    font-size: 14px;
+  }
+  nav.toc a:hover { background: rgba(255, 255, 255, 0.22); }
+
+  section { scroll-margin-top: 16px; }
+  h2 {
+    font-size: 20px;
+    margin: 26px 0 10px;
+    padding-left: 12px;
+    border-left: 4px solid #9fd8ff;
+  }
+  h3 { font-size: 17px; margin: 16px 0 6px; color: #d8efff; }
+  p { margin: 10px 0; }
+  ul { margin: 10px 0; padding-left: 22px; }
+  li { margin: 6px 0; }
+  .hl { color: #ffe6a3; font-weight: 700; }
+  .note { font-size: 14px; opacity: 0.9; }
+  a.inline { color: #bfe3ff; }
+  footer { margin-top: 30px; font-size: 13px; opacity: 0.8; text-align: center; }
+  .footlink { color: #cfeaff; text-decoration: none; margin: 0 8px; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <header>
+    <h1>隐私政策</h1>
+    <p class="sub">《解压水消除》（Water Sort Relax）</p>
+    <p class="meta">版本 v1.0　·　生效日期 2026-09-29</p>
+  </header>
+
+  <!-- 发布信息配置区：仅此处含两处占位符 -->
+  <div class="card config">
+    <p class="config-title">发布信息（上线后可直接保留为公示信息，或删除本卡片）</p>
+    <p>本隐私政策由以下主体制定并负责：</p>
+    <p>开发者名称：【开发者名称】</p>
+    <p>联系邮箱：【联系邮箱】</p>
+  </div>
+
+  <nav class="toc" aria-label="章节导航">
+    <div class="toc-title">目录</div>
+    <a href="#overview">一、概述</a>
+    <a href="#collect">二、我们如何收集和使用信息</a>
+    <a href="#not-collect">三、我们不收集什么</a>
+    <a href="#storage">四、本地存储说明</a>
+    <a href="#third-party">五、第三方共享（广告 SDK）</a>
+    <a href="#retention">六、信息的保存期限</a>
+    <a href="#rights">七、您的权利</a>
+    <a href="#minors">八、未成年人保护</a>
+    <a href="#update">九、政策更新</a>
+    <a href="#contact">十、联系方式</a>
+  </nav>
+
+  <section id="overview">
+    <h2>一、概述</h2>
+    <div class="card">
+      <p>《解压水消除》（Water Sort Relax，以下简称"本游戏"）是一款单文件 HTML5 休闲益智小游戏，玩法是将彩色液体分装到对应的试管中，过程轻松、解压。本游戏由本页顶部公示的开发者（以下简称"我们"）开发与运营。</p>
+      <p>我们非常重视您的隐私。这份政策用尽量平实的语言，向您说明：我们处理了哪些信息、为什么处理、如何处理，以及您对自己信息所拥有的权利。请您特别阅读<span class="hl">"三、我们不收集什么"</span>一节——如实说明我们的产品特点，也是本游戏相对同类产品的真实优势。</p>
+      <p class="note">本游戏面向全年龄用户，内容仅涉及分装彩色液体的解压玩法，不含暴力、恐怖、赌博等元素。</p>
+    </div>
+  </section>
+
+  <section id="collect">
+    <h2>二、我们如何收集和使用信息</h2>
+    <div class="card">
+      <h3>处理的目的与方式</h3>
+      <p>我们处理信息的唯一目的，是向您提供并持续改进游戏体验，以及在您主动选择时向您展示广告。处理方式分为两类：</p>
+      <ul>
+        <li><strong>本地处理：</strong>游戏进度等数据仅保存在您自己的设备浏览器中（详见第四节），用于让您下次打开时继续游戏。</li>
+        <li><strong>由第三方广告 SDK 处理：</strong>当您选择观看广告时，与广告相关的信息由 TapTap 广告 SDK 在其运行环境中处理（详见第五节）。</li>
+      </ul>
+      <h3>我们自身处理的个人信息种类</h3>
+      <p>我们自身<span class="hl">不收集、不上传任何个人信息</span>。本游戏没有账号系统，不会采集您的姓名、手机号、邮箱、身份证号、家庭住址等任何能够识别您身份的信息。游戏内的操作事件仅在您的设备本地记录（见第四节），<span class="hl">不会发生任何网络上报</span>。</p>
+      <p>与广告投放相关的设备标识等信息，由 TapTap 广告 SDK 按其自身隐私政策处理，我们不掌握、也不向其额外提供您的个人信息。</p>
+    </div>
+  </section>
+
+  <section id="not-collect">
+    <h2>三、我们不收集什么</h2>
+    <div class="card">
+      <p>为了让您放心，我们明确说明本游戏<span class="hl">不做</span>以下事情：</p>
+      <ul>
+        <li><strong>不收集身份信息：</strong>本游戏无账号、无登录、无用户 ID；不采集姓名、手机号、电子邮箱、身份证号、地址等任何个人身份信息。</li>
+        <li><strong>不申请任何系统权限：</strong>游戏不会申请或使用定位、麦克风、摄像头、相册、通讯录、剪贴板、设备文件访问等任何系统权限。</li>
+        <li><strong>不使用 Cookie：</strong>本游戏不使用 Cookie 或其他同类跟踪技术。</li>
+        <li><strong>不上传任何数据：</strong>游戏内埋点的上报地址为空，所有事件只在您的设备本地缓冲，<span class="hl">不存在任何网络上报行为</span>。</li>
+        <li><strong>唯一的联网行为来自广告：</strong>游戏本身可完全离线运行；只有在您主动选择观看广告时，才会因广告 SDK 产生联网。</li>
+      </ul>
+    </div>
+  </section>
+
+  <section id="storage">
+    <h2>四、本地存储说明</h2>
+    <div class="card">
+      <p>本游戏使用浏览器本地存储（localStorage）保存少量数据，<span class="hl">全部只存在于您自己的设备上，不会上传到任何服务器</span>。仅包含两个存储键：</p>
+      <ul>
+        <li><code>wsr_save_v1</code>：保存您的游戏进度，包括当前关卡、关卡星级、已解锁的档位、每日挑战记录。</li>
+        <li><code>wsr_ev</code>：保存最近 80 条游戏内事件，仅用于本地调试核对，不涉及任何个人信息。</li>
+      </ul>
+      <p class="note">本地存储的数据只服务于您个人的游戏体验，我们既看不到，也不会读取或收集这些内容。</p>
+    </div>
+  </section>
+
+  <section id="third-party">
+    <h2>五、第三方共享（广告 SDK）</h2>
+    <div class="card">
+      <p>本游戏<span class="hl">唯一的第三方交互是 TapTap 广告 SDK</span>。广告由 TapTap 小游戏运行环境注入的全局对象提供，我们仅调用它来拉取以下两类广告：</p>
+      <ul>
+        <li><strong>激励视频广告：</strong>需要您主动点击才会触发，观看完成后您可获得游戏内的相应奖励。</li>
+        <li><strong>插屏广告：</strong>为不打扰您，我们将其频率限制为<strong>单个游戏会话最多 1 次</strong>，并且两次之间设有 <strong>300 秒冷却时间</strong>。</li>
+      </ul>
+      <p>广告 SDK 可能会为广告投放、频次控制、反作弊等目的而处理设备标识等信息，这部分行为由其按照自身的官方隐私政策处理，我们不予干预，也不向其提供额外的个人信息。</p>
+      <p>广告位通过 TapTap 旗下的 Dirichlet 媒体平台进行配置与下发。除广告 SDK 自身运行所需外，我们不会与任何第三方共享您的个人信息。</p>
+      <p class="note">如您希望了解或管理广告 SDK 对设备信息的处理，请查阅 TapTap 官方隐私政策，或通过其平台提供的相关设置进行管理。</p>
+    </div>
+  </section>
+
+  <section id="retention">
+    <h2>六、信息的保存期限</h2>
+    <div class="card">
+      <p>由于我们自身不收集、不上传任何个人信息，因此<strong>不存在服务器端的个人信息保存期限问题</strong>。您设备上的本地数据（见第四节）会一直保留，直到您主动清除浏览器数据或卸载游戏。</p>
+      <p>与广告相关的设备信息由 TapTap 广告 SDK 按其政策处理，保存期限请以其官方隐私政策为准。</p>
+    </div>
+  </section>
+
+  <section id="rights">
+    <h2>七、您的权利</h2>
+    <div class="card">
+      <p>根据《中华人民共和国个人信息保护法》等相关规定，您对自己的信息享有以下权利。结合本游戏"不上传任何数据"的特点，说明如下：</p>
+      <ul>
+        <li><strong>查阅、复制、更正：</strong>我们自身不在服务器端保存您的个人信息，因此无相关记录可供查阅或更正。您设备上的游戏数据，您可随时通过游戏内进度直接使用。</li>
+        <li><strong>删除：</strong>您对本地数据拥有完全控制权。清除浏览器数据或卸载游戏，即可彻底删除全部本地数据（包括进度与事件记录）。</li>
+        <li><strong>撤回同意：</strong>您可随时停止游玩并清除本地数据来撤回对本地数据存储的同意；对于广告 SDK 对设备信息的处理，您可通过 TapTap 平台的相关设置撤回或管理。</li>
+        <li><strong>投诉：</strong>如您认为我们的处理损害了您的合法权益，您可以向有关监管部门投诉，也可通过本页顶部公示的联系邮箱与我们沟通，我们会认真处理。</li>
+      </ul>
+      <p class="note">由于本游戏不采集身份信息、不上传任何数据，您无需向我们发起"注销账号"之类的请求——因为根本不存在需要注销的账号或服务器档案。</p>
+    </div>
+  </section>
+
+  <section id="minors">
+    <h2>八、未成年人保护</h2>
+    <div class="card">
+      <p>本游戏面向全年龄，内容健康，且<strong>不收集任何身份信息</strong>，对未成年人同样适用上述"不收集"原则。</p>
+      <p>我们建议未成年人的监护人对未成年人使用电子设备的情况予以关注与引导。如监护人发现未成年人设备上存在本游戏的本地数据，通过清除浏览器数据或卸载游戏即可完全删除，无需其他操作。</p>
+    </div>
+  </section>
+
+  <section id="update">
+    <h2>九、政策更新</h2>
+    <div class="card">
+      <p>我们可能根据法律法规或产品变化适时更新本政策。当更新涉及实质性变化时，我们会通过本游戏内提示或在本页面公示的方式通知您。本政策版本为 v1.0，生效日期为 2026-09-29。</p>
+      <p>政策更新后，若您继续使用本游戏，即视为您理解并同意更新后的内容。</p>
+    </div>
+  </section>
+
+  <section id="contact">
+    <h2>十、联系方式</h2>
+    <div class="card">
+      <p>如您对本隐私政策或我们的隐私实践有任何疑问、意见或请求，可通过<strong>本页顶部公示的开发者名称与联系邮箱</strong>与我们联系。</p>
+      <p class="note">我们将在合理时间内对您的来信予以回复。</p>
+    </div>
+  </section>
+
+  <footer>
+    <p>《解压水消除》隐私政策 · v1.0</p>
+    <p>
+      <a class="footlink" href="terms.html">用户协议</a>
+    </p>
+  </footer>
+
+</div>
+</body>
+</html>

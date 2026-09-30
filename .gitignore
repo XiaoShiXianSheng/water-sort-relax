@@ -23,6 +23,16 @@ _smoke.json
 publish_water/index.html
 publish_taptap/index.html
 
+# 隐私政策 / 用户协议 的发布副本（源文件在 outputs/legal/，发布时 cp 过来挂到公网 URL）
+publish_water/privacy.html
+publish_water/terms.html
+
 # 可再生的上传包（publish_taptap/ 重新压缩即得）与图标源文件
 tap_upload_v*.zip
 _icon_src.html
+
+# 录屏工具的中间产物（rec_mp4.js 每次跑都会重写）
+rec_diag.json
+rec_out.mp4
+_rec_tmp.html
+_*.json

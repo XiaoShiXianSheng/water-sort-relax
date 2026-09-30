@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<style>
+  html, body {
+    width: 3840px;
+    height: 1240px;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    background: #073f6b;
+    font-family: "Microsoft YaHei", "PingFang SC", "Noto Sans SC", sans-serif;
+  }
+  #stage { width: 3840px; height: 1240px; display: block; }
+</style>
+</head>
+<body>
+<svg id="stage" viewBox="0 0 3840 1240" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- 低明度品牌蓝渐变（作壁纸底，不抢前景） -->
+    <linearGradient id="bgGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0f6ea3"/>
+      <stop offset="1" stop-color="#073f6b"/>
+    </linearGradient>
+    <radialGradient id="glowR" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#2f9fd6" stop-opacity="0.30"/>
+      <stop offset="1" stop-color="#2f9fd6" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="glassBody" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.06"/>
+      <stop offset="0.5" stop-color="#ffffff" stop-opacity="0.02"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0.06"/>
+    </linearGradient>
+    <radialGradient id="bubble" cx="0.38" cy="0.35" r="0.65">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.5"/>
+      <stop offset="0.5" stop-color="#cdeeff" stop-opacity="0.15"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0.02"/>
+    </radialGradient>
+    <linearGradient id="hiTop" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.25"/>
+      <stop offset="0.2" stop-color="#ffffff" stop-opacity="0.03"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+
+    <!-- 各管剪影内部裁剪 -->
+    <clipPath id="clipA"><rect x="1997" y="258" width="106" height="744" rx="40" ry="40"/></clipPath>
+    <clipPath id="clipB"><rect x="2252" y="368" width="96"  height="604" rx="36" ry="36"/></clipPath>
+    <clipPath id="clipC"><rect x="2503" y="208" width="114" height="824" rx="44" ry="44"/></clipPath>
+    <clipPath id="clipD"><rect x="2777" y="428" width="86"  height="544" rx="34" ry="34"/></clipPath>
+    <clipPath id="clipE"><rect x="3017" y="328" width="106" height="664" rx="40" ry="40"/></clipPath>
+    <clipPath id="clipF"><rect x="3285" y="278" width="111" height="704" rx="42" ry="42"/></clipPath>
+    <clipPath id="clipG"><rect x="3562" y="408" width="96"  height="584" rx="36" ry="36"/></clipPath>
+  </defs>
+
+  <rect x="0" y="0" width="3840" height="1240" fill="url(#bgGrad)"/>
+
+  <!-- 右侧柔光，制造纵深 -->
+  <circle cx="2900" cy="640" r="900" fill="url(#glowR)"/>
+  <circle cx="3700" cy="300" r="600" fill="url(#glowR)"/>
+
+  <!-- 左侧/中部少量气泡（保持中间偏左留白，仅极淡点缀） -->
+  <g fill="url(#bubble)">
+    <circle cx="300" cy="380" r="26" fill-opacity="0.25"/>
+    <circle cx="520" cy="820" r="18" fill-opacity="0.2"/>
+    <circle cx="160" cy="900" r="14" fill-opacity="0.2"/>
+    <circle cx="980" cy="250" r="16" fill-opacity="0.18"/>
+  </g>
+
+  <!-- 右侧疏密有致的水管剪影（无文字，低明度） -->
+  <!-- A -->
+  <g>
+    <rect x="1990" y="250" width="120" height="760" rx="46" ry="46" fill="url(#glassBody)" stroke="#bfe6ff" stroke-opacity="0.14" stroke-width="2.5"/>
+    <g clip-path="url(#clipA)">
+      <rect x="1997" y="258" width="106" height="248" fill="#3f8cff" fill-opacity="0.5"/>
+      <rect x="1997" y="506" width="106" height="248" fill="#ffb648" fill-opacity="0.5"/>
+      <rect x="1997" y="754" width="106" height="248" fill="#3ec46d" fill-opacity="0.5"/>
+      <rect x="1997" y="258" width="106" height="248" fill="url(#hiTop)"/>
+      <rect x="2006" y="266" width="14" height="728" rx="7" fill="#ffffff" fill-opacity="0.12"/>
+    </g>
+  </g>
+  <!-- B -->
+  <g>
+    <rect x="2245" y="360" width="110" height="620" rx="42" ry="42" fill="url(#glassBody)" stroke="#bfe6ff" stroke-opacity="0.14" stroke-width="2.5"/>
+    <g clip-path="url(#clipB)">
+      <rect x="2252" y="368" width="96" height="201" fill="#ff5d6c" fill-opacity="0.5"/>
+      <rect x="2252" y="569" width="96" height="201" fill="#9b6bf5" fill-opacity="0.5"/>
+      <rect x="2252" y="770" width="96" height="202" fill="#3f8cff" fill-opacity="0.5"/>
+      <rect x="2252" y="368" width="96" height="201" fill="url(#hiTop)"/>
+      <rect x="2260" y="376" width="13" height="588" rx="6" fill="#ffffff" fill-opacity="0.12"/>
+    </g>
+  </g>
+  <!-- C（最高） -->
+  <g>
+    <rect x="2495" y="200" width="130" height="840" rx="50" ry="50" fill="url(#glassBody)" stroke="#bfe6ff" stroke-opacity="0.14" stroke-width="2.5"/>
+    <g clip-path="url(#clipC)">
+      <rect x="2503" y="208" width="114" height="275" fill="#3ec46d" fill-opacity="0.5"/>
+      <rect x="2503" y="483" width="114" height="275" fill="#ff85c2" fill-opacity="0.5"/>
+      <rect x="2503" y="758" width="114" height="274" fill="#ffb648" fill-opacity="0.5"/>
+      <rect x="2503" y="208" width="114" height="275" fill="url(#hiTop)"/>
+      <rect x="2512" y="216" width="15" height="808" rx="7" fill="#ffffff" fill-opacity="0.12"/>
+    </g>
+  </g>
+  <!-- D（最矮） -->
+  <g>
+    <rect x="2770" y="420" width="100" height="560" rx="38" ry="38" fill="url(#glassBody)" stroke="#bfe6ff" stroke-opacity="0.14" stroke-width="2.5"/>
+    <g clip-path="url(#clipD)">
+      <rect x="2777" y="428" width="86" height="181" fill="#9b6bf5" fill-opacity="0.5"/>
+      <rect x="2777" y="609" width="86" height="181" fill="#3f8cff" fill-opacity="0.5"/>
+      <rect x="2777" y="790" width="86" height="182" fill="#3ec46d" fill-opacity="0.5"/>
+      <rect x="2777" y="428" width="86" height="181" fill="url(#hiTop)"/>
+      <rect x="2784" y="436" width="11" height="528" rx="5" fill="#ffffff" fill-opacity="0.12"/>
+    </g>
+  </g>
+  <!-- E -->
+  <g>
+    <rect x="3010" y="320" width="120" height="680" rx="46" ry="46" fill="url(#glassBody)" stroke="#bfe6ff" stroke-opacity="0.14" stroke-width="2.5"/>
+    <g clip-path="url(#clipE)">
+      <rect x="3017" y="328" width="106" height="221" fill="#ff5d6c" fill-opacity="0.5"/>
+      <rect x="3017" y="549" width="106" height="221" fill="#ffb648" fill-opacity="0.5"/>
+      <rect x="3017" y="770" width="106" height="222" fill="#3ec46d" fill-opacity="0.5"/>
+      <rect x="3017" y="328" width="106" height="221" fill="url(#hiTop)"/>
+      <rect x="3026" y="336" width="14" height="648" rx="7" fill="#ffffff" fill-opacity="0.12"/>
+    </g>
+  </g>
+  <!-- F -->
+  <g>
+    <rect x="3277" y="270" width="125" height="720" rx="48" ry="48" fill="url(#glassBody)" stroke="#bfe6ff" stroke-opacity="0.14" stroke-width="2.5"/>
+    <g clip-path="url(#clipF)">
+      <rect x="3285" y="278" width="111" height="235" fill="#3f8cff" fill-opacity="0.5"/>
+      <rect x="3285" y="513" width="111" height="235" fill="#ff85c2" fill-opacity="0.5"/>
+      <rect x="3285" y="748" width="111" height="234" fill="#9b6bf5" fill-opacity="0.5"/>
+      <rect x="3285" y="278" width="111" height="235" fill="url(#hiTop)"/>
+      <rect x="3294" y="286" width="14" height="688" rx="7" fill="#ffffff" fill-opacity="0.12"/>
+    </g>
+  </g>
+  <!-- G（最右，较矮） -->
+  <g>
+    <rect x="3555" y="400" width="110" height="600" rx="42" ry="42" fill="url(#glassBody)" stroke="#bfe6ff" stroke-opacity="0.14" stroke-width="2.5"/>
+    <g clip-path="url(#clipG)">
+      <rect x="3562" y="408" width="96" height="195" fill="#3ec46d" fill-opacity="0.5"/>
+      <rect x="3562" y="603" width="96" height="195" fill="#ff5d6c" fill-opacity="0.5"/>
+      <rect x="3562" y="798" width="96" height="194" fill="#3f8cff" fill-opacity="0.5"/>
+      <rect x="3562" y="408" width="96" height="195" fill="url(#hiTop)"/>
+      <rect x="3570" y="416" width="13" height="568" rx="6" fill="#ffffff" fill-opacity="0.12"/>
+    </g>
+  </g>
+
+  <!-- 右侧气泡点缀（疏密有致） -->
+  <g fill="url(#bubble)">
+    <circle cx="1880" cy="300" r="30" fill-opacity="0.4"/>
+    <circle cx="2150" cy="180" r="22" fill-opacity="0.35"/>
+    <circle cx="2400" cy="1100" r="26" fill-opacity="0.35"/>
+    <circle cx="2720" cy="220" r="20" fill-opacity="0.3"/>
+    <circle cx="2980" cy="1150" r="24" fill-opacity="0.3"/>
+    <circle cx="3200" cy="180" r="22" fill-opacity="0.3"/>
+    <circle cx="3500" cy="1120" r="28" fill-opacity="0.35"/>
+    <circle cx="3760" cy="700" r="20" fill-opacity="0.3"/>
+    <circle cx="2060" cy="1000" r="16" fill-opacity="0.25"/>
+    <circle cx="2640" cy="1050" r="18" fill-opacity="0.25"/>
+  </g>
+</svg>
+</body>
+</html>

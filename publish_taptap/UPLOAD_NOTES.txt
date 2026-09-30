@@ -34,9 +34,27 @@ Water Sort Relax (解压水消除) - TapTap H5 小游戏上传包
 
 开发者需在上传后台自行补充
 ----------------------------------------------------------------
-1. 应用截图 / 简介 / 分类标签
-2. 隐私政策链接与版权信息（以平台后台提示为准）
-3. 版号 / 备案等合规信息（以平台后台提示为准）
+物料 2026-09-29 已全部备好，文件路径与可直接粘贴的文案见：
+  outputs/TapTap后台文案_复制即用.md
+
+1. 应用截图        screenshots/v4_1*.png（9 张，全部 720×1280，实机画面）
+2. 实机录屏        outputs/materials/gameplay_lv17_720x1280.mp4
+                   21.3s / 720×1280 / H.264(avc1) / 638 帧（下载·试玩必填）
+3. 宣传图 16:9     outputs/materials/promo_16x9_v2_1920x1080.png
+   （目录里那两个 deprecated_promo_16x9_违规版.html / deprecated_promo_1920x1080_违规版.png
+     是早期违规版：含 tagline/英文/特性列表，且画了实物手机模型 + 贴游戏截图。
+     已改名隔离，**不要上传**。）
+4. 宣传图 1:1      outputs/materials/promo_1x1_1200x1200.png
+5. 横版/竖版封面、游戏库背景壁纸
+                   outputs/materials/cover_landscape_460x215.png
+                   outputs/materials/cover_portrait_600x900.png
+                   outputs/materials/library_wallpaper_3840x1240.png
+6. 隐私政策公开链接 https://water-sort-relax.app.workbuddy.host/privacy.html
+   用户协议公开链接 https://water-sort-relax.app.workbuddy.host/terms.html
+   （两个页面各含 2 处占位符【开发者名称】【联系邮箱】，上线前替换后重新发布）
+7. 简介 / 详细介绍 / 更新日志 / 开发者的话 / 分类标签关键词 / 适龄分级
+                   outputs/TapTap后台文案_复制即用.md（整段复制，不要改写）
+8. 版号 / 备案等合规信息（以平台后台提示为准，需向官方确认）
 
 
 版本：广告接入版（CFG.version = '4.0.0'，随埋点上报，出事时能区分线上跑的是哪一版）

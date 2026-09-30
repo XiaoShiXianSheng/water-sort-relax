@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>verify2</title></head>
+<body style="margin:0;background:#111">
+<video id="v" muted playsinline preload="auto" style="width:360px;height:640px"></video>
+<script>
+/* 第二轮验证：MediaRecorder 出的是 fragmented MP4，Chrome 对它 **seek 不可靠**
+   （上一版按 currentTime 跳帧取样，4 帧全等 + duration 报 3.38s，其实是 fMP4 没有 seek index，
+   跳过去还是第一帧）。所以这里改成 **实时播放，边播边按墙钟取样**：
+   画面在动 → 每个取样点的图像必然不同。 */
+(function () {
+  const SRC = new URLSearchParams(location.search).get('src');
+  const v = document.getElementById('v');
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+  function grab() {
+    const c = document.createElement('canvas');
+    c.width = 360; c.height = 640;
+    const x = c.getContext('2d');
+    x.drawImage(v, 0, 0, 360, 640);
+    const d = x.getImageData(0, 0, 360, 640).data;
+    let sum = 0, n = 0;
+    for (let i = 0; i < d.length; i += 4 * 37) { sum += d[i] + d[i + 1] + d[i + 2]; n++; }
+    return { ct: +v.currentTime.toFixed(2), mean: +(sum / n / 3).toFixed(1),
+      jpg: c.toDataURL('image/jpeg', 0.7), data: d };
+  }
+  function diff(a, b) {
+    let s = 0, n = 0;
+    for (let i = 0; i < a.data.length; i += 4 * 37) {
+      s += Math.abs(a.data[i] - b.data[i]) + Math.abs(a.data[i + 1] - b.data[i + 1]) + Math.abs(a.data[i + 2] - b.data[i + 2]);
+      n += 3;
+    }
+    return +(s / n).toFixed(2);
+  }
+
+  (async () => {
+    try {
+      v.src = SRC;
+      await new Promise((res, rej) => {
+        v.onloadeddata = res;
+        v.onerror = () => rej(new Error('load error code=' + (v.error && v.error.code)));
+        setTimeout(() => rej(new Error('load timeout')), 20000);
+      });
+      const out = {
+        dims: v.videoWidth + 'x' + v.videoHeight, readyState: v.readyState,
+        durationAtLoad: +v.duration.toFixed(2), samples: [], diffs: []
+      };
+
+      await v.play();
+      const marks = [1, 4, 8, 12, 16, 20];
+      let mi = 0, last = grab(), t0 = performance.now();
+      while (mi < marks.length && performance.now() - t0 < 32000) {
+        await sleep(120);
+        if (v.currentTime >= marks[mi]) {
+          const g = grab();
+          out.samples.push({ mark: marks[mi], ct: g.ct, mean: g.mean, jpg: g.jpg });
+          out.diffs.push({ at: g.ct, d: diff(last, g) });
+          last = g; mi++;
+        }
+        if (v.ended) break;
+      }
+      /* 连续动态：同一秒内的两帧也要有差异（证明不是逐帧静止） */
+      const a = grab(); await sleep(330); const b = grab();
+      out.adjacentDiff = diff(a, b);
+      out.durationAtEnd = +v.duration.toFixed(2);
+      out.playedTo = +v.currentTime.toFixed(2);
+      out.ended = v.ended;
+      window.__VERIFY = out;
+    } catch (e) {
+      window.__VERIFY = { error: e.message };
+    }
+  })();
+})();
+</script>
+</body></html>

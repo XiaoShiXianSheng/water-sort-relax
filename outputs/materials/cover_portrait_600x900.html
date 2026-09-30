@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<style>
+  html, body {
+    width: 600px;
+    height: 900px;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    background: #0b609f;
+    font-family: "Microsoft YaHei", "PingFang SC", "Noto Sans SC", sans-serif;
+  }
+  #stage { width: 600px; height: 900px; display: block; }
+</style>
+</head>
+<body>
+<svg id="stage" viewBox="0 0 600 900" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bgGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#17a2e0"/>
+      <stop offset="1" stop-color="#0b609f"/>
+    </linearGradient>
+    <radialGradient id="glowA" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#6fc8f2" stop-opacity="0.4"/>
+      <stop offset="1" stop-color="#6fc8f2" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glowC" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.16"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="glassBody" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.10"/>
+      <stop offset="0.5" stop-color="#ffffff" stop-opacity="0.03"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0.10"/>
+    </linearGradient>
+    <linearGradient id="shelfGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.22"/>
+      <stop offset="1" stop-color="#0a4f86" stop-opacity="0.55"/>
+    </linearGradient>
+    <radialGradient id="bubble" cx="0.38" cy="0.35" r="0.65">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.85"/>
+      <stop offset="0.45" stop-color="#cdeeff" stop-opacity="0.3"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0.05"/>
+    </radialGradient>
+    <linearGradient id="hiTop" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.35"/>
+      <stop offset="0.15" stop-color="#ffffff" stop-opacity="0.05"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+    <clipPath id="bottleInterior">
+      <rect x="-30" y="8" width="60" height="504" rx="26" ry="26"/>
+    </clipPath>
+    <filter id="titleShadow" x="-20%" y="-20%" width="140%" height="160%">
+      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#06294a" flood-opacity="0.55"/>
+    </filter>
+  </defs>
+
+  <rect x="0" y="0" width="600" height="900" fill="url(#bgGrad)"/>
+
+  <circle cx="110" cy="120" r="180" fill="url(#glowA)"/>
+  <circle cx="520" cy="80" r="150" fill="url(#glowC)"/>
+  <circle cx="300" cy="40" r="200" fill="url(#glowC)"/>
+
+  <g fill="url(#bubble)">
+    <circle cx="70" cy="430" r="16"/>
+    <circle cx="540" cy="360" r="14"/>
+    <circle cx="120" cy="560" r="11"/>
+    <circle cx="500" cy="520" r="12"/>
+    <circle cx="300" cy="650" r="10"/>
+  </g>
+
+  <rect x="30" y="608" width="540" height="38" rx="19" ry="19" fill="url(#shelfGrad)" stroke="#bfe6ff" stroke-opacity="0.4" stroke-width="2"/>
+  <rect x="48" y="614" width="504" height="7" rx="3" ry="3" fill="#ffffff" fill-opacity="0.25"/>
+
+  <!-- 管1 cx=80 已完成红 -->
+  <g transform="translate(80,90)">
+    <rect x="-35" y="0" width="70" height="520" rx="30" ry="30" fill="url(#glassBody)" stroke="#dff3ff" stroke-opacity="0.55" stroke-width="2.5"/>
+    <rect x="-14" y="-40" width="28" height="46" rx="9" ry="9" fill="url(#glassBody)" stroke="#dff3ff" stroke-opacity="0.5" stroke-width="2"/>
+    <ellipse cx="0" cy="-40" rx="14" ry="5" fill="#0b609f" fill-opacity="0.55"/>
+    <g clip-path="url(#bottleInterior)">
+      <rect x="-30" y="8"   width="60" height="168" fill="#ff5d6c"/>
+      <rect x="-30" y="176" width="60" height="168" fill="#ff5d6c"/>
+      <rect x="-30" y="344" width="60" height="168" fill="#ff5d6c"/>
+      <rect x="-30" y="8"   width="60" height="168" fill="url(#hiTop)"/>
+      <rect x="-24" y="16" width="9" height="488" rx="4" fill="#ffffff" fill-opacity="0.22"/>
+      <circle cx="12" cy="380" r="5" fill="#ffffff" fill-opacity="0.35"/>
+    </g>
+  </g>
+
+  <!-- 管2 cx=190 混色（蓝→黄→绿） -->
+  <g transform="translate(190,90)">
+    <rect x="-35" y="0" width="70" height="520" rx="30" ry="30" fill="url(#glassBody)" stroke="#dff3ff" stroke-opacity="0.55" stroke-width="2.5"/>
+    <rect x="-14" y="-40" width="28" height="46" rx="9" ry="9" fill="url(#glassBody)" stroke="#dff3ff" stroke-opacity="0.5" stroke-width="2"/>
+    <ellipse cx="0" cy="-40" rx="14" ry="5" fill="#0b609f" fill-opacity="0.55"/>
+    <g clip-path="url(#bottleInterior)">
+      <rect x="-30" y="8"   width="60" height="168" fill="#3f8cff"/>
+      <rect x="-30" y="176" width="60" height="168" fill="#ffb648"/>
+      <rect x="-30" y="344" width="60" height="168" fill="#3ec46d"/>
+      <rect x="-30" y="8"   width="60" height="168" fill="url(#hiTop)"/>
+      <rect x="-24" y="16" width="9" height="488" rx="4" fill="#ffffff" fill-opacity="0.22"/>
+      <circle cx="10" cy="200" r="4" fill="#ffffff" fill-opacity="0.35"/>
+      <circle cx="-8" cy="420" r="5" fill="#ffffff" fill-opacity="0.3"/>
+    </g>
+    <path d="M0,-54 C6,-42 6,-35 0,-30 C-6,-35 -6,-42 0,-54 Z" fill="#3f8cff" fill-opacity="0.9"/>
+    <ellipse cx="0" cy="-21" rx="4" ry="6" fill="#3f8cff" fill-opacity="0.7"/>
+  </g>
+
+  <!-- 管3 cx=300 已完成紫 -->
+  <g transform="translate(300,90)">
+    <rect x="-35" y="0" width="70" height="520" rx="30" ry="30" fill="url(#glassBody)" stroke="#dff3ff" stroke-opacity="0.55" stroke-width="2.5"/>
+    <rect x="-14" y="-40" width="28" height="46" rx="9" ry="9" fill="url(#glassBody)" stroke="#dff3ff" stroke-opacity="0.5" stroke-width="2"/>
+    <ellipse cx="0" cy="-40" rx="14" ry="5" fill="#0b609f" fill-opacity="0.55"/>
+    <g clip-path="url(#bottleInterior)">
+      <rect x="-30" y="8"   width="60" height="168" fill="#9b6bf5"/>
+      <rect x="-30" y="176" width="60" height="168" fill="#9b6bf5"/>
+      <rect x="-30" y="344" width="60" height="168" fill="#9b6bf5"/>
+      <rect x="-30" y="8"   width="60" height="168" fill="url(#hiTop)"/>
+      <rect x="-24" y="16" width="9" height="488" rx="4" fill="#ffffff" fill-opacity="0.22"/>
+      <circle cx="12" cy="320" r="5" fill="#ffffff" fill-opacity="0.35"/>
+    </g>
+  </g>
+
+  <!-- 管4 cx=410 混色（红→粉→绿） -->
+  <g transform="translate(410,90)">
+    <rect x="-35" y="0" width="70" height="520" rx="30" ry="30" fill="url(#glassBody)" stroke="#dff3ff" stroke-opacity="0.55" stroke-width="2.5"/>
+    <rect x="-14" y="-40" width="28" height="46" rx="9" ry="9" fill="url(#glassBody)" stroke="#dff3ff" stroke-opacity="0.5" stroke-width="2"/>
+    <ellipse cx="0" cy="-40" rx="14" ry="5" fill="#0b609f" fill-opacity="0.55"/>
+    <g clip-path="url(#bottleInterior)">
+      <rect x="-30" y="8"   width="60" height="168" fill="#ff5d6c"/>
+      <rect x="-30" y="176" width="60" height="168" fill="#ff85c2"/>
+      <rect x="-30" y="344" width="60" height="168" fill="#3ec46d"/>
+      <rect x="-30" y="8"   width="60" height="168" fill="url(#hiTop)"/>
+      <rect x="-24" y="16" width="9" height="488" rx="4" fill="#ffffff" fill-opacity="0.22"/>
+      <circle cx="10" cy="240" r="4" fill="#ffffff" fill-opacity="0.4"/>
+      <circle cx="-8" cy="430" r="5" fill="#ffffff" fill-opacity="0.35"/>
+    </g>
+  </g>
+
+  <!-- 管5 cx=520 已完成蓝 -->
+  <g transform="translate(520,90)">
+    <rect x="-35" y="0" width="70" height="520" rx="30" ry="30" fill="url(#glassBody)" stroke="#dff3ff" stroke-opacity="0.55" stroke-width="2.5"/>
+    <rect x="-14" y="-40" width="28" height="46" rx="9" ry="9" fill="url(#glassBody)" stroke="#dff3ff" stroke-opacity="0.5" stroke-width="2"/>
+    <ellipse cx="0" cy="-40" rx="14" ry="5" fill="#0b609f" fill-opacity="0.55"/>
+    <g clip-path="url(#bottleInterior)">
+      <rect x="-30" y="8"   width="60" height="168" fill="#3f8cff"/>
+      <rect x="-30" y="176" width="60" height="168" fill="#3f8cff"/>
+      <rect x="-30" y="344" width="60" height="168" fill="#3f8cff"/>
+      <rect x="-30" y="8"   width="60" height="168" fill="url(#hiTop)"/>
+      <rect x="-24" y="16" width="9" height="488" rx="4" fill="#ffffff" fill-opacity="0.22"/>
+      <circle cx="12" cy="380" r="5" fill="#ffffff" fill-opacity="0.35"/>
+    </g>
+  </g>
+
+  <text x="300" y="800" text-anchor="middle"
+        font-family="'Microsoft YaHei','PingFang SC','Noto Sans SC',sans-serif"
+        font-size="72" font-weight="700"
+        fill="#ffffff" stroke="#06294a" stroke-width="5" paint-order="stroke"
+        letter-spacing="4" filter="url(#titleShadow)">解压水消除</text>
+</svg>
+</body>
+</html>

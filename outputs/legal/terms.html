@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>用户协议 · 解压水消除</title>
+<!--
+  ======================================================================
+  发布前配置（上线提示，可保留为公示信息或删除本注释）
+  ----------------------------------------------------------------------
+  本页只有两处需要你填写的占位符，均在本页顶部「发布信息」卡片中：
+    1) 【开发者名称】 —— 替换为你的开发者 / 主体名称
+    2) 【联系邮箱】     —— 替换为你的联系邮箱
+  除这两处外，全文已完整、可直接上线，无任何其他待填标记。
+  生效日期：2026-09-29   版本：v1.0
+  ======================================================================
+-->
+<style>
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: linear-gradient(180deg, #17a2e0 0%, #0b609f 100%);
+    background-attachment: fixed;
+    color: #eaf4ff;
+    font-family: "Microsoft YaHei", "PingFang SC", "Noto Sans SC", sans-serif;
+    font-size: 16px;
+    line-height: 1.75;
+    -webkit-font-smoothing: antialiased;
+  }
+  .container { max-width: 720px; margin: 0 auto; padding: 22px 16px 64px; }
+  header h1 {
+    font-size: 26px;
+    margin: 8px 0 4px;
+    letter-spacing: 1px;
+    text-shadow: 0 2px 8px rgba(0,0,0,0.25);
+  }
+  header .sub { font-size: 14px; opacity: 0.85; margin: 0 0 6px; }
+  .meta { font-size: 13px; opacity: 0.8; margin: 0 0 14px; }
+
+  .card {
+    background: rgba(255, 255, 255, 0.09);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 14px;
+    padding: 18px 20px;
+    margin: 14px 0;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+    -webkit-backdrop-filter: blur(3px);
+    backdrop-filter: blur(3px);
+  }
+  .card.config { background: rgba(255, 255, 255, 0.14); }
+  .config-title { font-size: 14px; font-weight: 700; margin: 0 0 8px; color: #fff; }
+  .config p { margin: 4px 0; font-size: 15px; }
+
+  nav.toc {
+    background: rgba(255, 255, 255, 0.07);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 14px;
+    padding: 14px 16px;
+    margin: 14px 0;
+  }
+  nav.toc .toc-title { font-size: 14px; font-weight: 700; margin: 0 0 8px; }
+  nav.toc a {
+    display: inline-block;
+    color: #cfeaff;
+    text-decoration: none;
+    margin: 4px 10px 4px 0;
+    padding: 3px 10px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.1);
+    font-size: 14px;
+  }
+  nav.toc a:hover { background: rgba(255, 255, 255, 0.22); }
+
+  section { scroll-margin-top: 16px; }
+  h2 {
+    font-size: 20px;
+    margin: 26px 0 10px;
+    padding-left: 12px;
+    border-left: 4px solid #9fd8ff;
+  }
+  h3 { font-size: 17px; margin: 16px 0 6px; color: #d8efff; }
+  p { margin: 10px 0; }
+  ul { margin: 10px 0; padding-left: 22px; }
+  li { margin: 6px 0; }
+  .hl { color: #ffe6a3; font-weight: 700; }
+  .note { font-size: 14px; opacity: 0.9; }
+  a.inline { color: #bfe3ff; }
+  footer { margin-top: 30px; font-size: 13px; opacity: 0.8; text-align: center; }
+  .footlink { color: #cfeaff; text-decoration: none; margin: 0 8px; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <header>
+    <h1>用户协议</h1>
+    <p class="sub">《解压水消除》（Water Sort Relax）</p>
+    <p class="meta">版本 v1.0　·　生效日期 2026-09-29</p>
+  </header>
+
+  <!-- 发布信息配置区：仅此处含两处占位符 -->
+  <div class="card config">
+    <p class="config-title">发布信息（上线后可直接保留为公示信息，或删除本卡片）</p>
+    <p>本协议由以下主体制定并负责：</p>
+    <p>开发者名称：【开发者名称】</p>
+    <p>联系邮箱：【联系邮箱】</p>
+  </div>
+
+  <nav class="toc" aria-label="章节导航">
+    <div class="toc-title">目录</div>
+    <a href="#service">一、服务说明</a>
+    <a href="#rules">二、使用规则</a>
+    <a href="#ip">三、知识产权</a>
+    <a href="#disclaimer">四、免责与责任限制</a>
+    <a href="#ads">五、广告说明</a>
+    <a href="#changes">六、协议变更</a>
+    <a href="#law">七、适用法律与争议解决</a>
+    <a href="#contact">八、联系方式</a>
+  </nav>
+
+  <section id="service">
+    <h2>一、服务说明</h2>
+    <div class="card">
+      <p>《解压水消除》（Water Sort Relax，以下简称"本游戏"或"本服务"）是一款单文件 HTML5 休闲益智小游戏，玩法是将彩色液体分装到对应的试管中，过程轻松解压。本游戏由本页顶部公示的开发者（以下简称"我们"）开发与运营。</p>
+      <p>本游戏为<strong>免费、无内购、无付费</strong>的娱乐产品，面向全年龄用户，不含社交、聊天、用户生成内容或任何付费项目。游戏本身可完全离线运行；只有在您主动选择观看广告时，才会因广告 SDK 产生联网。</p>
+      <p>我们保留在不违反本协议的前提下，对本游戏的功能、玩法、关卡等内容进行调整、优化或停服的权利。</p>
+    </div>
+  </section>
+
+  <section id="rules">
+    <h2>二、使用规则</h2>
+    <div class="card">
+      <p>您在使用本游戏时，承诺遵守以下规则。若违反，我们有权采取措施，包括但不限于限制相关功能：</p>
+      <ul>
+        <li><strong>不得破解、反编译或逆向工程：</strong>您不得对本游戏的单文件代码进行反编译、反向工程、破解、篡改，或试图提取、复制其底层逻辑与资源。</li>
+        <li><strong>不得恶意刷广告或利用漏洞：</strong>您不得通过频繁点击、借助工具、利用系统漏洞或其他非正常方式，反复触发广告或骗取广告奖励；插屏广告已被限制为单会话最多 1 次、冷却 300 秒，请正常使用。</li>
+        <li><strong>不得干扰游戏正常运行：</strong>您不得采用任何手段干扰、中断或破坏本游戏及其运行环境，不得对本游戏发动网络攻击或植入恶意代码。</li>
+        <li><strong>遵守法律法规：</strong>您不得将本游戏用于任何违反中华人民共和国法律法规或公序良俗的用途。</li>
+      </ul>
+    </div>
+  </section>
+
+  <section id="ip">
+    <h2>三、知识产权</h2>
+    <div class="card">
+      <p>本游戏及其包含的一切内容——包括但不限于游戏代码、玩法与关卡设计、界面布局、视觉表现，以及由 WebAudio 技术现场合成的音效——其全部知识产权均归开发者所有，或已获得合法授权。我们保留与上述知识产权相关的一切权利。</p>
+      <p>本游戏<strong>不含用户生成内容</strong>。您在使用本游戏过程中，不会也不获得对本游戏任何部分的复制、修改、分发、再许可或商业使用等权利。</p>
+      <p>未经我们书面许可，任何个人或单位不得擅自复制、传播、改编或用于商业目的。</p>
+    </div>
+  </section>
+
+  <section id="disclaimer">
+    <h2>四、免责与责任限制</h2>
+    <div class="card">
+      <p>本游戏按"<span class="hl">现状</span>"提供。在适用法律允许的最大范围内，我们不对以下情形承担责任：</p>
+      <ul>
+        <li>因网络、设备、浏览器兼容性或不可抗力导致您无法正常使用本游戏；</li>
+        <li>因您清除浏览器数据、卸载游戏或更换设备而导致的本地进度丢失（本地数据仅存于您的设备，需您自行注意备份）；</li>
+        <li>因使用本游戏产生的任何间接、附带、特殊或后果性损失；</li>
+        <li>广告内容由第三方（TapTap 广告 SDK）提供，我们不对广告的真实性、合法性、准确性或适用性作出保证，相关责任由广告提供方承担。</li>
+      </ul>
+      <p class="note">我们始终尽力提供稳定、健康的游戏体验，但请您理解，免费在线产品的服务存在客观限制。</p>
+    </div>
+  </section>
+
+  <section id="ads">
+    <h2>五、广告说明</h2>
+    <div class="card">
+      <p>为维持本游戏的免费运营，我们接入了 TapTap 广告 SDK。这是本游戏<strong>唯一的第三方交互</strong>，广告由 TapTap 小游戏运行环境注入的全局对象提供，我们仅调用它拉取以下两类广告：</p>
+      <ul>
+        <li><strong>激励视频广告：</strong>需要您主动点击才会触发，观看完成后您可获得游戏内的相应奖励。</li>
+        <li><strong>插屏广告：</strong>为不打扰您，我们将其频率限制为<strong>单个游戏会话最多 1 次</strong>，并设有 <strong>300 秒冷却时间</strong>。</li>
+      </ul>
+      <p>广告 SDK 可能会为广告投放、频次控制、反作弊等目的处理设备标识等信息，这部分行为按其自身官方隐私政策处理。广告位通过 TapTap 旗下的 Dirichlet 媒体平台配置与下发。如您不希望接收广告，可选择不点击观看；游戏核心玩法本身可完全离线、免费体验。</p>
+    </div>
+  </section>
+
+  <section id="changes">
+    <h2>六、协议变更</h2>
+    <div class="card">
+      <p>我们可能根据法律法规变化或产品运营需要，适时修改本协议。协议修改后，我们会在本页面公示更新后的版本（版本号与生效日期以页面标注为准）。</p>
+      <p>协议更新后，若您继续使用本游戏，即视为您理解并同意更新后的协议内容。</p>
+    </div>
+  </section>
+
+  <section id="law">
+    <h2>七、适用法律与争议解决</h2>
+    <div class="card">
+      <p>本协议的订立、效力、解释、履行及争议解决，均适用<strong>中华人民共和国法律</strong>。</p>
+      <p>因本协议或本游戏引起的、或与本协议或本游戏有关的任何争议，双方应首先友好协商解决；协商不成的，任何一方均可向有管辖权的人民法院提起诉讼。</p>
+    </div>
+  </section>
+
+  <section id="contact">
+    <h2>八、联系方式</h2>
+    <div class="card">
+      <p>如您对本协议或本游戏有任何疑问、意见或反馈，可通过<strong>本页顶部公示的开发者名称与联系邮箱</strong>与我们联系。</p>
+      <p class="note">我们会在合理时间内回复您的来信。</p>
+    </div>
+  </section>
+
+  <footer>
+    <p>《解压水消除》用户协议 · v1.0</p>
+    <p>
+      <a class="footlink" href="privacy.html">隐私政策</a>
+    </p>
+  </footer>
+
+</div>
+</body>
+</html>
