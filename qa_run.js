@@ -181,8 +181,8 @@ if (GATE) {
         : smokeRes.fails.slice(0, 2).join('；'));
   }
 
-  /* 按编号排一下：门禁表要能一眼从 G1 读到 G9，别让「后加的条件」插在中间 */
-  const ORDER = ['G1', 'G2', 'G2b', 'G3', 'G4', 'G5', 'G6', 'G7', 'G8a', 'G8b', 'G9'];
+  /* 按编号排一下：门禁表要能一眼从 G1 读到 G11，别让「后加的条件」插在中间 */
+  const ORDER = ['G1', 'G2', 'G2b', 'G3', 'G4', 'G5', 'G6', 'G6b', 'G7', 'G8a', 'G8b', 'G8c', 'G9', 'G10', 'G11'];
   gateItems.sort((a, b) => {
     const ia = ORDER.indexOf(a.id), ib = ORDER.indexOf(b.id);
     return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);

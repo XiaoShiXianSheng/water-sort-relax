@@ -7,8 +7,13 @@
  *   G4 ES5 合规            —— 老 WebView 语法报错 = 直接白屏，这条最容易在加功能时破
  *   G5 无外部依赖          —— 一旦混进外部 script/link/@import，离线打不开、CDN 挂了就白屏
  *   G6 1~40 关全部可解      —— 关卡表越界 / 生成器死锁，玩家卡在第 34 关就卸载
+ *   G6b 面板显示的每一关都能玩 —— 面板按 LV_PER_PAGE × LV_PAGES 显示（当前 90 关），
+ *                                G6/G7 只盯 1~40，第 41~90 关点得开但没有测试管
  *   G7 机器人 1~40 关全通   —— 「保证不卡死」这个卖点的独立证明（用真机器人打，不是自检）
  *   G8 线上字节与本地一致   —— 踩过：改了主文件忘了同步发布目录，线上一直停在旧版
+ *   G11 出厂广告位 ID 已填   —— 踩过同类事故（env='test' → 真机跑模拟广告、零收益且不报错）；
+ *                                adUnitId 被清空是它的孪生形态，而 qa_biz 里恰好有一条
+ *                                「没有 adUnitId 必须降级」的用例会**故意**清空它 → 套件里永远查不出
  *
  * G4 的实现要点（别简化）：必须先剥掉**注释、字符串、正则字面量**再扫语法。
  * 直接 grep `const` / `=>` 会被注释里的中文说明和 `// {units:[...]}` 这种注释骗到，
@@ -228,6 +233,27 @@ function fetchLive(url, depth) {
       bad.length ? bad.join('、') : '1 个内联 <script>，0 个 src/link/@import/url(http)');
   }
 
+  /* ---- G11 出厂广告位 ID 必须已填（静默零收益的孪生形态）----
+     2026-09-29 真出过事故：CFG.env 是 'test' → 真机跑**模拟广告**（点一下直接发奖、
+     根本不请求广告平台）→ 一个广告费都收不到，而且**不报任何错**，游戏照常玩。
+     adUnitId 被清空是同一类事故的另一半：env 仍是 'online'，但 AdService.init() 会
+     自动降级成 test(no-ad-unit-id) → 又是静默零收益。
+     为什么套件里查不出来：qa_biz 恰好有一条「没有 adUnitId 时必须降级成 test」的用例，
+     它会**故意**把 adUnitId 清空 —— 于是「出厂 adUnitId 是空的」这件事永远见不到红。
+     所以必须静态扫**交付文件本身**，且先 stripLits 再匹配（否则被注释掉的配置也能骗过这条）。 */
+  if (html) {
+    const mAd = html.match(/adUnit\s*:\s*\{\s*rewarded\s*:\s*'([^']*)'\s*,\s*interstitial\s*:\s*'([^']*)'\s*\}/);
+    const notCommentedOut = !!stripped && /adUnit\s*:\s*\{/.test(stripped);
+    const looksPlaceholder = v => !v || /^\s*$/.test(v) || /^x+$/i.test(v) || /^(todo|tbd|test|your|待填|填)/i.test(v);
+    const rw = mAd ? mAd[1] : '', it2 = mAd ? mAd[2] : '';
+    const ok11 = !!mAd && notCommentedOut && !looksPlaceholder(rw) && !looksPlaceholder(it2);
+    item('G11', '出厂广告位 ID 已填（两个都非空且没被注释掉；空了会静默降级成模拟广告 = 零收益）', ok11,
+      !mAd ? '源码里找不到 `adUnit:{rewarded:…,interstitial:…}` 这段配置 —— 配置块被删/改名了，按不许上线处理'
+        : !notCommentedOut ? 'adUnit 配置被**注释掉了**（剥掉注释后扫不到）→ 真机会静默降级成模拟广告'
+          : ok11 ? '激励视频 ' + rw + ' / 插屏 ' + it2 + '　（⚠ 平台侧仍需确认推广位属性为「正式」）'
+            : '有 ID 是空的或仍是占位符：rewarded=`' + rw + '` / interstitial=`' + it2 + '`');
+  }
+
   /* ---- G6 1~40 关全部可解 + 水量守恒 ---- */
   try {
     const { loadGame } = require('./qa_lib.js');
@@ -259,6 +285,58 @@ function fetchLive(url, depth) {
       || '40 关 × ' + SOLVE_REPS + ' 次，全部通过剥落式自检且水量守恒');
   } catch (e) {
     item('G6', '1~40 关全部可解', false, '执行异常：' + (e && e.message));
+  }
+
+  /* ---- G6b 选关面板显示多少关，就必须有多少关能玩 ----
+     为什么单开一条：选关面板按 LV_PER_PAGE × LV_PAGES 渲染（当前 30×3 = 90 关），
+     面板上第 41~90 关是**真的能被手指点到**的；而 G6 与 G7 只覆盖 1~40 关。
+     一旦生成器在高关位出问题（数组越界、关卡表被写死、高关不可解），
+     玩家点开一个开不起来（或必输）的关，现有测试**一条都不会红** —— 典型的门禁盲区。
+     实现上：常量**从源码读**，不硬编码 90。面板改了，门禁自动跟着走，避免两处口径漂移。 */
+  let panelN = 0;
+  try {
+    /* 两个常量分别解析（而不是钉死「var A=x, B=y;」这一种写法），
+       但值必须是**紧跟分隔符的纯数字字面量** —— 写成 `LV_PAGES=1+2` 这种表达式时
+       宁可报「读不到」也不去猜：门禁一旦猜错就会少测几十关，而它自己看不出来。
+       「读不到」按不许上线处理（没验证 ≠ 通过），跟 --no-live 那一条一个道理。 */
+    const gpA = html ? html.match(/\bLV_PER_PAGE\s*=\s*(\d+)\s*[,;]/) : null;
+    const gpB = html ? html.match(/\bLV_PAGES\s*=\s*(\d+)\s*[,;]/) : null;
+    if (!gpA || !gpB) {
+      item('G6b', '选关面板显示的每一关都能生成且可解（关数从源码读）', false,
+        '读不到 `LV_PER_PAGE` / `LV_PAGES` 的数字字面量（' + (gpA ? '' : 'LV_PER_PAGE 缺; ') + (gpB ? '' : 'LV_PAGES 缺; ')
+        + '）—— 常量改名 / 删掉 / 写成表达式了？请同步更新这条断言，否则等于放弃这条门禁，按不许上线处理');
+    } else {
+      panelN = (+gpA[1]) * (+gpB[1]);
+      const { loadGame } = require('./qa_lib.js');
+      const g2 = loadGame({});
+      g2.frames(3);
+      const D2 = g2.DBG;
+      const bad2 = [];
+      let maxCells = 0, maxBottles = 0;
+      for (let lv = 1; lv <= panelN; lv++) {
+        try {
+          D2.gen(lv);
+          /* 与 G6 同样的规矩：在 gen 之后、frames 之前采（走完帧状态会被主循环改掉） */
+          if (!D2.layoutSolvable()) bad2.push('L' + lv + ' 不可解');
+          const G2 = D2.G;
+          let water = 0; G2.tubes.forEach(t => t.units.forEach(() => water++));
+          const cap = G2.bottles.length * 3;
+          if (water !== cap) bad2.push('L' + lv + ' 水' + water + '≠容量' + cap);
+          if (G2.state !== 'play') bad2.push('L' + lv + ' 生成后state=' + G2.state);
+          G2.bottles.forEach(b => {
+            if (b.cell < 0 || b.cell >= G2.cellCount) bad2.push('L' + lv + ' 瓶落在格' + b.cell + '（共' + G2.cellCount + '格）');
+          });
+          maxCells = Math.max(maxCells, G2.cellCount);
+          maxBottles = Math.max(maxBottles, G2.bottles.length);
+        } catch (e) { bad2.push('L' + lv + ' 抛错 ' + (e && e.message)); }
+      }
+      item('G6b', '选关面板显示的每一关都能生成且可解（面板 ' + gpA[1] + '×' + gpB[1] + ' = ' + panelN + ' 关）',
+        bad2.length === 0,
+        bad2.length ? '共 ' + bad2.length + ' 处：' + [...new Set(bad2)].slice(0, 6).join('、')
+          : '1~' + panelN + ' 关逐关生成通过（最大 ' + maxCells + ' 格 / ' + maxBottles + ' 瓶），可解性与水量守恒全过');
+    }
+  } catch (e) {
+    item('G6b', '选关面板显示的每一关都能生成且可解', false, '执行异常：' + (e && e.message));
   }
 
   /* ---- G8a 所有发布副本都必须与主文件逐字节一致 ---- */

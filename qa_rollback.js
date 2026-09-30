@@ -593,6 +593,44 @@ const CASES = [
     suite: 'qa_design.js', expect: /中期货架阶梯硬钉死/,
     find: 'else if(lv<=15){pc=6;pr=3;}',
     repl: 'else if(lv<=15){pc=5;pr=3;}   /* rollback-test */'
+  },
+
+  /* ---------- 2026-09-30 05:00 档新增：两条门禁（G6b 面板关数全覆盖 / G11 广告位已填）----------
+     这两条补的都是「**套件里永远查不出来**」的盲区，所以每条都必须自己证明有牙齿。 */
+  {
+    /* 门禁 G11。为什么套件里查不出：qa_biz 有一条「没有 adUnitId 时必须降级成 test」的用例，
+       它会**故意**把 adUnitId 清空 —— 于是「出厂 adUnitId 是空的」这件事永远见不到红。
+       真实后果与 env='test' 那次一模一样：真机静默降级成模拟广告，零收益且不报错。 */
+    name: '门禁 G11：出厂激励视频 adUnitId 被清空（真机静默降级成模拟广告 = 零收益且不报错）',
+    suite: 'qa_gate.js', expect: /仍是占位符/,
+    find: "adUnit:{rewarded:'1067564',interstitial:'1067565'},",
+    repl: "adUnit:{rewarded:'',interstitial:'1067565'},   /* rollback-test: 清空一个 ID */"
+  },
+  {
+    /* 同一条门禁的第二种形态：配置**还在**、只是被注释掉了。
+       如果 G11 只在原始文本上 grep，注释掉的配置照样能骗过它 —— 所以实现里先 stripLits。 */
+    name: '门禁 G11：adUnit 配置被整行注释掉（raw 文本里 grep 得到，剥掉注释后其实没生效）',
+    suite: 'qa_gate.js', expect: /剥掉注释后扫不到/,
+    find: "adUnit:{rewarded:'1067564',interstitial:'1067565'},",
+    repl: "// adUnit:{rewarded:'1067564',interstitial:'1067565'},   /* rollback-test: 注释掉配置 */"
+  },
+  {
+    /* 门禁 G6b 的独立效力：把「第 41 关之后生成出来的状态」改脏。
+       注意 G6 只覆盖 1~40 关 —— 这条改坏 G6 完全看不见（它照样全绿），
+       只有 G6b 会红。这正是它存在的理由：选关面板上 41~90 关是真的能点到的。 */
+    name: '门禁 G6b：第 41 关之后生成出的状态不是 play（G6 只测 1~40，看不见）',
+    suite: 'qa_gate.js', expect: /\[G6b\]/,
+    find: "  G.state='play';",
+    repl: "  G.state='play';\n  if(lv>40)G.state='win';   /* rollback-test: 模拟高关位关卡表写坏 */"
+  },
+  {
+    /* 同一条门禁的第二种形态：面板关数常量读不出来时**必须报错**，不能静默按小数字跑。
+       用 `2+1` 而不是 `4`：值其实还是 3，游戏本体完全正常 ——
+       这条验的就是「读不到就说读不到，不许猜」（没验证 ≠ 通过）。 */
+    name: '门禁 G6b：面板关数常量写成表达式（读不到就必须报错，不许猜着往下跑）',
+    suite: 'qa_gate.js', expect: /读不到/,
+    find: 'var LV_PER_PAGE=30, LV_PAGES=3;',
+    repl: 'var LV_PER_PAGE=30, LV_PAGES=2+1;   /* rollback-test: 值仍是 3，但断言读不出来 */'
   }
 ];
 
