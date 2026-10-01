@@ -224,8 +224,8 @@ if (GATE) {
       : '标题页→第 1 关=' + e2.titleToPlay + '　点瓶子上台面=' + e2.bottleMoved
         + '　canvas 在视口原点=' + e2.rectAtOrigin + '　输入通道=' + e2.inputPath);
 
-  /* 按编号排一下：门禁表要能一眼从 G1 读到 G13，别让「后加的条件」插在中间 */
-  const ORDER = ['G1', 'G2', 'G2b', 'G3', 'G4', 'G5', 'G6', 'G6b', 'G7', 'G8a', 'G8b', 'G8c', 'G9', 'G10', 'G11', 'G12', 'G13'];
+  /* 按编号排一下：门禁表要能一眼从 G1 读到 G14，别让「后加的条件」插在中间 */
+  const ORDER = ['G1', 'G2', 'G2b', 'G3', 'G4', 'G5', 'G14', 'G6', 'G6b', 'G7', 'G8a', 'G8b', 'G8c', 'G9', 'G10', 'G11', 'G12', 'G13'];
   gateItems.sort((a, b) => {
     const ia = ORDER.indexOf(a.id), ib = ORDER.indexOf(b.id);
     return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);

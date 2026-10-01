@@ -6,6 +6,11 @@
  *   G3 单文件 < 200KB      —— 交付形态不能退化（零依赖、一个文件拿走就能用）
  *   G4 ES5 合规            —— 老 WebView 语法报错 = 直接白屏，这条最容易在加功能时破
  *   G5 无外部依赖          —— 一旦混进外部 script/link/@import，离线打不开、CDN 挂了就白屏
+ *   G14 ES5 运行期兼容      —— G4 只查**语法**（箭头函数 / let / 模板串）。但 `Promise`、`new Map()`、
+ *                               `Object.assign`、`Array.from`、`Number.isInteger`、`.includes(` 这些
+ *                               **语法完全合法**，在老 WebView 里却是 `undefined is not a function`
+ *                               → 整页白屏，而语法检查**永远看不见**。README 里「兼容老 WebView」
+ *                               这句承诺，只有这条在守。
  *   G6 1~40 关全部可解      —— 关卡表越界 / 生成器死锁，玩家卡在第 34 关就卸载
  *   G6b 面板显示的每一关都能玩 —— 面板按 LV_PER_PAGE × LV_PAGES 显示（当前 90 关），
  *                                G6/G7 只盯 1~40，第 41~90 关点得开但没有测试管
@@ -235,6 +240,48 @@ function fetchLive(url, depth) {
     if (scripts !== 1) bad.push('<script> 块有 ' + scripts + ' 个（应为 1）');
     item('G5', '无外部依赖（自包含单文件）', bad.length === 0,
       bad.length ? bad.join('、') : '1 个内联 <script>，0 个 src/link/@import/url(http)');
+  }
+
+  /* ---- G14 ES5 运行期兼容：不许调用 ES6+ 的**内置 API** ----
+     为什么 G4 之后还要单开一条：G4 查的是**语法**（`=>` / `let` / `const` / 模板串 / 展开 …），
+     它挡不住"合法的 ES5 语法 + 老 WebView 里不存在的内置对象"这种组合：
+     `Promise.resolve()`、`new Map()`、`Object.assign()`、`Array.from()`、`Number.isInteger()`、
+     `'a'.includes('a')`、`'a'.padStart(2)`、`Math.trunc()` —— 语法一律合法，一跑就
+     `TypeError: undefined is not a function`，整个 <script> 挂掉 → **白屏**。
+     README 里写着「纯 ES5（兼容老 WebView）」，这条就是给那句话配的哨兵。
+
+     ★ 名单只收**绝无歧义**的内置成员，宁可漏收也不误判：
+       `\.fill\(` 绝对不能进名单 —— Canvas 的 `ctx.fill()` 长这样，
+       第一版一刀切收进去，扫描立刻报 71 处"违规"，全是画布填充（59 × ctx + 2 × 别名）。
+       同理 `\.find(` / `\.repeat(` 也排除：卡牌/动画代码里一个自定义 helper 就叫这名，
+       假警报比漏收更贵 —— 门禁一旦会误报，人就不信它了（同 §9.1「性能为什么没进门禁」）。 */
+  const ES6_RUNTIME = [
+    ['`Promise`（老 WebView 没有）', /\bPromise\b/],
+    ['`new Map/Set/WeakMap/WeakSet`', /\bnew\s+(?:Map|Set|WeakMap|WeakSet)\s*\(/],
+    ['`Symbol`', /\bSymbol\b/],
+    ['`Proxy` / `Reflect`', /\bProxy\b|\bReflect\./],
+    ['`globalThis`', /\bglobalThis\b/],
+    ['`Object.assign/entries/values/fromEntries/is`', /Object\.(?:assign|entries|values|fromEntries|is)\s*\(/],
+    ['`Array.from/of`', /Array\.(?:from|of)\s*\(/],
+    ['`Number.isInteger/isSafeInteger/isFinite/isNaN/parseFloat/parseInt`',
+      /Number\.(?:isInteger|isSafeInteger|isFinite|isNaN|parseFloat|parseInt)\b/],
+    ['`Math.trunc/hypot/sign/cbrt/fround/imul/log2/log10/expm1/log1p/clz32`',
+      /Math\.(?:trunc|hypot|sign|cbrt|fround|imul|log2|log10|expm1|log1p|clz32)\s*\(/],
+    ['`.includes(`（ES2016）', /\.includes\s*\(/],
+    ['`.padStart/` `.padEnd(`', /\.pad(?:Start|End)\s*\(/],
+    ['`.startsWith(` / `.endsWith(`', /\.(?:startsWith|endsWith)\s*\(/]
+  ];
+  if (stripped) {
+    const badR = [];
+    ES6_RUNTIME.forEach(p => {
+      const a = stripped.match(new RegExp(p[1].source, 'g'));
+      if (a) badR.push(p[0] + ' ×' + a.length);
+    });
+    item('G14', 'ES5 运行期兼容：代码里没有 ES6+ 内置 API（语法合法但老 WebView 里 undefined → 白屏）',
+      badR.length === 0,
+      badR.length
+        ? '命中 ' + badR.join('、') + '　→ 老 WebView 会在这一行抛 TypeError，整个 <script> 挂掉 = 白屏；请改用 ES5 等价写法（或自己补 polyfill）'
+        : '扫过 ' + (stripped.length / 1024).toFixed(0) + 'KB 纯代码：Promise / Map / Symbol / Proxy / Object.assign / Array.from / Number.is* / Math.trunc* / .includes( / .padStart( / .startsWith( 全部 0 命中');
   }
 
   /* ---- G11 出厂广告位 ID 必须已填（静默零收益的孪生形态）----

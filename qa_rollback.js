@@ -465,7 +465,13 @@ const CASES = [
 
   /* ---------- 09-29 02:00 档新增的 7 条设计不变量，逐条做回滚验证 ----------
      每条都刻意挑「只让这一条红」的改法（除了注明交叉的那条），
-     否则分不清哪条断言真有独立效力。 */
+     否则分不清哪条断言真有独立效力。
+     ⚠ 2026-10-02 05:00：这 7 条里有 5 条的 `find` 锚点是 **V4.x 的 STAGE_CURVE 原文**
+     （`cols:[7,8], rows:[5,6]` 这类），V6.0/V6.1 把曲线重做后就再也匹配不上了 ——
+     全量跑一遍立刻暴露成「**原文片段出现 0 次**」而非「改坏了却没 FAIL」。
+     ★ 教训：**回滚用例的锚点会随产品曲线重做而过期，而且过期是静默的**（单跑不会发现）。
+     已按 V6.2 的 `STAGE_CURVE` 重新锚定，并把 `expect` 里写死的版本号（`V6.0 阶段阶梯硬钉死`）
+     改成不带版本号的 `/阶段阶梯硬钉死/` —— 断言名字里带版本前缀时，**永远不要去匹配那个前缀**。 */
   {
     name: '入门正式 4~8 关：冰冻上限被抬到 3（新手段一次撞两种新干扰）',
     suite: 'qa_design.js', expect: /入门正式 4~8 关/,
@@ -473,10 +479,10 @@ const CASES = [
     repl: 'colors:[4,6],   tubes:[5,8],   gates:[0,2], ice:[0,3]   /* rollback-test */'
   },
   {
-    name: '高密度阶段被压小（第 25 关格数不再落在 48 格的设计目标上）',
-    suite: 'qa_design.js', expect: /V6.0 阶段阶梯硬钉死/,
-    find: 'cols:[7,8], rows:[5,6]',
-    repl: 'cols:[7,7], rows:[5,5]   /* rollback-test */'
+    name: '高密度阶段被压小（第 25 关格数不再落在 45 格的设计目标上）',
+    suite: 'qa_design.js', expect: /阶段阶梯硬钉死/,
+    find: 'cols:[7,9],   rows:[5,5]',
+    repl: 'cols:[7,7],   rows:[5,5]   /* rollback-test */'
   },
   {
     name: 'levelPlan：困难档一档就交掉 2 个台面槽（槽位递进超出「每档 −1」）',
@@ -504,8 +510,8 @@ const CASES = [
   },
   {
     name: '高密度阶段 slotBias 反向放大（「台面槽 − 颜色数」不再单调不增）',
-    suite: 'qa_design.js', expect: /普通档「台面槽 − 颜色数」随关卡单调不增/,
-    find: 'gates:[3,4], ice:[2,4], slotBias:1}',
+    suite: 'qa_design.js', expect: /台面槽 − 颜色数」随关卡单调不增/,
+    find: 'gates:[3,4], ice:[2,4], slotBias:0}',
     repl: 'gates:[3,4], ice:[2,4], slotBias:3}   /* rollback-test */'
   },
   /* ---------- 05:00 档新增 G9「真浏览器启动冒烟」的三条回滚用例 ----------
@@ -577,7 +583,7 @@ const CASES = [
   {
     name: 'levelPlan：高密度阶段行数起点被压到 3（第 15→16 关格数跳 14 个 = 曲线断崖）',
     suite: 'qa_design.js', expect: /难度参数逐关不跳变/,
-    find: 'rows:[5,6], colors:[9,12]',
+    find: 'rows:[5,5], colors:[9,12]',
     repl: 'rows:[3,6], colors:[9,12]   /* rollback-test */'
   },
   {
@@ -589,8 +595,8 @@ const CASES = [
   {
     name: 'levelPlan：正式挑战阶段门洞与冰冻同时归零（后半程变纯送分的无干扰局）',
     suite: 'qa_design.js', expect: /第 9 关起干扰不许归零/,
-    find: 'gates:[2,3], ice:[1,2], slotBias:1}',
-    repl: 'gates:[0,0], ice:[0,0], slotBias:1}   /* rollback-test */'
+    find: 'gates:[2,3], ice:[1,2], slotBias:0}',
+    repl: 'gates:[0,0], ice:[0,0], slotBias:0}   /* rollback-test */'
   },
   {
     name: 'tubeCountFor：管数一律多加 3 根（第 1 关的管只剩 4 层水 —— 短短一截很难看）',
@@ -608,9 +614,9 @@ const CASES = [
     /* 这条刻意选「plan 和实际一起改」的改法：格数断言拿实际比计划，两边一起变小是查不出的，
        只有硬编码绝对值的「中期货架阶梯」能抓到 —— 与稳态货架那条是同一个道理。 */
     name: '正式挑战阶段列数被压到 5（第 15 关格数不再落在 35 格的设计目标上）',
-    suite: 'qa_design.js', expect: /V6.0 阶段阶梯硬钉死/,
-    find: 'cols:[5,7], rows:[4,5]',
-    repl: 'cols:[5,5], rows:[4,5]   /* rollback-test */'
+    suite: 'qa_design.js', expect: /阶段阶梯硬钉死/,
+    find: 'cols:[5,7],   rows:[4,5]',
+    repl: 'cols:[5,5],   rows:[4,5]   /* rollback-test */'
   },
 
   /* ---------- 2026-09-30 05:00 档新增：两条门禁（G6b 面板关数全覆盖 / G11 广告位已填）----------
@@ -649,6 +655,31 @@ const CASES = [
     suite: 'qa_gate.js', expect: /读不到/,
     find: 'var LV_PER_PAGE=30, LV_PAGES=3;',
     repl: 'var LV_PER_PAGE=30, LV_PAGES=2+1;   /* rollback-test: 值仍是 3，但断言读不出来 */'
+  },
+
+  /* ---------- 2026-10-02 05:00 档新增：门禁 G14（ES5 运行期兼容）----------
+     G14 补的是 G4 的**姊妹盲区**：G4 只认语法（=> / let / const / 模板串），
+     而「语法完全合法、老 WebView 里却根本没有」的内置对象，它一个都看不见 ——
+     Promise / new Map() / Object.assign / Array.from / .includes( 一跑就是
+     `TypeError: undefined is not a function`，整个 script 挂掉 = 白屏。
+     两条用例刻意取「静态成员」与「原型方法」两种形态，证明名单两类都在守。 */
+  {
+    /* 形态①：静态成员（Promise）。注意注入的这段**是合法 ES5 语法** ——
+       G4 因此仍然全绿，只有 G14 会红：这就是它相对 G4 的独立效力（不是搭便车）。 */
+    name: '门禁 G14：注入 Promise（ES5 语法合法 → G4 看不见；老 WebView 里 undefined → 白屏）',
+    suite: 'qa_gate.js', expect: /\[G14\]/,
+    find: 'var CFG={',
+    repl: 'var CFG={\n  _rbEs6:Promise.resolve(),   /* rollback-test: ES5 语法 + ES6 内置对象 */'
+  },
+  {
+    /* 形态②：原型方法（.includes）。与形态①互不覆盖 ——
+       只拿 Promise 验过，说明不了「.includes( 也在名单里」。
+       取名也刻意避开 `.fill(`：那个名字属于 Canvas（ctx.fill()），永远不许进名单。 */
+    name: '门禁 G14：字符串 .includes(（ES2016 原型方法，老 WebView 无）',
+    suite: 'qa_gate.js', expect: /\[G14\]/,
+    find: 'function clamp(v,lo,hi){ return v<lo?lo:(v>hi?hi:v); }',
+    repl: 'function clamp(v,lo,hi){ return v<lo?lo:(v>hi?hi:v); }\n'
+      + 'function _rbInc(s,c){ return s.includes(c); }   /* rollback-test: .includes 是 ES2016 */'
   },
 
   /* ---------- 2026-10-01 02:00 档新增：7 条「设计不变量」断言，逐条做回滚验证 ----------
