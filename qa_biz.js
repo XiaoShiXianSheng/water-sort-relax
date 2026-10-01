@@ -352,11 +352,11 @@ guard(rep, '单局规模', function () {
     badConserve.slice(0, 5).map(function (r) { return 'L' + r.lv; }).join(' '));
 
   const CV = D.CURVE;
-  const cellsCap = 54, bottleCap = 70;
+  const cellsCap = 55, bottleCap = 70;
   const maxCells = Math.max.apply(null, rows.map(function (r) { return r.cells; }));
   const maxBottles = Math.max.apply(null, rows.map(function (r) { return r.bottles; }));
-  rep.ok('单局棋盘封顶 ' + cellsCap + ' 格（V6.0 的 9×6 硬上限）', maxCells <= cellsCap, '最大 ' + maxCells);
-  rep.ok('单局瓶子封顶 ' + bottleCap + ' 瓶（54 格 + 门洞最多多塞 16 瓶）', maxBottles <= bottleCap, '最大 ' + maxBottles);
+  rep.ok('单局棋盘封顶 ' + cellsCap + ' 格（V6.1 的 11×5 硬上限）', maxCells <= cellsCap, '最大 ' + maxCells);
+  rep.ok('单局瓶子封顶 ' + bottleCap + ' 瓶（55 格 + 门洞最多多塞 16 瓶）', maxBottles <= bottleCap, '最大 ' + maxBottles);
   rep.ok('单局水量封顶 ≤ ' + (bottleCap * 3) + ' 杯',
     Math.max.apply(null, rows.map(function (r) { return r.water; })) <= bottleCap * 3);
 

@@ -1,5 +1,5 @@
 {
-  "at": "2026-10-01T11:23:46.203Z",
+  "at": "2026-10-01T16:02:00.027Z",
   "green": true,
   "gate": null,
   "total": {
@@ -14,7 +14,7 @@
       "pass": 171,
       "fail": 0,
       "warn": 0,
-      "ms": 4394,
+      "ms": 1119,
       "fails": [],
       "warns": [],
       "unstable": false
@@ -25,7 +25,7 @@
       "pass": 74,
       "fail": 0,
       "warn": 0,
-      "ms": 1369,
+      "ms": 307,
       "fails": [],
       "warns": [],
       "unstable": false
@@ -36,7 +36,7 @@
       "pass": 31,
       "fail": 0,
       "warn": 0,
-      "ms": 585,
+      "ms": 108,
       "fails": [],
       "warns": [],
       "unstable": false
@@ -47,7 +47,7 @@
       "pass": 66,
       "fail": 0,
       "warn": 0,
-      "ms": 2040,
+      "ms": 521,
       "fails": [],
       "warns": [],
       "unstable": false
@@ -58,7 +58,7 @@
       "pass": 14,
       "fail": 0,
       "warn": 0,
-      "ms": 730,
+      "ms": 97,
       "fails": [],
       "warns": [],
       "unstable": false
@@ -69,7 +69,7 @@
       "pass": 98,
       "fail": 0,
       "warn": 0,
-      "ms": 5329,
+      "ms": 1609,
       "fails": [],
       "warns": [],
       "unstable": false
@@ -80,7 +80,7 @@
       "pass": 30,
       "fail": 0,
       "warn": 0,
-      "ms": 71598,
+      "ms": 21298,
       "fails": [],
       "warns": [],
       "unstable": false,

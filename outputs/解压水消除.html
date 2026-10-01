@@ -59,16 +59,22 @@ function showFatal(msg){
 }
 window.onerror=function(m,s,l,c,e){if(!fatalShown){fatalShown=true;showFatal((e&&e.stack)||(m+' @'+l+':'+c));}return false;};
 window.addEventListener('unhandledrejection',function(e){if(!fatalShown){fatalShown=true;showFatal('PROMISE '+((e.reason&&e.reason.stack)||e.reason));}});
-/* V6.0：调色板从 6 色扩到 20 色（实际用到 18，留 2 个余量）。
-   依据：难度路线要求「颜色」成为真实的决策变量 —— 9~15 关 6~9 色、16~25 关 9~12 色、
-   极限 14~16 色、极限+ 16~18 色。6 色调色板直接把这个维度封死了（曲线再怎么改也涨不上去）。
+/* V6.1：调色板 20 色（实际用到 17，SLOT_CAP=17 决定，留 3 个余量）。
    选色标准：先按色相环均匀铺开（红→蓝→绿→橙→紫→粉→青→黄绿），
-   再用「明度差」补足同色相区域 —— 第 9~16 号是低明度组（深棕/灰蓝/深紫/深绿），
-   第 17~20 号是极端明度组（深酒红/藏青/米金/冰白），保证 18 色同屏也不撞。 */
+   再用「明度差」补足同色相区域。V6.0 的问题：后期深紫#4b2e83/深绿#1f9d55/深红#7a1f1f
+   与早期基础紫#9b6bf5/绿#3ec46d/红#ff5d6c 明度太近，17 色同屏时肉眼分不清。
+   V6.1 改法（颜色只是标签，重排不影响可解性逻辑）：
+     · 主动色 0~12 保持不变（早期关卡就常驻的基础色相）；
+     · 后期极端明度组 13~16 改成「黑 / 白 / 深红 / 深藏青」四个与基础色拉开明度的锚点：
+       黑#2b2b33（L≈18%）、纯白#ffffff（L≈100%，替代旧冰白#f2f2f2——在半透明白瓶身上更跳）、
+       深红#7a1f1f（L≈30%，远离亮红 L68%）、深藏青#0d2b6b（L≈22%，远离亮蓝 L62%）；
+     · 旧的近邻深色（灰蓝/深紫/深绿）下沉到 17~19 号作余量，不再进入 17 色实战池 ——
+       等于直接把「深蓝vs蓝、深紫vs紫、深绿vs绿」的混淆对从实战里拿掉。
+   配色自检：黑#2b2b33 与灰蓝#7f8c99(L60%) 明度差充足；纯白#ffffff 与木托盘/瓶底也不会糊。 */
 var COLORS=['#ff5d6c','#3f8cff','#3ec46d','#ffb648','#9b6bf5','#ff85c2',
             '#29c7d6','#c6d92e','#ff7a1a','#8b5e3c','#00a0a0','#b0308f',
-            '#f2e34c','#7f8c99','#4b2e83','#1f9d55','#7a1f1f','#0a3d91',
-            '#e6c8a0','#f2f2f2'];
+            '#f2e34c','#2b2b33','#ffffff','#7a1f1f','#0d2b6b',
+            '#7f8c99','#4b2e83','#1f9d55'];
 var URL_LVL=0;
 try{ var _m=((window.location&&window.location.search)||'').match(/[?&]lvl=(\d+)/); URL_LVL=_m?parseInt(_m[1],10)||0:0; }catch(e){}
 function clamp(v,a,b){return v<a?a:(v>b?b:v);}
@@ -110,7 +116,7 @@ var GRID_Y0=766;      // 底部货架起始 y（实际用 G.gridY0，会按行�
                       // （瓶盖顶 = 格子上沿 + tile/2 + 11 - bh），而台面瓶子的刻度格下沿在
                       // SLOT_Y+38 = 738。766 让所有 3~5 行的组合都留出 ≥7px 空隙，
                       // 不会出现「货架瓶盖顶到台面刻度」这种层叠感。
-var GX=10, GY=12;     // 货架格子间距（压小间距，把省下的空间让给格子本身）
+var GX=8, GY=12;      // 货架格子间距（V6.1：GX 10→8，把省下的横向空间让给格子本身，配合 11 列铺满屏幕）
 var GRID_ROWS=3;      // 货架固定 3 行（列数按瓶子数自算）
 var TOOL_Y=1176, TOOL_H=96, TOOL_W=130, TOOL_GAP=10, TOOL_X0=85;   // 4 个按钮居中（去掉假分享后重新居中）
 var TOOLBS=[
@@ -673,14 +679,16 @@ var STAGE_CURVE=[
      【连续性铁律】每个阶段的「起点值」= 上一阶段的「终点值」——
      上一版阶段表各写各的 [from,to]，结果每跨一次阶段边界都出现一次「回退」
      （L15 密度 98.1 → L16 89.7），玩家感受就是「打到新阶段反而变简单」。
-     现在 from 一律等于上一段的 to，阶段名只是标签，难度曲线本身是连续的。 */
-  {to:3,  name:'教学',     cols:[3,3], rows:[3,3], colors:[3,4],   tubes:[4,5],   gates:[0,0], ice:[0,0], slotBias:2},
-  {to:8,  name:'入门正式', cols:[3,5], rows:[3,4], colors:[4,6],   tubes:[5,8],   gates:[0,2], ice:[0,1], slotBias:2},
-  {to:15, name:'正式挑战', cols:[5,7], rows:[4,5], colors:[6,9],   tubes:[8,12],  gates:[2,3], ice:[1,2], slotBias:1},
-  {to:25, name:'高密度',   cols:[7,8], rows:[5,6], colors:[9,12],  tubes:[12,15], gates:[3,4], ice:[2,4], slotBias:1},
-  {to:40, name:'困难',     cols:[8,9], rows:[6,6], colors:[12,14], tubes:[15,17], gates:[4,5], ice:[4,5], slotBias:1},
-  {to:60, name:'极限',     cols:[9,9], rows:[6,6], colors:[14,16], tubes:[17,17], gates:[5,6], ice:[5,6], slotBias:0},
-  {to:90, name:'极限+',    cols:[9,9], rows:[6,6], colors:[16,17], tubes:[17,17], gates:[6,8], ice:[6,8], slotBias:0}
+     现在 from 一律等于上一段的 to，阶段名只是标签，难度曲线本身是连续的。
+     V6.1：晚段把「9×6」加宽成「11×5」——同样 55 格，棋盘更宽、左右贴边铺满屏幕；
+     格数仍单调不减（45→50→55→55），不增加操作量（水总量守住 ≤210 红线）。 */
+  {to:3,  name:'教学',     cols:[3,3],   rows:[3,3], colors:[3,4],   tubes:[4,5],   gates:[0,0], ice:[0,0], slotBias:2},
+  {to:8,  name:'入门正式', cols:[3,5],   rows:[3,4], colors:[4,6],   tubes:[5,8],   gates:[0,2], ice:[0,1], slotBias:2},
+  {to:15, name:'正式挑战', cols:[5,7],   rows:[4,5], colors:[6,9],   tubes:[8,12],  gates:[2,3], ice:[1,2], slotBias:1},
+  {to:25, name:'高密度',   cols:[7,9],   rows:[5,5], colors:[9,12],  tubes:[12,15], gates:[3,4], ice:[2,4], slotBias:1},
+  {to:40, name:'困难',     cols:[9,10],  rows:[5,5], colors:[12,14], tubes:[15,17], gates:[4,5], ice:[4,5], slotBias:1},
+  {to:60, name:'极限',     cols:[10,11], rows:[5,5], colors:[14,16], tubes:[17,17], gates:[5,6], ice:[5,6], slotBias:0},
+  {to:90, name:'极限+',    cols:[11,11], rows:[5,5], colors:[16,17], tubes:[17,17], gates:[6,8], ice:[6,8], slotBias:0}
 ];
 /* 颜色数上限 17 不是随手写的：普通档必须满足「台面槽 ≥ 颜色数」（每种颜色都要有接水工位），
    而 SLOT_CAP=17 —— 18 色就意味着有效空槽 − 颜色数 = −2。
@@ -688,7 +696,7 @@ var STAGE_CURVE=[
    晚局真实的难度增量改由 门洞 6→8、冰冻 6→8 提供（都是纯思考量，不增加操作时长）。 */
 var TUBE_MIN_W=34;          // 水管最小宽度（再窄在手机上点不准；layoutAll 按它反推水管的物理上限）
 var GRID_MAX_ROWS=6;        // 货架行数硬上限：6 行时 tile≈64；7 行掉到 55、8 行掉到 47（触控变差）
-var GRID_MAX_COLS=9;        // 货架列数硬上限：9 列时 cell 宽 66px
+var GRID_MAX_COLS=11;       // 货架列数硬上限：V6.1 9→11，配合边距压缩让底部横向铺满（11 列时 tile≈55，瓶子≈41px）
 var SLOT_CAP=17;            // 台面槽上限（再多一排瓶子就挤成一条线）
 var GATE_CAP=8, ICE_CAP=8;
 /* 单局预估操作数上限：**按关卡分段**，不再是一个写死的数。
@@ -1083,8 +1091,9 @@ function layoutAll(){
   // 底部货架：行数固定 3 行，列数在 genLevel 里按瓶子数算好（rowLen）。
   // 注意：格子归属与行长度只在 genLevel 里定一次，这里绝不重排 —— 否则撤销会把格子位置打乱
   var rows=G.gridRows||GRID_ROWS, maxRow=G.gridCols||3;
-  /* 左右各留 40（原来是 72，白白浪费）；格子上限从 112 放宽到 190，让格子尽量撑满可用空间 */
-  var tileW=Math.floor((VW-40-(maxRow-1)*GX)/maxRow);
+  /* V6.1：左右边距从 40 压到 28（各 14px），配合 11 列 / GX=8 让货架横向铺满；
+     格子上限从 112 放宽到 190，让格子尽量撑满可用空间 */
+  var tileW=Math.floor((VW-28-(maxRow-1)*GX)/maxRow);
   var availH=(TOOL_Y-12)-GRID_Y0;
   var tileH=Math.floor((availH-(rows-1)*GY)/rows);
   var tile=Math.max(46,Math.min(190,tileW,tileH));
