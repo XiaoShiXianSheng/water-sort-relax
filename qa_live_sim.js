@@ -44,7 +44,7 @@ const LIVE_URL = (process.env.SIM_URL || 'https://water-sort-relax.app.workbuddy
 const CHROME = process.env.CHROME || 'C:/Program Files/Google/Chrome/Application/chrome.exe';
 const W = +(process.env.SIM_W || 360), H = +(process.env.SIM_H || 640);
 const OUT = process.env.SIM_OUT || '_sim_live.json';
-const EXPECT_VERSION = process.env.SIM_VERSION || '6.0.0';
+const EXPECT_VERSION = process.env.SIM_VERSION || '6.2.0';
 const t0 = Date.now();
 const checks = [];
 const fails = [];
@@ -422,11 +422,11 @@ const BENCH = [
   const live = await fetchLive();
   console.log('  线上：' + live.buf.length + ' B / md5 ' + live.md5);
   check('线上可取回且非空', live.buf.length > 10000, live.buf.length + ' B');
-  if (!/version:'6\.0\.0'/.test(live.buf.toString('utf8'))) {
+  if (!new RegExp("version:'" + EXPECT_VERSION.replace(/\./g, '\\.') + "'").test(live.buf.toString('utf8'))) {
     const m = live.buf.toString('utf8').match(/version:'([0-9.]+)'/);
     check('线上主文件就是 V6.0 字节', false, '实际 version=' + (m ? m[1] : '未找到'));
   } else {
-    check('线上主文件就是 V6.0 字节', true, '含 version:' + EXPECT_VERSION);
+    check('线上主文件就是 V' + EXPECT_VERSION + ' 字节', true, '含 version:' + EXPECT_VERSION);
   }
 
   let htmlStr = null;
