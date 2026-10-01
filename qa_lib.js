@@ -62,6 +62,11 @@ const INJECT = `window.__DBG={
   totalStars:totalStars, tierUnlocked:tierUnlocked, starsOf:starsOf,
   startDaily:startDaily, dateKey:dateKey, dailySeed:dailySeed, dailyDoneToday:dailyDoneToday,
   enterFail:enterFail, doRevive:doRevive, hasLegalDecision:hasLegalDecision, boardPlayable:boardPlayable,
+  /* 2026-10-01 23:00 档补：把此前「零测试引用」的四组机制暴露出来
+     —— 存档续玩 / 复活兜底阶梯 / 撤销额度与栈上限 / 台面账目自洽。 */
+  startFromTitle:startFromTitle, goHome:goHome, TITLE_UI:TITLE_UI,
+  rescueGrant:rescueGrant, addUndo:addUndo,
+  counterCount:counterCount, openSlotCount:openSlotCount, clearTargetExists:clearTargetExists,
   /* FIX-04：软提示按钮 + 失败面板撤销按钮（绘制与命中必须共用 hintRects） */
   FAIL_OPTS:FAIL_OPTS, hintRects:hintRects, hintHit:hintHit, hintTap:hintTap,
   hintOpts:hintOpts, hintAction:hintAction,
