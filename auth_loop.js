@@ -40,21 +40,27 @@ function oneRound(i) {
     const f = fs.openSync(path.join(ROOT, '_auth_round.tmp'), 'w');
     const p = spawn(EXE, [CLI, 'auth', 'login'], { stdio: ['ignore', f, f] });
 
-    // 给 CLI 6 秒把 device code 打出来
-    setTimeout(() => {
+    // 轮询拿码：固定等 6 秒不够——网络慢时 CLI 还没把 device code 打出来，
+    // 实测 14 轮里有 7 轮空手而归（日志"没拿到码"）。改成最多等 40 秒，1 秒一探。
+    let waited = 0;
+    const tick = setInterval(() => {
       let t = '';
       try { t = fs.readFileSync(path.join(ROOT, '_auth_round.tmp'), 'utf8'); } catch (e) {}
       const m = t.match(/user_code=([A-Za-z0-9]+)/);
-      if (m) {
+      if (!m) {
+        waited += 1000;
+        if (waited >= 40000) { clearInterval(tick); say('第 ' + i + ' 轮  40 秒内没拿到码，跳过'); }
+        return;
+      }
+      clearInterval(tick);
+      {
         const url = 'https://accounts.taptap.cn/device?qrcode=1&user_code=' + m[1];
         try { fs.unlinkSync(QR); } catch (e) {}
         const q = spawnSync(EXE, [CLI, 'auth', 'qrcode', url, '--output', '_taptap_auth_qr.png', '--size', '512'], { cwd: ROOT, encoding: 'utf8' });
         fs.writeFileSync(TXT, url + '\n（约 5 分钟有效，过期会被本脚本自动换成新码）\nuser_code=' + m[1] + '\n');
         say('第 ' + i + ' 轮  新码 ' + m[1] + (q.status === 0 ? '（二维码已更新）' : '（二维码生成失败：' + ((q.stdout || '') + (q.stderr || '')).trim() + '）'));
-      } else {
-        say('第 ' + i + ' 轮  没拿到码：' + t.trim());
       }
-    }, 6000);
+    }, 1000);
 
     // 这一轮结束（成功或超时）后收尾
     p.on('exit', () => {
