@@ -682,11 +682,11 @@ var STAGE_CURVE=[
      现在 from 一律等于上一段的 to，阶段名只是标签，难度曲线本身是连续的。
      V6.1：晚段把「9×6」加宽成「11×5」——同样 55 格，棋盘更宽、左右贴边铺满屏幕；
      格数仍单调不减（45→50→55→55），不增加操作量（水总量守住 ≤210 红线）。 */
-  {to:3,  name:'教学',     cols:[3,3],   rows:[3,3], colors:[3,4],   tubes:[4,5],   gates:[0,0], ice:[0,0], slotBias:2},
-  {to:8,  name:'入门正式', cols:[3,5],   rows:[3,4], colors:[4,6],   tubes:[5,8],   gates:[0,2], ice:[0,1], slotBias:2},
-  {to:15, name:'正式挑战', cols:[5,7],   rows:[4,5], colors:[6,9],   tubes:[8,12],  gates:[2,3], ice:[1,2], slotBias:1},
-  {to:25, name:'高密度',   cols:[7,9],   rows:[5,5], colors:[9,12],  tubes:[12,15], gates:[3,4], ice:[2,4], slotBias:1},
-  {to:40, name:'困难',     cols:[9,10],  rows:[5,5], colors:[12,14], tubes:[15,17], gates:[4,5], ice:[4,5], slotBias:1},
+  {to:3,  name:'教学',     cols:[3,3],   rows:[3,3], colors:[3,4],   tubes:[4,5],   gates:[0,0], ice:[0,0], slotBias:0},
+  {to:8,  name:'入门正式', cols:[3,5],   rows:[3,4], colors:[4,6],   tubes:[5,8],   gates:[0,2], ice:[0,1], slotBias:0},
+  {to:15, name:'正式挑战', cols:[5,7],   rows:[4,5], colors:[6,9],   tubes:[8,12],  gates:[2,3], ice:[1,2], slotBias:0},
+  {to:25, name:'高密度',   cols:[7,9],   rows:[5,5], colors:[9,12],  tubes:[12,15], gates:[3,4], ice:[2,4], slotBias:0},
+  {to:40, name:'困难',     cols:[9,10],  rows:[5,5], colors:[12,14], tubes:[15,17], gates:[4,5], ice:[4,5], slotBias:0},
   {to:60, name:'极限',     cols:[10,11], rows:[5,5], colors:[14,16], tubes:[17,17], gates:[5,6], ice:[5,6], slotBias:0},
   {to:90, name:'极限+',    cols:[11,11], rows:[5,5], colors:[16,17], tubes:[17,17], gates:[6,8], ice:[6,8], slotBias:0}
 ];
@@ -760,7 +760,10 @@ function levelPlan(lv,tier){
     ice   -=Math.ceil(ice  *0.60*kk);
     slotBias+=kk;                      // 热身把退路变宽
   }
-  /* ---- 正档 = 玩家自选的挑战：只调约束，不动棋盘 ---- */
+  /* ---- 正档 = 玩家自选的挑战：只调约束，不动棋盘 ----
+     V6.2：slotBias 全线归 0 后，挑战档继续按「槽每档 −1」收紧（eff −1→−2→−3）。
+     这是受控实验已验收的挑战难度区间（设计测试守住 eff ≥ −3），且为玩家主动选择的硬核档；
+     普通档（绝大多数玩家）停在 eff=−1 的可解地板上。 */
   if(tier>=1){ slotBias-=1; if(lv>=6)gates+=1; }
   if(tier>=2){ slotBias-=1; gates+=1; ice+=1; }
   /* ---- 插值之后逐项夹到合法范围（这里是唯一允许出现数字上限的地方） ---- */
@@ -781,7 +784,9 @@ function levelPlan(lv,tier){
     cells=cols*rows;
   }
   cells=cols*rows;
-  /* ---- 台面槽：有效空槽 − 颜色数 = slotBias（受控实验给出的难度开关） ---- */
+  /* ---- 台面槽：有效空槽 − 颜色数 = slotBias（受控实验给出的难度开关） ----
+     V6.2：slotBias 全线归 0，普通档 slots=colors（eff=−1，受控实验「可解但偏难」地板）；
+     挑战档按 tier 每档再 −1（eff −2/−3，已由设计测试守住的硬核区间）。 */
   var slots=clamp(colors+slotBias,5,SLOT_CAP);
   /* ---- 决策密度分：颜色 / 门洞 / 冰冻 / 水管 / 格数 / 空间压力 的加权 ---- */
   var slotPressure=Math.max(0,colors-(slots-1));
