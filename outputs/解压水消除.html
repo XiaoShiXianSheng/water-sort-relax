@@ -59,7 +59,16 @@ function showFatal(msg){
 }
 window.onerror=function(m,s,l,c,e){if(!fatalShown){fatalShown=true;showFatal((e&&e.stack)||(m+' @'+l+':'+c));}return false;};
 window.addEventListener('unhandledrejection',function(e){if(!fatalShown){fatalShown=true;showFatal('PROMISE '+((e.reason&&e.reason.stack)||e.reason));}});
-var COLORS=['#ff5d6c','#3f8cff','#3ec46d','#ffb648','#9b6bf5','#ff85c2'];
+/* V6.0：调色板从 6 色扩到 20 色（实际用到 18，留 2 个余量）。
+   依据：难度路线要求「颜色」成为真实的决策变量 —— 9~15 关 6~9 色、16~25 关 9~12 色、
+   极限 14~16 色、极限+ 16~18 色。6 色调色板直接把这个维度封死了（曲线再怎么改也涨不上去）。
+   选色标准：先按色相环均匀铺开（红→蓝→绿→橙→紫→粉→青→黄绿），
+   再用「明度差」补足同色相区域 —— 第 9~16 号是低明度组（深棕/灰蓝/深紫/深绿），
+   第 17~20 号是极端明度组（深酒红/藏青/米金/冰白），保证 18 色同屏也不撞。 */
+var COLORS=['#ff5d6c','#3f8cff','#3ec46d','#ffb648','#9b6bf5','#ff85c2',
+            '#29c7d6','#c6d92e','#ff7a1a','#8b5e3c','#00a0a0','#b0308f',
+            '#f2e34c','#7f8c99','#4b2e83','#1f9d55','#7a1f1f','#0a3d91',
+            '#e6c8a0','#f2f2f2'];
 var URL_LVL=0;
 try{ var _m=((window.location&&window.location.search)||'').match(/[?&]lvl=(\d+)/); URL_LVL=_m?parseInt(_m[1],10)||0:0; }catch(e){}
 function clamp(v,a,b){return v<a?a:(v>b?b:v);}
@@ -93,6 +102,8 @@ var BOTT_Y=470;       // 水管底部基准线（底对齐；水多时向上溢�
 var TUBE_CUT_Y=110;   // 水柱顶到这条线以上 = 顶部出画面：管口改平口，超出部分交给顶部渐隐
 var TUBE_FADE_H=160;  // 顶部渐隐遮罩的高度（0 → 160 由不透明渐变到全透明）
 var TUBE_W=92; // 兼容保留（实际用 G.tubeW）
+var TUBE_GAP_MIN=6;   // 高关卡水管变多时的最小管间距（与 TUBE_MIN_W 一起决定「最多能排几根管」）
+var TUBE_MIN_W=34;    // 水管最小宽度：再窄在手机上就点不准了（tubeCountFor 按它反推根数上限）
 var SLOT_Y=700;       // 台面表面（瓶底）
 var GRID_Y0=766;      // 底部货架起始 y（实际用 G.gridY0，会按行数垂直居中）
                       // 766 不是拍脑袋：货架瓶子的**瓶盖**画在「格子上沿上方约 17px」
@@ -132,7 +143,7 @@ function toolX(i){return TOOL_X0+i*(TOOL_W+TOOL_GAP);}
    adUnitId 为空时（尚未在开发者中心开通广告）会自动降级为 TEST，流程绝不被卡死。 */
 
 var CFG={
-  version:'4.0.0',                         // 对外版本号：随每条埋点上报，出事时能区分线上跑的是哪一版
+  version:'6.0.0',                         // 对外版本号：随每条埋点上报，出事时能区分线上跑的是哪一版
   env:'online',                            // 'online'(默认：真机有 tap 就真实拉广告) | 'test'(模拟完成，供开发/自动化测试)
                                            // 自动降级：无 window.tap → test(no-tap-runtime)；无 adUnitId → test(no-ad-unit-id)。
                                            // 所以本地浏览器/Node 测试环境永远是 test，真机永远走 online，不需要手动改代码。
@@ -145,7 +156,20 @@ var CFG={
   reviveLimit:2,                           // 每局广告复活次数上限
   adFailFallback:'free',                   // 广告拉取失败降级：'free'(放行一次救援，不卡流程) | 'none'(只提示)
   trackUrl:'',                             // 埋点上报地址（留空 = 只写本地缓冲，便于离线核对）
-  trackLocalCap:80                         // 本地最多保留多少条事件
+  trackLocalCap:80,                        // 本地最多保留多少条事件
+
+  /* ---------- V6.0 §五-A：回归热身 + 递进挑战（留存机制，不是降难度开关） ----------
+     要解决的问题：玩家隔一段时间回来，直接撞上自己上次的最高难度 → 被劝退。
+     做法：**保留关卡进度不动**，只在「本次挑战」这一层从低难度档位重新起步，
+     连续成功后在同一关内逐档把难度加回去。
+     口径上的硬区分（测试第 7 条要验的就是这个）：
+       · 关卡进度（Store.level / Store.data.maxLevel）—— 只增不减，热身绝不碰它；
+       · 本次挑战档位（Store.data.warmTier）—— 可以低于 0，是「这一局重开在哪个档」。
+     全部参数化：改默认值不需要动玩法代码，「几天」也不写死（阈值按秒算）。 */
+  returnWarmupEnabled:true,                // 总开关；关掉后行为与 V4.0 完全一致
+  returnWarmupInactivityThreshold:12*3600, // 多久没打开算「一段时间的回归用户」（秒；默认 12 小时）
+  returnWarmupStartTier:-2,                // 回归后本次挑战从哪一档起步（-2 = 热身1，比正常档低两档）
+  returnWarmupRampStep:1                   // 每次成功后难度回升几档（回到 0 = 正常档即结束热身）
 };
 try{
   // ?ad=online / ?env=online 可强制线上环境（真机验证用）；?ad=test 强制测试环境
@@ -155,12 +179,20 @@ try{
 }catch(e){}
 
 /* ---------- 本地存档（localStorage + 校验和 + 版本迁移 + 损坏重建） ---------- */
-var SAVE_KEY='wsr_save_v1', SAVE_VER=1;
+var SAVE_KEY='wsr_save_v1', SAVE_VER=2;    // v2：新增 V6.0 回归热身字段（maxLevel/lastPlayed/warm*）
 var Store={
   data:null,
   blank:function(){
     return {v:SAVE_VER,level:1,tiers:{},stars:{},tools:{clear:0,finger:0,swap:0},undo:0,
-            daily:{date:'',done:0,stars:0},tut:0,firstOpen:'',lastOpen:'',sessions:0,wins:0,failFallback:0};
+            daily:{date:'',done:0,stars:0},tut:0,firstOpen:'',lastOpen:'',sessions:0,wins:0,failFallback:0,
+            /* V6.0 §五-A：最高关卡 / 最近游玩时间 / 本次挑战档位 —— 三件必须分开存，
+               否则「热身」与「进度」会互相污染（测试第 7、8 条就是验这个）。 */
+            maxLevel:1,        // 最高关卡：玩家到达过的最高关，只增不减
+            lastPlayed:0,      // 最近游玩时间：epoch 毫秒；改存档里任何东西都会刷新它
+            warmActive:0,      // 本次会话是否处于「回归热身」
+            warmTier:0,        // 本次挑战难度档位（<0 = 热身档；0 = 正常档）
+            warmLevel:1,       // 热身绑定在哪一关（换关即失效，防蹭热身）
+            warmWins:0};       // 热身里连续成功次数（用于逐档回升的观测与埋点）
   },
   hash:function(s){                 // djb2×33：够用且零依赖（不需要 CRC 库）
     var h=5381;
@@ -193,6 +225,16 @@ var Store={
     if(!d.tiers||typeof d.tiers!=='object')d.tiers={};
     if(!(d.level>=1))d.level=1;
     if(!(d.tut>=0))d.tut=0;
+    /* V6.0：新字段的类型守卫 —— 存档被手改/被旧版本写坏时不能把游戏带崩。
+       maxLevel 必须 ≥ level-1（level 是「已解锁的下一关」，maxLevel 是「到达过的最高关」）。 */
+    if(!(typeof d.maxLevel==='number'&&isFinite(d.maxLevel)&&d.maxLevel>=1))d.maxLevel=d.level;
+    if(d.maxLevel<d.level)d.maxLevel=d.level;
+    if(!(typeof d.lastPlayed==='number'&&isFinite(d.lastPlayed)&&d.lastPlayed>=0))d.lastPlayed=0;
+    if(!(typeof d.warmTier==='number'&&isFinite(d.warmTier)))d.warmTier=0;
+    if(d.warmTier>0)d.warmTier=0;                       // 热身档位只允许 ≤0（>0 是玩家自己选的挑战档）
+    if(!(typeof d.warmLevel==='number'&&isFinite(d.warmLevel)&&d.warmLevel>=1))d.warmLevel=d.level;
+    if(!(typeof d.warmWins==='number'&&isFinite(d.warmWins)&&d.warmWins>=0))d.warmWins=0;
+    d.warmActive=d.warmActive?1:0;
     d.v=SAVE_VER;                                       // 版本升级：补齐字段后统一打新版本号
     return d;
   },
@@ -213,6 +255,87 @@ var Store={
   get:function(k,def){ try{ var v=Store.data[k]; return v===undefined?def:v; }catch(e){ return def; } },
   reset:function(){ Store.data=Store.blank(); Store.save(); }
 };
+
+/* ================= V6.0 §五-A：回归热身 + 递进挑战 =================
+   一句话：**进度不动，只把「这一局用什么难度」降下来，再一档一档加回去。**
+   它与「关卡进度」严格分工 —— 下面所有函数都不写 Store.level / Store.data.maxLevel。
+
+   档位取值约定（同一根数轴，负数是热身）：
+     -2 热身1 ｜ -1 热身2 ｜ 0 正常 ｜ 1 困难 ｜ 2 极限
+   热身只在 ≤0 的区间里爬，爬到 0 就结束（之后 1/2 档是玩家自己在结算页选的挑战档）。
+*/
+function nowMs(){ try{ return (new Date()).getTime(); }catch(e){ return 0; } }
+function idleSeconds(){
+  try{
+    var last=Store.get('lastPlayed',0)||0;
+    if(!(last>0))return 0;
+    return Math.max(0,(nowMs()-last)/1000);
+  }catch(e){ return 0; }
+}
+/* 本次挑战档位：只有「回归用户 + 热身仍绑在当前这一关」时才非 0。 */
+function resolveChallengeTier(lv){
+  try{
+    if(!CFG.returnWarmupEnabled)return 0;
+    var d=Store.data; if(!d||!d.warmActive)return 0;
+    if((d.warmLevel|0)!==(lv|0))return 0;      // 玩家已经换关了 → 热身对它不适用
+    var t=d.warmTier|0;
+    if(t>0)t=0;                                // 热身只允许 ≤0
+    return t;
+  }catch(e){ return 0; }
+}
+/* 本局是否处于热身（给 UI / 埋点用） */
+function inWarmup(lv){
+  try{ return !!(CFG.returnWarmupEnabled&&Store.data&&Store.data.warmActive&&
+    (Store.data.warmLevel|0)===(lv|0)&&(Store.data.warmTier|0)<0); }catch(e){ return false; }
+}
+/* 会话启动时判定「是不是回归用户」。
+   ★ 已处于热身中的会话不重置档位 —— 否则每天回来都被打回最低档，热身永远走不完。 */
+function warmupOnBoot(){
+  try{
+    var d=Store.data;
+    if(!d)return null;
+    var started=null;
+    if(CFG.returnWarmupEnabled&&!d.warmActive){
+      var idle=idleSeconds();
+      if(Store.get('lastPlayed',0)>0&&idle>=CFG.returnWarmupInactivityThreshold){
+        d.warmActive=1;
+        d.warmTier=CFG.returnWarmupStartTier|0;
+        d.warmLevel=Store.get('level',1)||1;
+        d.warmWins=0;
+        started={idleSec:Math.round(idle),tier:d.warmTier,level:d.warmLevel};
+        Track.log('warmup_start',{idleSec:Math.round(idle),tier:d.warmTier,level:d.warmLevel});
+      }
+    }
+    Store.set('lastPlayed',nowMs());
+    return started;
+  }catch(e){ return null; }
+}
+/* 通关一次后把热身档位往上推一档：热身1 → 热身2 → 正常（到 0 即结束热身）。
+   返回新档位；不在热身里返回 null。失败不惩罚（这正是「降低回归门槛」的本意）。
+   ★ 同时把热身「绑到新的一关」：热身是跟着玩家往前走的一条坡道，不是锁死在某一张图上。
+     不搬 warmLevel 的话，第 15 关热完身、进度推到 16 关，resolveChallengeTier(16) 会因为
+     warmLevel 还停在 15 而直接返回 0 —— 「热身1 → 热身2 → 正常」在第二关就断了。 */
+function advanceWarmup(){
+  try{
+    var d=Store.data;
+    if(!d||!d.warmActive)return null;
+    d.warmWins=(d.warmWins|0)+1;
+    var t=(d.warmTier|0)+(CFG.returnWarmupRampStep||1);
+    if(t>=0){ t=0; d.warmActive=0; }
+    d.warmTier=t;
+    if(d.warmActive)d.warmLevel=(Store.get('level',d.warmLevel)|0)||d.warmLevel;
+    Track.log('warmup_advance',{tier:t,warm:d.warmActive?'1':'0',wins:d.warmWins,level:d.warmLevel});
+    Store.save();
+    return t;
+  }catch(e){ return null; }
+}
+/* 热身档位的人话名字（结算页/HUD 用） */
+function tierLabel(t){
+  t=t|0;
+  if(t<=-2)return '热身1';
+  if(t===-1)return '热身2';
+  return TIER_NAME[t]||'普通';
+}
 
 /* ---------- 最小埋点（10+ 事件，永不抛错，绝不阻塞游戏） ---------- */
 var Track={
@@ -472,6 +595,8 @@ var G={
      所以开局永远不会出现「空格子」（门洞里多塞的瓶子共用一格，行数就用 3 行补回来） */
   rowLen:[], rowBase:[], cellR:[], cellC:[],
   gridRows:3, gridCols:3, gridY0:GRID_Y0, tile:100, cellCount:0, uh:36,
+  /* V6.0：这些尺寸不再写死，由 layoutAll 按「本关有几根管 / 几个槽」反算 */
+  tubeW:92, tubeGap:32, slotStep:112, jw:76, jh:86, trayRx:50,
   undoLeft:5, unlockLeft:1,
   tools:{clear:1,finger:1,swap:1},
   mode:null, swapFirst:-1,   // null|'clear'|'swap'
@@ -503,86 +628,179 @@ var flying=[];        // 消除时的飞出特效（纯视觉，不占状态机�
 
 /* ================= 关卡生成 ================= */
 function shuffle(a){for(var i=a.length-1;i>0;i--){var j=(Math.random()*(i+1))|0,t=a[i];a[i]=a[j];a[j]=t;}return a;}
-/* ---- 关卡规划 V2：决策密度优先，不再单纯扩棋盘（V4.0 §5 / §6 / §8） ----------
-   ① 1~3 关（教学期）：3 色 / 9 格 / 无门洞无冰冻 / 5 槽 —— 只教玩法，不制造困惑。
-   ② 4~8 关（过渡期）：逐步加复杂度（第 6 关起入门洞、第 7 关起入冰冻），
-      但颜色不猛加（最多 4 色）、干扰一次只加一种，保留「新手友好」。
-   ③ 9 关以后（决策密度期）：靠「变量组合」变难 ——
-      颜色数 / 门洞 / 冰冻 / 台面槽（空间约束）/ 管数 一起动；
-      **格数封顶 26**（原来一路涨到 35）。封顶的直接收益：水量与步数下降，
-      单局时长从「第 30 关近 9~10 分钟」回落到 2~5 分钟区间。
-   ④ 波浪保留（每 5 关一个峰值、峰值后两关放水），但峰值靠决策密度变难，
-      不再靠砍槽位制造「难上加难」的叠加惩罚。
-   ⑤ tier 递进挑战：0 普通 / 1 困难 / 2 极限 —— 同一关只调约束、不加美术：
-      困难 = 少 1 个台面槽 + 多 1 个门洞；极限 = 再少 1 槽 + 再加门洞/冰冻。
-   ⑥ density 是「决策密度」量化分（不是容量分），供自动化测试断言「难度真的在涨」。 */
+/* ================= 关卡规划 V6.0：分阶段难度路线 =================
+
+   [为什么要重做] V4.0 的曲线在 9 关以后把格数封顶 26、颜色封顶 6、水管封顶 7，
+   结果第 24 关起**所有参数完全触顶**：面板写着 90 关，25~90 关只是同一套参数的
+   不同布局（实测 L45/L60/L75/L90/L91 逐字相同）。难度上限被自己钉死了。
+
+   [表里给的是区间，不是硬编码] 每个阶段按「关内进度 k∈[0,1]」在区间里插值取整：
+     阶段      关卡     水管      颜色      底部空间
+     教学      1-3     4-5       3-4      小(3×3)
+     入门正式   4-8     6-8       4-6      ~5×4
+     正式挑战   9-15    8-12      6-9      ~7×5
+     高密度    16-25   12-15     9-12      ~8×6
+     困难      26-40   15-17     12-14     ~9×6
+     极限      41-60   17-19     14-15     ~9×6
+     极限+     61-90   19-20     15-16     ~9×6
+   ⚠ 相邻阶段的区间端点刻意接上（入门从 6 管起 = 教学校顶的 5+1），
+     所以整条曲线逐关只涨不回落 —— 这条由测试断言守着。
+
+   [三道校准，顺序固定，任何一条不过就回退，绝不硬塞]
+     ① 货架放得下：tile ≥ 46（≈25pt 触控下限，见 layoutAll）→ 行数硬上限 6
+     ② 台面槽够用：有效空槽 − 颜色数 ∈ [−1, +1]（受控实验给出的「难度开关」）
+     ③ 单局操作量：预估玩家操作数 ≤ MOVE_BUDGET → 超了先削行、再削列
+
+   [为什么不是 V6.0 表里的 9×8] 9 列 × 8 行 = 72 瓶，再加门洞多塞 ≈ 82 瓶 →
+   预估 190 次操作（≈6.3 分钟）、tile 掉到 42（≈19pt，低于触控下限）。
+   V6.0 自己写了「不允许机械硬编码 / 必须以实际可玩性、可解性和决策密度校准」，
+   所以这里把压迫感做在**颜色与水管密度**（真正增加同时可选项与前瞻长度）上，
+   而不是继续堆操作量 —— 加格子加的是操作量，不是思考深度，这是本项目踩过的老坑。
+
+   [波浪] 每 5 关一个周期、周期末为峰值关。只对第 9 关以后生效（教学/入门刻意平缓）：
+   峰值 +1 门洞；放水 −1 门洞（冰冻 >1 时再 −1）。峰谷差距很小，保证「逐关只涨不跌」。
+
+   [tier 两套轴，互不干扰]
+     · 负档（−1 / −2）= 回归热身档：**允许缩小棋盘**（行数、颜色、水管一起降）——
+       因为它的产品目的就是「回来先轻松找回手感」（V6.0 §五-A）。
+     · 正档（1 / 2）= 玩家自选的困难/极限：只调约束（槽位/门洞/冰冻），
+       格数、颜色数、水管数三档完全一致 —— 不然挑战档就变成「换个更大的盘多玩 3 分钟」。
+
+   [decisionDensityScore] 只由「生成期可确定的决策变量」加权得到，不含求解器结果；
+   求解器口径（最优/平均步数、可选动作数、最长前瞻链）由 dbg_diff.js 单独量并写进报告。 */
+var STAGE_CURVE=[
+  /* to = 该阶段最后一关；slotBias = 有效空槽 − 颜色数 的目标值（受控实验的难度开关）
+     【连续性铁律】每个阶段的「起点值」= 上一阶段的「终点值」——
+     上一版阶段表各写各的 [from,to]，结果每跨一次阶段边界都出现一次「回退」
+     （L15 密度 98.1 → L16 89.7），玩家感受就是「打到新阶段反而变简单」。
+     现在 from 一律等于上一段的 to，阶段名只是标签，难度曲线本身是连续的。 */
+  {to:3,  name:'教学',     cols:[3,3], rows:[3,3], colors:[3,4],   tubes:[4,5],   gates:[0,0], ice:[0,0], slotBias:2},
+  {to:8,  name:'入门正式', cols:[3,5], rows:[3,4], colors:[4,6],   tubes:[5,8],   gates:[0,2], ice:[0,1], slotBias:2},
+  {to:15, name:'正式挑战', cols:[5,7], rows:[4,5], colors:[6,9],   tubes:[8,12],  gates:[2,3], ice:[1,2], slotBias:1},
+  {to:25, name:'高密度',   cols:[7,8], rows:[5,6], colors:[9,12],  tubes:[12,15], gates:[3,4], ice:[2,4], slotBias:1},
+  {to:40, name:'困难',     cols:[8,9], rows:[6,6], colors:[12,14], tubes:[15,17], gates:[4,5], ice:[4,5], slotBias:1},
+  {to:60, name:'极限',     cols:[9,9], rows:[6,6], colors:[14,16], tubes:[17,17], gates:[5,6], ice:[5,6], slotBias:0},
+  {to:90, name:'极限+',    cols:[9,9], rows:[6,6], colors:[16,17], tubes:[17,17], gates:[6,8], ice:[6,8], slotBias:0}
+];
+/* 颜色数上限 17 不是随手写的：普通档必须满足「台面槽 ≥ 颜色数」（每种颜色都要有接水工位），
+   而 SLOT_CAP=17 —— 18 色就意味着有效空槽 − 颜色数 = −2。
+   受控实验里那个值对应「首战通关率 0%」（怎么点都过不去），所以颜色天花板 = 槽位天花板 = 17。
+   晚局真实的难度增量改由 门洞 6→8、冰冻 6→8 提供（都是纯思考量，不增加操作时长）。 */
+var TUBE_MIN_W=34;          // 水管最小宽度（再窄在手机上点不准；layoutAll 按它反推水管的物理上限）
+var GRID_MAX_ROWS=6;        // 货架行数硬上限：6 行时 tile≈64；7 行掉到 55、8 行掉到 47（触控变差）
+var GRID_MAX_COLS=9;        // 货架列数硬上限：9 列时 cell 宽 66px
+var SLOT_CAP=17;            // 台面槽上限（再多一排瓶子就挤成一条线）
+var GATE_CAP=8, ICE_CAP=8;
+/* 单局预估操作数上限：**按关卡分段**，不再是一个写死的数。
+   上一版统一 150 步：后果是第 50 关之后「门洞一多、预算先爆」，
+   校准③只能去削行数（54 格被砍到 45 格），于是 50~90 关的曲线被压成一条平线
+   （169→180，40 关只涨 6%）。晚局本来就该更长：
+     · ≤25 关  150 步 ≈ 5.0 分钟（新手节奏，别拖）
+     · ≤60 关  175 步 ≈ 5.8 分钟（正式玩家可接受）
+     · 61~90 关 200 步 ≈ 6.7 分钟（硬核段，仍在「数值宪法」的 220 步红线内） */
+var MOVE_BUDGET_LATE=200, MOVE_BUDGET_MID=175, MOVE_BUDGET_EARLY=150;
+function moveBudgetFor(lv){ return lv<=25?MOVE_BUDGET_EARLY:(lv<=60?MOVE_BUDGET_MID:MOVE_BUDGET_LATE); }
+var ACTION_PER_BOTTLE=2.3;  // 绕路比：实测「实际步数 / 理论下界(瓶数)」稳定在 2.2~2.4
+function stageOf(lv){
+  for(var i=0;i<STAGE_CURVE.length;i++)if(lv<=STAGE_CURVE[i].to)return STAGE_CURVE[i];
+  return STAGE_CURVE[STAGE_CURVE.length-1];
+}
+function stageIndex(lv){
+  for(var i=0;i<STAGE_CURVE.length;i++)if(lv<=STAGE_CURVE[i].to)return i;
+  return STAGE_CURVE.length-1;
+}
+function clamp(v,lo,hi){ return v<lo?lo:(v>hi?hi:v); }
+/* 预估玩家操作数：瓶子数 × 绕路比。
+   为什么用瓶数而不是水量：玩家每一次「把瓶子放上台面」才是真的决策，
+   接水/消除都是引擎自动动画（tryDrinks 自己跑），不该算进玩家的操作量。 */
+function estimateActions(bottles){ return Math.round((bottles||0)*ACTION_PER_BOTTLE); }
 function levelPlan(lv,tier){
-  tier=tier||0;
-  var era=Math.floor((lv-1)/5);                    // 保留给展示/统计
-  var phase=(lv-1)%5;                              // 4 = 周期峰值（第 5/10/15/20… 关）
-  var peak=(phase===4), breathe=(phase===0||phase===1);
-  var theme=(lv%5===0);                            // 每 5 关 = 一个「主题关」
-  var cells,colors,gates,ice,slots,tubes,planCols=0,planRows=0;
-  if(lv<=3){                                       // 教学期
-    cells=9; colors=3; gates=0; ice=0; slots=5; tubes=3;
-  }else if(lv<=8){                                 // 过渡期：一次只加一种复杂度
-    cells=(lv<=5)?9:12;
-    colors=(lv<=5)?3:4;
-    gates=(lv>=6)?1:0;
-    ice=(lv>=7)?1:0;
-    slots=5;
-    tubes=(lv>=7)?4:3;
-  }else{                                           // 决策密度期
-    var t=lv-9;
-    /* 布局 V3：列/行由关卡唯一决定，cells 恒等于「列×行」→ 每行等长。
-       波峰/放水的差异只放在门洞与冰冻上，不再动格子数（动格子会连带动水量）。 */
-    var pc,pr;
-    if(lv<=12){pc=5;pr=3;}                         // 15 格
-    else if(lv<=15){pc=6;pr=3;}                    // 18 格
-    else if(lv<=18){pc=5;pr=4;}                    // 20 格
-    else{pc=6;pr=4;}                               // 24 格（第 19 关起恒定稳态货架）
-    colors=Math.min(4+Math.floor(t/6),6);
-    gates=Math.min(1+Math.floor((t+1)/4),4);
-    ice=Math.min(1+Math.floor(t/5),4);
-    slots=Math.min(5+Math.floor(t/8),6);           // 空间约束：后期槽位收紧到 6
-    tubes=Math.min(4+Math.floor(t/3),7);           // 封顶 7：9 根时两端 2 根完全出屏且点不到
-    if(peak){gates=Math.min(gates+1,4);}
-    else if(breathe){gates=Math.max(1,gates-1);ice=Math.max(0,ice-1);}
-    planCols=pc; planRows=pr;
-    cells=pc*pr;
+  tier=tier|0;
+  var si=stageIndex(lv), seg=STAGE_CURVE[si];
+  var prevTo=si>0?STAGE_CURVE[si-1].to:0;
+  var span=Math.max(1,seg.to-prevTo);
+  var k=clamp((lv-prevTo)/span,0,1);
+  var li=function(a){ return Math.round(a[0]+(a[1]-a[0])*k); };
+  /* 行数用 floor、列数用 round —— 这不是笔误，是为了错开「加一行」和「加一列」的时机。
+     V6.0 很多阶段的列/行都只差 1（如 高密度 列[7,8] 行[5,6]），两者都在 k=0.5 进位：
+     第 19 关 7×5=35 → 第 20 关 8×6=48，一关凭空多 13 个瓶子（+37%），玩家读到的就是断崖。
+     让行数「晚一档」到阶段末尾才进位后，格数变成 35 → 40 → 48，每关只涨 5~8 格。 */
+  var lf=function(a){ return Math.floor(a[0]+(a[1]-a[0])*k); };
+  var cols=li(seg.cols), rows=lf(seg.rows), colors=li(seg.colors), tubes=li(seg.tubes);
+  var gates=li(seg.gates), ice=li(seg.ice), slotBias=seg.slotBias;
+  var phase=(lv-1)%5, peak=(phase===4), breathe=(phase===0||phase===1);
+  /* 「本阶段第一关」不放水：阶段起点直接吃上一段的终点值。
+     不然 L15（峰值，洞4）→ L16（阶段起点 + 放水，洞2）会掉 8 分，
+     玩家读到的是「进了新阶段反而变简单」。放水只发生在阶段内部。 */
+  var stageEntry=(si>0&&lv===prevTo+1);
+  /* ---- 波浪：只对第 9 关以后生效（教学/入门刻意平缓，不给新手做峰谷） ----
+     峰值关同时加 1 个门洞和 1 个冰冻瓶（不是只加门洞）：
+     否则遇到「周期第 1 关恰好也是阶段第 1 关」（如 L61）时，那关不放水、洞和冰都等于基准值，
+     和峰值关就只差「洞 +1」一项 ——「放水关 ≥2 项严格更低」这条设计规则会被合法地绕过。 */
+  if(lv>=9){
+    if(peak){ gates+=1; ice+=1; }
+    else if(breathe&&!stageEntry){ gates-=1; if(ice>1)ice-=1; }
   }
-  if(tier>0&&lv<=3){cells=12;colors=4;gates=1;ice=0;slots=5;tubes=3;}   // 教学关的挑战档也要"能玩"
-  if(tier>=1){                                     // 困难
-    slots=Math.max(4,slots-1);
-    if(lv>=6)gates=Math.min(gates+1,4);
+  /* ---- 负档 = 回归热身：整块缩小（行数/颜色/水管一起降），这是它的产品目的 ---- */
+  if(tier<0){
+    var kk=-tier;
+    colors-=Math.max(1,Math.round(colors*0.22*kk));
+    tubes -=Math.max(1,Math.round(tubes *0.28*kk));
+    rows  -=kk;
+    cols  -=Math.max(0,Math.round(cols*0.10*kk));
+    gates -=Math.ceil(gates*0.60*kk);
+    ice   -=Math.ceil(ice  *0.60*kk);
+    slotBias+=kk;                      // 热身把退路变宽
   }
-  if(tier>=2){                                     // 极限
-    slots=Math.max(4,slots-1);
-    gates=Math.min(gates+1,4);
-    ice=Math.min(ice+1,4);
+  /* ---- 正档 = 玩家自选的挑战：只调约束，不动棋盘 ---- */
+  if(tier>=1){ slotBias-=1; if(lv>=6)gates+=1; }
+  if(tier>=2){ slotBias-=1; gates+=1; ice+=1; }
+  /* ---- 插值之后逐项夹到合法范围（这里是唯一允许出现数字上限的地方） ---- */
+  cols  = clamp(cols,3,GRID_MAX_COLS);
+  rows  = clamp(rows,3,GRID_MAX_ROWS);
+  colors= clamp(colors,3,COLORS.length);
+  tubes = clamp(tubes,3,20);
+  gates = clamp(gates,0,GATE_CAP);
+  ice   = clamp(ice,0,ICE_CAP);
+  var cells=cols*rows;
+  /* ---- 校准③：单局操作量预算（按关卡分段，见 moveBudgetFor）。超了先削行、再削列。 ---- */
+  var budget=moveBudgetFor(lv);
+  var guard=0;
+  while(guard++<40){
+    var extras=Math.round(gates*1.5);                 // 每个门洞多塞 2~3 瓶 → 平均多 1.5 瓶
+    if(estimateActions(cells+extras)<=budget)break;
+    if(rows>3)rows--; else if(cols>3)cols--; else break;
+    cells=cols*rows;
   }
-  if(cells>26)cells=26;                            // 硬上限：波动/档位都不得突破「停止扩棋盘」
-  if(cells<6)cells=6;
-  /* 行/列一律「每行等长」（cells 必为 rows 的整数倍）。9 关以后由上面的阶梯给定，
-     同一关每次开局形状完全一致；教学/过渡期（9 格 / 12 格）都能被 3 整除 → 恒 3 行。 */
-  var rows;
-  if(lv>=9){cells=planCols*planRows;rows=planRows;}
-  else{rows=3;}
-  /* 决策密度分：颜色/门洞/冰冻/空间约束/格数/管数 的加权（用于测试断言难度真的在递进） */
-  var density=colors*6+gates*7+ice*4+Math.max(0,7-slots)*5+Math.min(cells,26)*0.6+tubes*1.2;
-  return {cells:cells,rows:rows,colors:colors,gates:gates,ice:ice,slots:slots,tubes:tubes,
-          peak:peak,breathe:breathe,era:era,theme:theme,tier:tier,density:Math.round(density*10)/10};
+  cells=cols*rows;
+  /* ---- 台面槽：有效空槽 − 颜色数 = slotBias（受控实验给出的难度开关） ---- */
+  var slots=clamp(colors+slotBias,5,SLOT_CAP);
+  /* ---- 决策密度分：颜色 / 门洞 / 冰冻 / 水管 / 格数 / 空间压力 的加权 ---- */
+  var slotPressure=Math.max(0,colors-(slots-1));
+  var density=5.0*colors+3.0*gates+2.4*ice+2.0*tubes+0.35*cells+4.0*slotPressure;
+  var extras2=Math.round(gates*1.5);
+  var estA=estimateActions(cells+extras2);
+  return {cells:cells,rows:rows,cols:cols,colors:colors,gates:gates,ice:ice,slots:slots,tubes:tubes,
+          peak:peak,breathe:breathe,era:Math.floor((lv-1)/5),theme:(lv%5===0),tier:tier,
+          stage:seg.name,stageIndex:si,slotPressure:slotPressure,
+          bottles:cells+extras2,estActions:estA,estMinutes:Math.round(estA*2/60*10)/10,
+          density:Math.round(density*10)/10,decisionDensityScore:Math.round(density*10)/10};
 }
 /* 水管根数：以关卡给的「目标根数 want」为主，只做两道合法性剪裁 ——
    ① 每根管至少 5 层（水太少时减管，否则管子短短一截很丑）
    ② 单管最多 26 层（水太多时加管，否则大半根管在屏幕外，连角标都救不回来）
-   ③ 根数封顶 7：720 宽下 7 根（tw72+gap32）正好铺满（x0=12）；8 根起最外侧的管被切、
-      9 根时两端 2 根完全出屏且点不到（tubeAt 命中盒与屏幕无交集）→ 假卖点，直接封顶。
+   ③ 根数上限**不再写死 7**：V6.0 要求高关卡 15~20 根管，写死数字会让曲线想涨也涨不上去
+      （这正是上一版第 24 关就触顶的原因之一）。上限改由「屏幕能放下多细的管」反推，
+      与 layoutAll 用同一个 TUBE_MIN_W —— 两边共用常量，不会再出现「计划 12 根、实际切屏外 2 根」。
    注意：这里【不再】保证管子不出屏 —— 高关卡水柱就是要顶出屏幕顶部（见 drawTube 的平口 + 渐隐）。 */
+function maxTubesByWidth(){
+  return Math.max(3,Math.floor((VW-24+TUBE_GAP_MIN)/(TUBE_MIN_W+TUBE_GAP_MIN)));
+}
 function tubeCountFor(units,want){
-  var n=Math.max(3,Math.min(7,want||3));
+  var cap=maxTubesByWidth();
+  var n=Math.max(3,Math.min(cap,want||3));
   while(n>3&&Math.floor(units/n)<5)n--;
-  while(n<7&&Math.ceil(units/n)>26)n++;
+  while(n<cap&&Math.ceil(units/n)>26)n++;
   return n;
 }
 function genLevel(lv,opts){
@@ -602,7 +820,16 @@ function genLevel(lv,opts){
   G.clears=0; G.toast=null; particles=[]; flying=[];
   G.stuck=false; G.hint=false; G.mode=null;
   G.gates=[]; G.lvPick=false; G.warn=null; G.lvTap={n:0,t:0}; G.lastPour=null;
-  if(opts.tier!==undefined)G.tier=opts.tier|0;
+  /* ---- 本次挑战档位的来源（V6.0 §五-A）----
+     优先级：显式传入的 opts.tier > 每日挑战(固定种子，恒 0) > 回归热身档 > 0（正常）。
+     注意热身档**只影响这一局怎么生成**，碰不到 Store.level / maxLevel ——
+     「我已经打到第 15 关」这件事不会因为热身而改变。
+     ★ G.warm 必须与「这一局实际用了哪个档」一致：玩家在热身期间从结算页主动选了
+       困难/极限（opts.tier），或者去打了每日挑战，这一局就不算热身 ——
+       否则通关时会走 advanceWarmup()，把热身进度白白推进一档，而玩家根本没在热身。 */
+  if(opts.tier!==undefined){ G.tier=opts.tier|0; G.warm=0; }
+  else if(opts.daily){ G.tier=0; G.warm=0; }
+  else { G.tier=resolveChallengeTier(lv); G.warm=inWarmup(lv)?1:0; }
   G.fail=null; G.tierPick=false; G.reviveUsed=0; G.adUndo=0; G.moves=0; G.toolsUsed=0;
   G.restarted=opts.restart?1:0; G.winStats=null; G.interPending=false; G.adBusy=false;
   G.daily=!!opts.daily; G.dailyDate=opts.date||'';
@@ -801,8 +1028,16 @@ function genLevel(lv,opts){
   /* 单局步数基准（星级用）：par = 宽裕估计的「好成绩步数」 */
   G.par=Math.max(10,Math.round(G.bottles.length*1.4+gateN*2));
   /* 埋点：关卡开始（带档位与难度快照，用来回答「改难度后有没有改善」） */
-  Track.log('level_start',{tier:G.tier,colors:plan.colors,cells:plan.cells,gates:plan.gates,ice:plan.ice,
-    slots:plan.slots,tubes:plan.tubes,density:plan.density,daily:G.daily?'1':'0',theme:plan.theme?'1':'0',par:G.par});
+  Track.log('level_start',{tier:G.tier,warm:G.warm||0,stage:plan.stage,colors:plan.colors,cells:plan.cells,
+    gates:plan.gates,ice:plan.ice,slots:plan.slots,tubes:plan.tubes,density:plan.density,
+    est:plan.estActions,daily:G.daily?'1':'0',theme:plan.theme?'1':'0',par:G.par});
+  /* ---- V6.0 §五-A：最高关卡只增不减 ----
+     maxLevel 记的是「玩家到达过的最高关」，与「已解锁的下一关 level」分开存。
+     回归热身、重开本关、失败重来都不会让它变小 —— 这是测试第 8 条（不丢进度）的落点。 */
+  try{
+    if(!G.daily&&lv>(Store.get('maxLevel',1)||1))Store.set('maxLevel',lv);
+    Store.set('lastPlayed',nowMs());
+  }catch(e){}
   if(G.daily)Track.log('challenge_start',{date:G.dailyDate,seed:(opts.seed|0)});
   /* 新手引导：前 3 关各一条轻量气泡提示，看过就不再打扰（进度存在存档里） */
   var tutSeen=Store.get('tut',0);
@@ -815,22 +1050,36 @@ function genLevel(lv,opts){
   }
 }
 function layoutAll(){
-  // 水管
+  /* ---- 水管：宽度/间距不再写死，按「有几根管」反算 ----
+     旧代码把 7 根当物理上限（7×(72+32) 正好铺满 720），于是 V6.0 要的 12~18 根管
+     在布局层就没法实现 —— 这也是上一版曲线第 24 关就触顶的根因之一。
+     现在改成：先按根数给一个舒适的间距档位，算出管宽；管宽掉到触控下限以下时，
+     才把间距压缩到 TUBE_GAP_MIN。TUBE_MIN_W / TUBE_GAP_MIN 与 tubeCountFor 共用，
+     所以「计划几根管」和「实际画得下几根」永远是同一套常量推出来的。 */
   var nT=G.tubes.length;
-  var tw=nT<=3?92:(nT===4?80:72), gap=nT<=3?46:32;   // 管子加宽、间距放宽，5 管时不再挤成一排
-  G.tubeW=tw;
+  var gap=nT<=3?46:(nT<=4?32:(nT<=6?20:(nT<=10?12:TUBE_GAP_MIN)));
+  var tw=Math.min(nT<=3?92:(nT===4?80:72),Math.floor((VW-24-(nT-1)*gap)/nT));
+  if(tw<TUBE_MIN_W){
+    tw=TUBE_MIN_W;
+    gap=nT>1?Math.max(TUBE_GAP_MIN,Math.floor((VW-24-nT*TUBE_MIN_W)/(nT-1))):gap;
+  }
+  G.tubeW=tw; G.tubeGap=gap;
   var totalW=nT*tw+(nT-1)*gap;
   var x0=(VW-totalW)/2;
   for(var i=0;i<nT;i++){
     G.tubes[i].x=x0+i*(tw+gap);
   }
   G.junctionY=BOTT_Y+46;
-  // 台面槽位（数量随关卡变化，居中排布）
+  /* ---- 台面槽位：间距随槽数收紧（高关卡槽位要跟颜色数对齐，17 槽时必须自己算间距）---- */
   var nS=G.slots.length;
-  var step=nS<=4?140:(nS===5?124:(nS===6?112:100));   // 7 槽（后期放水关）再收紧一点，别顶出画面
+  var step=nS<=4?140:(nS===5?124:(nS===6?112:Math.min(100,Math.floor((VW-56)/Math.max(1,nS-1)))));
   var sx0=(VW-(nS-1)*step)/2;
-  G.slotX=[];
+  G.slotX=[]; G.slotStep=step;
   for(var s=0;s<nS;s++)G.slotX.push(sx0+s*step);
+  /* 台面瓶子尺寸必须跟着槽间距缩，否则 17 个槽会挤成一团（旧代码写死 jw=76） */
+  G.jw=Math.max(26,Math.min(76,Math.floor(step*0.78)));
+  G.jh=G.jw*1.13;
+  G.trayRx=Math.min(50,step*0.5);
   // 底部货架：行数固定 3 行，列数在 genLevel 里按瓶子数算好（rowLen）。
   // 注意：格子归属与行长度只在 genLevel 里定一次，这里绝不重排 —— 否则撤销会把格子位置打乱
   var rows=G.gridRows||GRID_ROWS, maxRow=G.gridCols||3;
@@ -843,7 +1092,8 @@ function layoutAll(){
   var gridH=rows*tile+(rows-1)*GY;
   G.gridY0=GRID_Y0+Math.max(0,Math.round((availH-gridH)/2));   // 货架在可用区域里垂直居中
   /* 瓶子随格子放大：原来写死 Math.min(58,…)，格子 106 时瓶子只有 58 宽（仅占 55%），显得又小又空。
-     改成按格子的 66% 取，上限 96（格子够大时也不至于胖到挤在一起）。 */
+     改成按格子的 66% 取，上限 96（格子够大时也不至于胖到挤在一起）。
+     6 行（格子 56）时比例抬到 0.74，瓶子不至于缩成一颗豆。 */
   G.bw=Math.min(tile*(tile<92?0.74:0.66),96); G.bh=G.bw*1.10;   // 格子小(5行)时把比例调高，瓶子不至于缩太小
   placeBottles();
 }
@@ -1566,11 +1816,17 @@ function tubeAt(vx,vy){
 }
 function bottleAtGrid(vx,vy){
   var best=null,bd=1e9;
+  /* 命中盒跟着格子缩：高关卡格子只有 56px（旧版 124），
+     继续用写死的 ±52/±66 会让相邻瓶子的命中区互相重叠一大半 ——
+     虽然下面用「取离手指最近的那个」兜底，但斜着点就会串到隔壁瓶。
+     这里把半宽收到「格子 + 间距 的一半」，相邻命中区正好相切、不重叠。 */
+  var hw=Math.min(52,(G.tile+GX)*0.5);
+  var vUp=Math.min(66,(G.bh||65)+24), vDn=Math.min(56,G.tile*0.5+30);
   for(var i=0;i<G.bottles.length;i++){
     var b=G.bottles[i];
     if(b.place!=='grid')continue;
     if(b.gate>=0&&!gateFront(b))continue;                 // 藏在洞里的瓶子点不到
-    if(vx>=b.x-52&&vx<=b.x+52&&vy>=b.y-66&&vy<=b.y+56){
+    if(vx>=b.x-hw&&vx<=b.x+hw&&vy>=b.y-vUp&&vy<=b.y+vDn){
       var dx=vx-b.x,dy=vy-(b.y-20),d=dx*dx+dy*dy;
       if(d<bd){bd=d;best=b;}                              // 命中多个时取离手指最近的那个
     }
@@ -1578,10 +1834,13 @@ function bottleAtGrid(vx,vy){
   return best;
 }
 function jarAtCounter(vx,vy){
+  /* 同样跟着槽间距缩：17 个槽时间距只有 41px，±44 会让左右两个槽都命中 */
+  var hw=Math.min(44,(G.slotStep||112)*0.55);
+  var vUp=Math.min(96,(G.jh||86)+14);
   for(var i=0;i<G.bottles.length;i++){
     var b=G.bottles[i];
     if(b.place!=='counter')continue;
-    if(vx>=b.x-44&&vx<=b.x+44&&vy>=b.y-96&&vy<=b.y+8)return b;
+    if(vx>=b.x-hw&&vx<=b.x+hw&&vy>=b.y-vUp&&vy<=b.y+8)return b;
   }
   return null;
 }
@@ -1589,7 +1848,8 @@ function lockedSlots(){var a=[];for(var s=0;s<G.slots.length;s++)if(!G.slots[s].
 function unlockBadgeAt(v){
   var ls=lockedSlots(); if(!ls.length||G.unlockLeft<=0)return false;
   var sx=G.slotX[ls[ls.length-1]],dx=v.x-sx,dy=v.y-(SLOT_Y-52);
-  return dx*dx+dy*dy<54*54;
+  var r=Math.min(54,(G.slotStep||112)*0.6);
+  return dx*dx+dy*dy<r*r;
 }
 function toolAt(v){
   if(v.y<TOOL_Y||v.y>TOOL_Y+TOOL_H)return -1;
@@ -2163,7 +2423,11 @@ function drawFlying(f){
 }
 function drawJarCounter(b,time){
   var x=b.x,y=b.y;
-  var jw=76,jh=86;                        // 瓶身矮一点：台面更清爽，瓶口的颜色也露得出来
+  /* V6.0：台面瓶子尺寸必须跟着槽间距缩 —— 高关卡台面有 10~17 个槽（槽数与颜色数对齐），
+     沿用写死的 jw=76 会让一排瓶子叠成一片。
+     处理办法：所有写死的像素偏移统一乘 s2（= jw/76），
+     s2=1 时画出来与旧版逐像素一致（5~6 槽的低关卡完全不变），槽多了才整体等比缩小。 */
+  var jw=G.jw||76, jh=G.jh||86, s2=jw/76;
   var popY=0,popA=1;
   if(b.done){
     var p=Math.min(1,(b.doneT||0)/0.7);
@@ -2172,50 +2436,50 @@ function drawJarCounter(b,time){
   ctx.save();
   ctx.globalAlpha=Math.max(0,popA);
   var yy=y+popY;
-  rr(ctx,x-jw/2+2,yy-40,10,18,5);ctx.fillStyle='rgba(180,205,225,0.9)';ctx.fill();
-  rr(ctx,x+jw/2-12,yy-40,10,18,5);ctx.fill();
-  rr(ctx,x-jw/2,yy-jh,jw,jh,18);
+  rr(ctx,x-jw/2+2*s2,yy-40*s2,10*s2,18*s2,5*s2);ctx.fillStyle='rgba(180,205,225,0.9)';ctx.fill();
+  rr(ctx,x+jw/2-12*s2,yy-40*s2,10*s2,18*s2,5*s2);ctx.fill();
+  rr(ctx,x-jw/2,yy-jh,jw,jh,18*s2);
   ctx.fillStyle='rgba(255,255,255,0.7)';ctx.fill();
-  ctx.save();rr(ctx,x-jw/2,yy-jh,jw,jh,18);ctx.clip();
+  ctx.save();rr(ctx,x-jw/2,yy-jh,jw,jh,18*s2);ctx.clip();
   if(b.fill>0){
-    var fh=(jh-14)*(b.fill/b.cap);
+    var fh=(jh-14*s2)*(b.fill/b.cap);
     var gulp=(G.anim&&G.anim.type==='drink'&&G.anim.b===b)?Math.sin(G.anim.t*22)*2:0;
     ctx.fillStyle=COLORS[b.col];
-    ctx.fillRect(x-jw/2+5,yy-10-fh+gulp,jw-10,fh+10);
+    ctx.fillRect(x-jw/2+5*s2,yy-10*s2-fh+gulp,jw-10*s2,fh+10*s2);
     ctx.fillStyle='rgba(255,255,255,0.3)';
-    ctx.fillRect(x-jw/2+5,yy-10-fh+gulp,jw-10,5);
+    ctx.fillRect(x-jw/2+5*s2,yy-10*s2-fh+gulp,jw-10*s2,5*s2);
   }else{
     /* 空瓶（刚放上台面）：铺一层目标色淡底 + 中央一颗同色水滴 + 虚线水位，一眼看出接什么颜色 */
     ctx.fillStyle=COLORS[b.col];ctx.globalAlpha=Math.max(0,popA)*0.20;
-    ctx.fillRect(x-jw/2+5,yy-jh+12,jw-10,jh-16);
+    ctx.fillRect(x-jw/2+5*s2,yy-jh+12*s2,jw-10*s2,jh-16*s2);
     ctx.globalAlpha=Math.max(0,popA)*0.55;
-    ctx.strokeStyle=COLORS[b.col];ctx.lineWidth=3;ctx.setLineDash([8,8]);
-    ctx.beginPath();ctx.moveTo(x-jw/2+13,yy-jh*0.42);ctx.lineTo(x+jw/2-13,yy-jh*0.42);ctx.stroke();
+    ctx.strokeStyle=COLORS[b.col];ctx.lineWidth=3*s2;ctx.setLineDash([8*s2,8*s2]);
+    ctx.beginPath();ctx.moveTo(x-jw/2+13*s2,yy-jh*0.42);ctx.lineTo(x+jw/2-13*s2,yy-jh*0.42);ctx.stroke();
     ctx.setLineDash([]);
     ctx.globalAlpha=Math.max(0,popA);
     drawDrop(ctx,x,yy-jh*0.52,jh*0.16,COLORS[b.col],Math.max(0,popA));
   }
   ctx.fillStyle='rgba(255,255,255,0.5)';
-  rr(ctx,x-jw/2+8,yy-jh+10,7,jh-30,4);ctx.fill();
+  rr(ctx,x-jw/2+8*s2,yy-jh+10*s2,7*s2,Math.max(6,jh-30*s2),4*s2);ctx.fill();
   ctx.restore();
-  rr(ctx,x-jw/2,yy-jh,jw,jh,18);
-  ctx.strokeStyle=b.done?'#7ec96b':'rgba(105,140,175,0.95)';ctx.lineWidth=4;ctx.stroke();
+  rr(ctx,x-jw/2,yy-jh,jw,jh,18*s2);
+  ctx.strokeStyle=b.done?'#7ec96b':'rgba(105,140,175,0.95)';ctx.lineWidth=4*s2;ctx.stroke();
   /* 瓶口一圈同色 + 掀开靠在旁边的同色盖子 —— 不管瓶里有没有水，都一眼看出这瓶接什么颜色 */
   ctx.save();
   ctx.globalAlpha=Math.max(0,popA);
-  var mouthY=yy-jh+3;
-  ctx.beginPath();ctx.moveTo(x-jw/2+5,mouthY);ctx.quadraticCurveTo(x,mouthY+11,x+jw/2-5,mouthY);
-  ctx.strokeStyle=COLORS[b.col];ctx.lineWidth=(b.fill>0)?5:8;ctx.lineCap='round';ctx.stroke();
-  ctx.translate(x+jw/2+7,mouthY-9);ctx.rotate(-0.42);
-  rr(ctx,-14,-7,28,14,7);
+  var mouthY=yy-jh+3*s2;
+  ctx.beginPath();ctx.moveTo(x-jw/2+5*s2,mouthY);ctx.quadraticCurveTo(x,mouthY+11*s2,x+jw/2-5*s2,mouthY);
+  ctx.strokeStyle=COLORS[b.col];ctx.lineWidth=((b.fill>0)?5:8)*s2;ctx.lineCap='round';ctx.stroke();
+  ctx.translate(x+jw/2+7*s2,mouthY-9*s2);ctx.rotate(-0.42);
+  rr(ctx,-14*s2,-7*s2,28*s2,14*s2,7*s2);
   ctx.fillStyle=COLORS[b.col];ctx.fill();
-  ctx.strokeStyle=dark(COLORS[b.col],0.3);ctx.lineWidth=2.5;ctx.stroke();
+  ctx.strokeStyle=dark(COLORS[b.col],0.3);ctx.lineWidth=2.5*s2;ctx.stroke();
   ctx.restore();
   if(b.capT<1){
     ctx.save();ctx.globalAlpha=Math.max(0,popA*(1-b.capT));
-    rr(ctx,x-26,yy-jh-30-b.capT*30,52,22,10);
+    rr(ctx,x-26*s2,yy-jh-30*s2-b.capT*30,52*s2,22*s2,10*s2);
     ctx.fillStyle=COLORS[b.col];ctx.fill();
-    ctx.strokeStyle=dark(COLORS[b.col],0.25);ctx.lineWidth=3;ctx.stroke();
+    ctx.strokeStyle=dark(COLORS[b.col],0.25);ctx.lineWidth=3*s2;ctx.stroke();
     ctx.restore();
   }
   ctx.restore();
@@ -2225,13 +2489,13 @@ function drawJarCounter(b,time){
        ② 百分比要读还要算，可瓶子自己已经画了水位，信息重复；
        ③ 以后瓶子改成 4 口 / 5 口，百分比整套要重来，刻度格天然支持任意口数。 */
     var n=b.cap||3;
-    ctx.font='bold 26px '+FONT;ctx.textAlign='center';ctx.fillStyle='#4a6a88';
-    var cw=Math.min(18,Math.max(12,(jw-10)/n-3)), chh=Math.max(7,Math.min(10,cw*0.55));
-    var tw2=n*cw+(n-1)*3, sx0=x-tw2/2;
+    ctx.font='bold '+Math.round(26*s2)+'px '+FONT;ctx.textAlign='center';ctx.fillStyle='#4a6a88';
+    var cw=Math.min(18*s2,Math.max(9*s2,(jw-10*s2)/n-3*s2)), chh=Math.max(6*s2,Math.min(10*s2,cw*0.55));
+    var tw2=n*cw+(n-1)*3*s2, sx0=x-tw2/2;
     for(var k=0;k<n;k++){
-      rr(ctx,sx0+k*(cw+3),y+28,cw,chh,3);
+      rr(ctx,sx0+k*(cw+3*s2),y+28*s2,cw,chh,3*s2);
       ctx.fillStyle=(k<b.fill)?COLORS[b.col]:'rgba(96,130,160,0.30)';ctx.fill();
-      ctx.strokeStyle='rgba(74,106,136,0.75)';ctx.lineWidth=1.5;ctx.stroke();
+      ctx.strokeStyle='rgba(74,106,136,0.75)';ctx.lineWidth=1.5*s2;ctx.stroke();
     }
     /* 这里原来还画一条 68×10 的进度条，和上面的刻度格是**同一份信息**（重复），
        而且它的下沿到 y+54，比刻度格低 16px —— 正是它把底部货架挤下去、
@@ -2240,12 +2504,13 @@ function drawJarCounter(b,time){
 }
 function drawSlot(s){
   var sx=G.slotX[s];
+  var trx=G.trayRx||50;                  // 托盘宽度跟着槽间距缩（高关卡一排有 10~17 个槽）
   // 托盘阴影
-  ctx.beginPath();ctx.ellipse(sx,SLOT_Y,50,14,0,0,7);
+  ctx.beginPath();ctx.ellipse(sx,SLOT_Y,trx,Math.max(6,trx*0.28),0,0,7);
   ctx.fillStyle='rgba(150,120,80,0.35)';ctx.fill();
   if(G.slots[s].open)return;
   // 广告解锁槽：木盖 + 播放按钮 + 「解锁」
-  ctx.beginPath();ctx.ellipse(sx,SLOT_Y-6,46,16,0,0,7);
+  ctx.beginPath();ctx.ellipse(sx,SLOT_Y-6,trx*0.92,Math.max(7,trx*0.32),0,0,7);
   ctx.fillStyle='#c99b62';ctx.fill();
   ctx.strokeStyle='rgba(120,85,45,0.8)';ctx.lineWidth=3;ctx.stroke();
   ctx.beginPath();ctx.ellipse(sx,SLOT_Y-10,40,12,0,0,7);
@@ -2863,15 +3128,29 @@ function levelDone(){
      口径必须一致，否则会出现「看完广告 → 三星」这种自相矛盾的激励。
      用普通撤销次数退的那一步不在此列（花的是每关 5 次的额度）。 */
   if((G.reviveUsed>0||G.adUndo>0)&&stars>2)stars=2;
-  G.winStats={stars:stars,moves:G.moves,tools:G.toolsUsed,revive:G.reviveUsed,tier:G.tier,par:par,daily:!!G.daily};
+  /* V6.0 §五-A：热身档（负数）在存档里一律记到「普通」那一格 ——
+     热身只是「这次重开在哪个难度」，不是一种新的挑战档，
+     否则热身通关会凭空点亮「困难/极限」的星，热身就成了刷星捷径。 */
+  var recTier=clamp(G.tier|0,0,2);
+  var warmInfo=null;
+  G.winStats={stars:stars,moves:G.moves,tools:G.toolsUsed,revive:G.reviveUsed,tier:G.tier,
+    recTier:recTier,par:par,daily:!!G.daily,warm:G.warm?1:0,warmTier:G.tier};
   var key=String(G.level);
   var rec=Store.data.stars[key]||{normal:0,hard:0,extreme:0};
-  var field=(['normal','hard','extreme'])[G.tier]||'normal';
+  var field=(['normal','hard','extreme'])[recTier]||'normal';
   if((rec[field]||0)<stars)rec[field]=stars;
   Store.data.stars[key]=rec;
-  unlockNextTier(G.level,G.tier);
+  unlockNextTier(G.level,recTier);
   if(!G.daily&&G.level+1>Store.data.level)Store.data.level=G.level+1;
   Store.data.wins=(Store.data.wins||0)+1;
+  if(!G.daily)Store.data.maxLevel=Math.max(Store.data.maxLevel||1,G.level);
+  /* ---- 热身推进：通关一次就把档位往上抬一档（热身1 → 热身2 → 正常）----
+     放在存档写完之后、saveProgress 之前，保证「档位」和「进度」一起落盘。 ---- */
+  if(!G.daily&&G.warm){
+    var nt=advanceWarmup();
+    if(nt!==null)warmInfo={tier:nt,still:!!(Store.data.warmActive)};
+    G.winStats.warmNext=warmInfo;
+  }
   if(G.daily){
     Store.data.daily={date:G.dailyDate,done:1,stars:stars,moves:G.moves};
     Track.log('challenge_complete',{date:G.dailyDate,stars:stars,moves:G.moves});
@@ -2909,7 +3188,12 @@ function bootSession(){
   else if(last&&last!==today){ Track.log('return_open',{from:last,to:today}); }
   Store.set('lastOpen',today);
   Store.set('sessions',(Store.get('sessions',0)||0)+1);
-  Track.log('game_start',{level:Store.get('level',1),env:AdService.env});
+  /* V6.0 §五-A：先判定「这次回来要不要热身」，再刷新 lastPlayed。
+     顺序不能反 —— 反了就永远量到 idle=0，热身触发不了。 */
+  var warm=warmupOnBoot();
+  if(warm)toast('欢迎回来！第 '+warm.level+' 关这次从「'+ (warm.tier<=-2?'热身1':'热身2') +'」开始找手感');
+  Track.log('game_start',{level:Store.get('level',1),maxLevel:Store.get('maxLevel',1),
+    warm:warm?1:0,warmTier:Store.get('warmTier',0),env:AdService.env});
   G.winStreak=0;
 }
 /* 单次会话时长：整页生命周期只记一条，避免「切后台又回来」重复计数 */

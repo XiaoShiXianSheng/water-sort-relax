@@ -32,6 +32,10 @@ const SUITES = [
   { key: 'biz', name: '商业化测试（广告/存档/埋点/档位/单局规模）', file: 'qa_biz.js', kind: 'qa', fast: true },
   { key: 'arch', name: '架构测试（单文件 / ES5 / 零依赖 / 兜底）', file: 'qa_arch.js', kind: 'qa', fast: true },
   { key: 'design', name: '设计测试（关卡与布局不变量）', file: 'qa_design.js', kind: 'qa', fast: true },
+  /* V6.0 §五-A：回归热身 + 递进挑战（八条验收 + 参数化 / 不污染进度）
+     它单独成套件而不是塞进 design：这两件事的失效方式完全不同 ——
+     曲线坏了是「关卡不好玩」，热身坏了是「老玩家回来发现进度没了」，后者更严重。 */
+  { key: 'warmup', name: '留存测试（回归热身 / 递进挑战 / 存档迁移）', file: 'qa_warmup.js', kind: 'qa', fast: true },
   { key: 'ui', name: 'UI 测试（命中回转 / 拒绝反馈 / 多分辨率）', file: 'qa_ui.js', kind: 'qa', fast: true },
   /* 门禁模式把机器人放到 1~40 关：G7 要的是「1~40 全通」，1~30 是它的子集。
      bot_run.js 用的是固定种子（seedRandom(lv*7919+attempt*104729)），所以这个条件是**确定性**的，

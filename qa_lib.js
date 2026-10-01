@@ -31,6 +31,17 @@ function makeCtx(rec) {
 const INJECT = `window.__DBG={
   get G(){return G;}, get fatal(){return fatalShown;}, get URL_LVL(){return URL_LVL;},
   tap:handleTap, gen:genLevel, plan:levelPlan, tubeCountFor:tubeCountFor,
+  maxTubesByWidth:maxTubesByWidth, moveBudgetFor:moveBudgetFor, estimateActions:estimateActions,
+  /* V6.0 曲线常量：断言里不写死数字，一律从产品常量读，避免「测试和产品各写一份」 */
+  CURVE:{SLOT_CAP:SLOT_CAP,GATE_CAP:GATE_CAP,ICE_CAP:ICE_CAP,GRID_MAX_ROWS:GRID_MAX_ROWS,
+    GRID_MAX_COLS:GRID_MAX_COLS,TUBE_MIN_W:TUBE_MIN_W,ACTION_PER_BOTTLE:ACTION_PER_BOTTLE,
+    MOVE_BUDGET_EARLY:MOVE_BUDGET_EARLY,MOVE_BUDGET_MID:MOVE_BUDGET_MID,MOVE_BUDGET_LATE:MOVE_BUDGET_LATE,
+    MAX_COLORS:STAGE_CURVE[STAGE_CURVE.length-1].colors[1],      /* 曲线自己的颜色天花板（18） */
+    PALETTE:COLORS.length,                                       /* 调色板长度（20，留余量） */
+    STAGE:STAGE_CURVE,stageOf:stageOf,stageIndex:stageIndex},
+  /* V6.0 §五-A 回归热身：测试要能直接驱动「判定 / 升档 / 档位换算」 */
+  warm:{nowMs:nowMs,idleSeconds:idleSeconds,resolveChallengeTier:resolveChallengeTier,
+    inWarmup:inWarmup,warmupOnBoot:warmupOnBoot,advanceWarmup:advanceWarmup,tierLabel:tierLabel},
   freeSlot:freeSlot, bottomOf:bottomOf, lockedSlots:lockedSlots,
   gateBlocked:gateBlocked, gateFront:gateFront, gateMouthCell:gateMouthCell, gateRest:gateRest, gateAt:gateAt,
   gridPlayable:gridPlayable, neighborEmpty:neighborEmpty, neighborCell:neighborCell,

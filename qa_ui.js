@@ -215,14 +215,18 @@ guard(rep, 'UI', function () {
       for (let r = 0; r < G.gridRows; r++) {
         if (G.tile + C.GX < G.bw + 2) overlap.push('L' + lv + ' 行' + r + ' 瓶宽' + G.bw.toFixed(0) + '>格距' + (G.tile + C.GX));
       }
-      /* 6.4 台面相邻槽位不许叠（间距 ≥ 瓶宽 + 间隙） */
+      /* 6.4 台面相邻槽位不许叠：间距必须 > 瓶宽（V6.0 晚局 17 个槽，间距从 124 收到 41px，
+             所以口径是「相对瓶宽 + 6px 间隙」，不再写死 76+6）。
+             同时守住触控下限：间距 ≥ 38px，否则手指点不准。 */
       for (let s = 1; s < G.slotX.length; s++) {
-        if (G.slotX[s] - G.slotX[s - 1] < 76 + 6) overlap.push('L' + lv + ' 槽' + s + ' 间距' + (G.slotX[s] - G.slotX[s - 1]).toFixed(0));
+        const step2 = G.slotX[s] - G.slotX[s - 1];
+        if (step2 < G.jw + 6) overlap.push('L' + lv + ' 槽' + s + ' 间距' + step2.toFixed(0) + '<瓶宽' + G.jw.toFixed(0) + '+6');
+        if (step2 < 38) overlap.push('L' + lv + ' 槽' + s + ' 间距' + step2.toFixed(0) + '<38（触控下限）');
       }
     }
     rep.ok('货架瓶子的视觉框左右不出屏（1~40 关）', bleed.length === 0, Array.from(new Set(bleed)).slice(0, 5).join(' '));
     rep.ok('货架瓶子不压底部工具栏', toolClash.length === 0, toolClash.slice(0, 5).join(' '));
-    rep.ok('瓶子之间不重叠：瓶宽 < 格距、台面槽间距 ≥ 82', overlap.length === 0, overlap.slice(0, 5).join(' '));
+    rep.ok('瓶子之间不重叠：瓶宽 < 格距、台面槽间距 ≥ 瓶宽+6px 且 ≥38px（触控下限）', overlap.length === 0, overlap.slice(0, 5).join(' '));
   }
 
   /* ============ 7. 文字纯净 + 关键文案在位 ============ */

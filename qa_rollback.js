@@ -24,10 +24,12 @@ const GAME = path.join(ROOT, 'outputs', '解压水消除.html');
 /* 每个用例：把产品代码某处改坏 → 指定套件里必须出现一条匹配 expect 的 FAIL */
 const CASES = [
   {
-    name: '命中框从 ±52px 砍到 ±20px',
+    /* V6.0：命中盒不再是一个常量，改成 min(52, (tile+GX)/2)（跟着格子缩）。
+       所以「砍小命中框」改成砍这个上界 —— 同理仍要让 5 点探针里的左/右半身落空。 */
+    name: '命中框半宽上界从 52px 砍到 20px',
     suite: 'qa_ui.js', expect: /命中回转/,
-    find: 'vx>=b.x-52&&vx<=b.x+52&&vy>=b.y-66&&vy<=b.y+56',
-    repl: 'vx>=b.x-20&&vx<=b.x+20&&vy>=b.y-66&&vy<=b.y+56'
+    find: 'var hw=Math.min(52,(G.tile+GX)*0.5);',
+    repl: 'var hw=Math.min(20,(G.tile+GX)*0.5);   /* rollback-test */'
   },
   {
     name: 'gateFront() 恒返回 true（洞里不再按顺序取）',
@@ -72,22 +74,31 @@ const CASES = [
   },
   /* ---------- 02:00 档新增的 9 条设计断言，逐条做回滚验证 ---------- */
   {
+    /* V6.0：放水（breathe）改成「阶段起点不放水」+ peak 同时 +1 洞 +1 冰。
+       把 breathe 恒置 false → 放水关与峰值关同难度 → 「密度严格更低」失守。 */
     name: 'levelPlan：放水关不再减量（breathe 恒 false）',
     suite: 'qa_design.js', expect: /放水关真的放水/,
-    find: '  var peak=(phase===4), breathe=(phase===0||phase===1);',
-    repl: '  var peak=(phase===4), breathe=false;   /* rollback-test */'
+    find: '    else if(breathe&&!stageEntry){ gates-=1; if(ice>1)ice-=1; }',
+    repl: '    else if(false&&breathe&&!stageEntry){ gates-=1; if(ice>1)ice-=1; }   /* rollback-test */'
   },
   {
-    name: 'levelPlan：门洞上限从 4 提到 6（单局操作量天花板失守）',
+    /* V6.0：操作量天花板不再是一个写死的数字，而是校准③里的分段预算 moveBudgetFor(lv)。
+       注意：把预算**调大**（关掉校准）是抓不到的 —— V6.0 的曲线本身就在预算内
+       （第 90 关 54 格 + 8 洞 ≈ 66 瓶 ≈ 152 步 < 200），校准③ 本来就不用出手。
+       所以这条改「预算被压小」：校准③ 被迫把高关卡一路削回 3×3，
+       但门洞数不变 → 瓶子数（9 + 12）仍然要按 3 倍预算算 → 天花板断言必须抓到。 */
+    name: 'levelPlan：单局操作量预算被压成 10 步（校准③ 把高关卡压回 3×3）',
     suite: 'qa_design.js', expect: /单局操作量天花板/,
-    find: 'gates=Math.min(1+Math.floor((t+1)/4),4);',
-    repl: 'gates=Math.min(1+Math.floor((t+1)/4),6);   /* rollback-test */'
+    find: 'function moveBudgetFor(lv){ return lv<=25?MOVE_BUDGET_EARLY:(lv<=60?MOVE_BUDGET_MID:MOVE_BUDGET_LATE); }',
+    repl: 'function moveBudgetFor(lv){ return 10; }   /* rollback-test: 预算被压成 10 步 */'
   },
   {
-    name: 'levelPlan：后期台面槽收到 5（槽 < 颜色数）',
+    /* V6.0：slots = clamp(colors + slotBias, 5, SLOT_CAP)，普通档保证 槽 ≥ 色。
+       把 slotBias 抹掉再 −3 → 高关卡的槽比颜色数还少。 */
+    name: 'levelPlan：普通档台面槽比颜色数还少（slotBias 被抹掉）',
     suite: 'qa_design.js', expect: /台面槽 ≥ 颜色数/,
-    find: '    slots=Math.min(5+Math.floor(t/8),6);',
-    repl: '    slots=Math.min(4+Math.floor(t/8),5);' + '   /* rollback-test */'
+    find: '  var slots=clamp(colors+slotBias,5,SLOT_CAP);',
+    repl: '  var slots=clamp(colors-3,5,SLOT_CAP);   /* rollback-test */'
   },
   {
     name: 'genLevel：某色瓶数多塞 2 瓶（每色瓶数不均衡）',
@@ -114,16 +125,20 @@ const CASES = [
     repl: 'for(var gk=0;gk<maxGates;gk++){var w=4;ws.push(w);es+=w-1;}' + '   /* rollback-test */'
   },
   {
+    /* V6.0：档位只改 slotBias / gates / ice。把 tier>=2 整段短路 → 极限 == 困难。
+       断言标题已从「三档挑战严格更难」改成「三档挑战真的更难」，expect 跟着换。 */
     name: 'levelPlan：极限档 tier>=2 整段失效（极限 == 困难）',
-    suite: 'qa_design.js', expect: /三档挑战严格更难/,
-    find: '  if(tier>=2){',
-    repl: '  if(tier>=2&&false){' + '   /* rollback-test */'
+    suite: 'qa_design.js', expect: /三档挑战真的更难/,
+    find: '  if(tier>=2){ slotBias-=1; gates+=1; ice+=1; }',
+    repl: '  if(tier>=2&&false){ slotBias-=1; gates+=1; ice+=1; }' + '   /* rollback-test */'
   },
   {
-    name: '教学关的挑战档把棋盘改大到 20 格 / 5 管',
+    /* V6.0：教学关的极限档靠切片区间 + 全局 clamp 自然被限制在 9 格 / 5 管。
+       这里直接给 tier2 的棋盘加行列 → 教学关被撑成 36 格，触碰「≤12 格」红线。 */
+    name: '教学关的极限档把棋盘撑成 36 格（新手第一关变劝退关）',
     suite: 'qa_design.js', expect: /教学关的极限档/,
-    find: '  if(tier>0&&lv<=3){cells=12;colors=4;gates=1;ice=0;slots=5;tubes=3;}',
-    repl: '  if(tier>0&&lv<=3){cells=20;colors=4;gates=1;ice=0;slots=5;tubes=5;}' + '   /* rollback-test */'
+    find: '  if(tier>=2){ slotBias-=1; gates+=1; ice+=1; }',
+    repl: '  if(tier>=2){ slotBias-=1; gates+=1; ice+=1; rows+=3; cols+=3; }' + '   /* rollback-test */'
   },
   /* ---------- FIX-02：结算弹窗的三档方块从「纯展示」变成「可点」 ---------- */
   {
@@ -133,30 +148,34 @@ const CASES = [
     repl: 'if(false){'
   },
   /* ---------- FIX-03：出屏管（本次漏测根因，两条治本断言都必须能抓它）----------
-     把 tubeCountFor 的封顶 7 还原成 9 → 高关卡又变成 9 根管，两端 2 根被推到屏外
-     （x0=-92，命中盒与 [0,VW] 无交集），正是用户报的「两根管点不到」。 */
+     V6.0：管数上限不再写死 7，而是 maxTubesByWidth()（按屏幕宽 + TUBE_MIN_W 反推）。
+     所以「还原成 9 根」这条改法换等价形态：在剪裁后的根数上再 +3 →
+     高关卡排 20 根管，layoutAll 夹到 TUBE_MIN_W 后总宽超过屏宽，两端管子被推出屏幕外。 */
   {
-    name: '出屏管①（几何）：管数封顶还原成 9 根 → 两端出屏、命中盒与屏幕无交集',
+    name: '出屏管①（几何）：管数超出屏幕宽度上限 → 两端出屏、命中盒与屏幕无交集',
     suite: 'qa_design.js', expect: /出屏管回归/,
-    find: '  var n=Math.max(3,Math.min(7,want||3));',
-    repl: '  var n=9;   /* rollback-test: 还原成 9 根 */'
+    find: '  var n=Math.max(3,Math.min(cap,want||3));',
+    repl: '  var n=Math.max(3,Math.min(cap,want||3)+3);   /* rollback-test: 多 3 根 → 超屏 */'
   },
   {
     name: '出屏管②（命中路径）：同上，用「夹到屏幕内」的坐标走 tubeAt 点不到那 2 根',
     suite: 'qa_ui.js', expect: /水管命中路径/,
-    find: '  var n=Math.max(3,Math.min(7,want||3));',
-    repl: '  var n=9;   /* rollback-test: 还原成 9 根 */'
+    find: '  var n=Math.max(3,Math.min(cap,want||3));',
+    repl: '  var n=Math.max(3,Math.min(cap,want||3)+3);   /* rollback-test: 多 3 根 → 超屏 */'
   },
 
   /* ---------- 05:00 档新增：性能之外的两件事（修 flaky + 上线门禁）----------
      注意：下面几条有的改的是**测试文件**、有的是**发布件**、有的干脆不改文件而是给一个
      「线上是旧版」的场景 —— 所以用例支持 file（默认主文件）/ noPatch / liveTamper 三个开关。 */
   {
-    name: '冒烟后不还原档位（脏档放行 → 后面一整簇普通档断言失真）',
-    file: 'test_water.js',
+    /* V6.0 起 genLevel 每次都会重新解析档位（opts.tier > daily > 热身/普通），
+       所以「冒烟把 G.tier 点脏」这件事已经被 genLevel 自愈了 —— 原来那条改法（把 test_water
+       里的还原行改成 tier=1）不再能弄脏任何东西。改用治本改法：让档位解析本身坏掉
+       （永远返回困难档）→ 冒烟后的哨兵（tier==0 && 9 格 && 5 槽）必然失守。 */
+    name: 'genLevel 档位解析坏掉（永远困难档）→ 冒烟后的哨兵必须抓到',
     suite: 'test_water.js', expect: /冒烟随机点击后档位已还原/,
-    find: '  DBG.G.tier = 0;                                   // ← 还原为普通档（这一行是后续所有普通档断言的前提）',
-    repl: '  DBG.G.tier = 1;   /* rollback-test: 故意不还原 */'
+    find: '  else { G.tier=resolveChallengeTier(lv); G.warm=inWarmup(lv)?1:0; }',
+    repl: '  else { G.tier=1; G.warm=inWarmup(lv)?1:0; }   /* rollback-test: 档位解析坏掉 */'
   },
   {
     name: '门禁 G3：主文件膨胀到 200KB 以上',
@@ -448,22 +467,22 @@ const CASES = [
      每条都刻意挑「只让这一条红」的改法（除了注明交叉的那条），
      否则分不清哪条断言真有独立效力。 */
   {
-    name: 'levelPlan：过渡期第 6 关就把冰冻也上了（新手一次撞两种新干扰）',
-    suite: 'qa_design.js', expect: /过渡期 4~8 关/,
-    find: 'ice=(lv>=7)?1:0;',
-    repl: 'ice=(lv>=6)?1:0;   /* rollback-test: 门洞与冰冻同关新增 */'
+    name: '入门正式 4~8 关：冰冻上限被抬到 3（新手段一次撞两种新干扰）',
+    suite: 'qa_design.js', expect: /入门正式 4~8 关/,
+    find: 'colors:[4,6],   tubes:[5,8],   gates:[0,2], ice:[0,1]',
+    repl: 'colors:[4,6],   tubes:[5,8],   gates:[0,2], ice:[0,3]   /* rollback-test */'
   },
   {
-    name: 'levelPlan：稳态货架从 6×4=24 格缩成 5×4=20 格（第 19 关起不再恒定）',
-    suite: 'qa_design.js', expect: /稳态货架/,
-    find: 'else{pc=6;pr=4;}',
-    repl: 'else{pc=5;pr=4;}   /* rollback-test: 偷偷把稳态货架改小 */'
+    name: '高密度阶段被压小（第 25 关格数不再落在 48 格的设计目标上）',
+    suite: 'qa_design.js', expect: /V6.0 阶段阶梯硬钉死/,
+    find: 'cols:[7,8], rows:[5,6]',
+    repl: 'cols:[7,7], rows:[5,5]   /* rollback-test */'
   },
   {
-    name: 'levelPlan：困难档额外交掉 1 个台面槽（槽位递进不再是 −1/−1，且掉到 4 以下）',
+    name: 'levelPlan：困难档一档就交掉 2 个台面槽（槽位递进超出「每档 −1」）',
     suite: 'qa_design.js', expect: /三档挑战「只调约束/,
-    find: 'if(lv>=6)gates=Math.min(gates+1,4);',
-    repl: 'if(lv>=6)gates=Math.min(gates+1,4);slots=slots-1;   /* rollback-test */'
+    find: '  if(tier>=1){ slotBias-=1; if(lv>=6)gates+=1; }',
+    repl: '  if(tier>=1){ slotBias-=2; if(lv>=6)gates+=1; }   /* rollback-test */'
   },
   {
     name: 'genLevel：门洞候选从「≥3 个货架内方向」放宽到「≥2」（角落也能当门洞）',
@@ -472,10 +491,10 @@ const CASES = [
     repl: 'if(dirsIn.length>=2)gateCellStart.push(gc0);   /* rollback-test: 放开角落 */'
   },
   {
-    name: 'genLevel：门洞候选再收紧到「≥4 个货架内方向」（放不下就静默少放几个洞）',
+    name: 'genLevel：门洞候选被清空（放不下就静默少放 → 实际门洞数 < 计划）',
     suite: 'qa_design.js', expect: /实际门洞数 == 计划门洞数/,
     find: 'if(dirsIn.length>=3)gateCellStart.push(gc0);',
-    repl: 'if(dirsIn.length>=4)gateCellStart.push(gc0);   /* rollback-test */'
+    repl: 'if(dirsIn.length>=5)gateCellStart.push(gc0);   /* rollback-test: 永无候选 */'
   },
   {
     name: 'genLevel：可解性兜底无条件执行（40 次自检没过就把冰冻整关撤掉）',
@@ -484,10 +503,10 @@ const CASES = [
     repl: 'if(true){   /* rollback-test: 兜底永远执行 */'
   },
   {
-    name: 'levelPlan：第 18~20 关把台面槽收回去 1 个（靠砍槽位制造难度）',
-    suite: 'qa_design.js', expect: /普通档台面槽位随关卡单调不减/,
-    find: '    slots=Math.min(5+Math.floor(t/8),6);',
-    repl: '    slots=Math.min(5+Math.floor(t/8),6);if(lv>=18&&lv<=20)slots=5;   /* rollback-test */'
+    name: '高密度阶段 slotBias 反向放大（「台面槽 − 颜色数」不再单调不增）',
+    suite: 'qa_design.js', expect: /普通档「台面槽 − 颜色数」随关卡单调不增/,
+    find: 'gates:[3,4], ice:[2,4], slotBias:1}',
+    repl: 'gates:[3,4], ice:[2,4], slotBias:3}   /* rollback-test */'
   },
   /* ---------- 05:00 档新增 G9「真浏览器启动冒烟」的三条回滚用例 ----------
      这三条刻意覆盖**三种不同的白屏成因**，而不是同一个成因换三种写法：
@@ -544,41 +563,40 @@ const CASES = [
      延续上一档的做法：每条新断言配一条**尽量只让它自己红**的改坏方式，
      这样才分得出哪条断言真有独立效力（有几条会顺带连坐别的断言，下面注明）。 */
   {
-    name: 'levelPlan：第 21~22 关台面槽砍到 4（有效空槽 − 颜色数 = −3 → 必输关）',
+    name: 'levelPlan：台面槽被砍掉 3 个（有效空槽 − 颜色数 < −1 → 必输关）',
     suite: 'qa_design.js', expect: /必输关/,
-    find: '    slots=Math.min(5+Math.floor(t/8),6);',
-    repl: '    slots=Math.min(5+Math.floor(t/8),6);if(lv>=21&&lv<=22)slots=4;   /* rollback-test */'
+    find: '  var slots=clamp(colors+slotBias,5,SLOT_CAP);',
+    repl: '  var slots=clamp(colors+slotBias,5,SLOT_CAP); if(lv>=21&&lv<=22)slots=Math.max(5,slots-3);   /* rollback-test */'
   },
   {
-    name: 'levelPlan：台面槽预算膨胀到 7（多一个槽 = 首战通关率 43% → 88%，难度被抹平）',
-    suite: 'qa_design.js', expect: /槽位预算不许膨胀/,
-    find: '    slots=Math.min(5+Math.floor(t/8),6);',
-    repl: '    slots=Math.min(6+Math.floor(t/8),7);   /* rollback-test */'
+    name: 'genLevel 实际开出的台面槽比 levelPlan 计划多 1 个（槽位预算被偷偷放大）',
+    suite: 'qa_design.js', expect: /槽位预算/,
+    find: '  for(var s2=0;s2<slotsN;s2++)G.slots.push({open:s2<slotsN-1}); // 只留最右一个广告解锁槽',
+    repl: '  for(var s2=0;s2<slotsN+1;s2++)G.slots.push({open:s2<slotsN}); // rollback-test: 多开一个槽'
   },
   {
-    name: 'levelPlan：第 9~12 关货架从 5×3=15 格砍成 3×3=9 格（第 12→13 关格数跳 9 个 = 曲线断崖）',
+    name: 'levelPlan：高密度阶段行数起点被压到 3（第 15→16 关格数跳 14 个 = 曲线断崖）',
     suite: 'qa_design.js', expect: /难度参数逐关不跳变/,
-    find: 'if(lv<=12){pc=5;pr=3;}',
-    repl: 'if(lv<=12){pc=3;pr=3;}   /* rollback-test */'
+    find: 'rows:[5,6], colors:[9,12]',
+    repl: 'rows:[3,6], colors:[9,12]   /* rollback-test */'
   },
   {
-    name: 'levelPlan：第 38 关起门洞上限压到 2（后两个周期的峰值关比前面还简单）',
+    name: '极限阶段门洞上限被压到 2（后两个周期的峰值关比前面还简单）',
     suite: 'qa_design.js', expect: /跨周期峰值关不许变简单/,
-    find: 'gates=Math.min(1+Math.floor((t+1)/4),4);',
-    repl: 'gates=Math.min(1+Math.floor((t+1)/4),lv>=38?2:4);   /* rollback-test */'
+    find: 'gates:[5,6], ice:[5,6], slotBias:0}',
+    repl: 'gates:[5,2], ice:[5,6], slotBias:0}   /* rollback-test */'
   },
   {
-    name: 'levelPlan：第 9~12 关门洞与冰冻同时归零（后半程变纯送分的无干扰局）',
+    name: 'levelPlan：正式挑战阶段门洞与冰冻同时归零（后半程变纯送分的无干扰局）',
     suite: 'qa_design.js', expect: /第 9 关起干扰不许归零/,
-    find: '    gates=Math.min(1+Math.floor((t+1)/4),4);\n    ice=Math.min(1+Math.floor(t/5),4);',
-    repl: '    gates=lv>=13?Math.min(1+Math.floor((t+1)/4),4):0;\n'
-      + '    ice=lv>=13?Math.min(1+Math.floor(t/5),4):0;   /* rollback-test */'
+    find: 'gates:[2,3], ice:[1,2], slotBias:1}',
+    repl: 'gates:[0,0], ice:[0,0], slotBias:1}   /* rollback-test */'
   },
   {
     name: 'tubeCountFor：管数一律多加 3 根（第 1 关的管只剩 4 层水 —— 短短一截很难看）',
     suite: 'qa_design.js', expect: /每根管开局都装/,
-    find: '  while(n<7&&Math.ceil(units/n)>26)n++;\n  return n;\n}',
-    repl: '  while(n<7&&Math.ceil(units/n)>26)n++;\n  return Math.min(7,n+3);\n}   /* rollback-test */'
+    find: '  while(n<cap&&Math.ceil(units/n)>26)n++;\n  return n;\n}',
+    repl: '  while(n<cap&&Math.ceil(units/n)>26)n++;\n  return n+3;   /* rollback-test */\n}'
   },
   {
     name: 'gridPlayable()：可点判定多加一个条件（三成的瓶子开局点不到 = 开局没事可做）',
@@ -589,10 +607,10 @@ const CASES = [
   {
     /* 这条刻意选「plan 和实际一起改」的改法：格数断言拿实际比计划，两边一起变小是查不出的，
        只有硬编码绝对值的「中期货架阶梯」能抓到 —— 与稳态货架那条是同一个道理。 */
-    name: 'levelPlan：第 13~15 关货架从 6×3=18 格砍成 5×3=15 格（plan 与实际一起变，旧断言查不出）',
-    suite: 'qa_design.js', expect: /中期货架阶梯硬钉死/,
-    find: 'else if(lv<=15){pc=6;pr=3;}',
-    repl: 'else if(lv<=15){pc=5;pr=3;}   /* rollback-test */'
+    name: '正式挑战阶段列数被压到 5（第 15 关格数不再落在 35 格的设计目标上）',
+    suite: 'qa_design.js', expect: /V6.0 阶段阶梯硬钉死/,
+    find: 'cols:[5,7], rows:[4,5]',
+    repl: 'cols:[5,5], rows:[4,5]   /* rollback-test */'
   },
 
   /* ---------- 2026-09-30 05:00 档新增：两条门禁（G6b 面板关数全覆盖 / G11 广告位已填）----------
@@ -674,10 +692,10 @@ const CASES = [
     /* ⑤ 难度触顶：把冰冻上限从 4 抬到 5（只在第 29 关之后生效）。
        单关数值全都合法、三档递进也仍然成立，只有「难度在第 24 关完全触顶」能抓 ——
        这条守的是「对外文案不能写越往后越难」的代码依据。 */
-    name: 'levelPlan：冰冻上限从 4 抬到 5（第 29 关起后期还能再变难，触顶契约被破坏）',
-    suite: 'qa_design.js', expect: /难度在第 24 关完全触顶/,
-    find: 'ice=Math.min(1+Math.floor(t/5),4);',
-    repl: 'ice=Math.min(1+Math.floor(t/5),5);   /* rollback-test: 上限抬高 */'
+    name: '极限阶段颜色数上限被压平（第 60 关不比第 40 关更难 = 曲线触顶）',
+    suite: 'qa_design.js', expect: /曲线不许触顶/,
+    find: 'colors:[14,16], tubes:[17,17]',
+    repl: 'colors:[14,14], tubes:[17,17]   /* rollback-test */'
   },
   {
     /* ⑥ 三档「实际 == 计划」：只在**挑战档**里把门洞整关撤掉（普通档不动）。
@@ -691,11 +709,10 @@ const CASES = [
   {
     /* ⑦ 挑战档难度开关下限：极限档一次砍 2 个槽（而不是 1 个）。
        受控实验里 −2 已让贪心首战归零，−4 就彻底没有退路 —— 属于「点了必输」的形态。 */
-    name: '极限档一次砍 2 个台面槽（有效空槽 − 色 = −4，掉出「必输区」下限）',
+    name: '极限档台面槽多砍 2 格（有效空槽 − 色 = −4，掉出「必输区」下限）',
     suite: 'qa_design.js', expect: /挑战档难度开关下限/,
-    find: 'gates=Math.min(gates+1,4);\n    ice=Math.min(ice+1,4);',
-    repl: 'gates=Math.min(gates+1,4);\n    ice=Math.min(ice+1,4);\n'
-      + '    slots=Math.max(2,slots-2);   /* rollback-test: 极限档再砍一刀 */'
+    find: '  if(tier>=2){ slotBias-=1; gates+=1; ice+=1; }',
+    repl: '  if(tier>=2){ slotBias-=3; gates+=1; ice+=1; }   /* rollback-test: 极限档再砍两刀 */'
   },
 
   /* ---------- 2026-10-01 05:00 档新增：两条真浏览器门禁（G12 断网 / G13 端到端点击）----------
@@ -802,6 +819,37 @@ function startServer(code) {
 const DEFAULT_FILE = 'outputs/解压水消除.html';
 const origHash = origOf(DEFAULT_FILE).hash;
 
+/* ---------- 安全检查 ①：被测文件里不许残留 rollback-test 标记 ----------
+   踩过（2026-10-01）：上一次回滚验证被 SIGTERM 打断在半途，产品文件留在「已被改坏」的状态；
+   下一次运行直接把这份被污染的文本当成 original 快照 —— 于是 24 条用例的 find 全部命中 0 次、
+   md5 校验却「通过」，整套回滚验证静默失效（假绿的最高形态）。
+   所以开跑前先自检：任何目标文件里出现 "rollback-test" 就拒绝启动，别把污染当基线。 */
+const TARGET_FILES = [];
+[DEFAULT_FILE].concat(CASES.map(c => c.file).filter(Boolean))
+  .forEach(f => { if (TARGET_FILES.indexOf(f) < 0) TARGET_FILES.push(f); });
+const polluted = TARGET_FILES.filter(f => {
+  try { return /rollback-test/.test(origOf(f).text); } catch (e) { return false; }
+});
+if (polluted.length) {
+  console.error('✘ 拒绝启动：以下文件残留「rollback-test」标记，说明上一次回滚被中断、文件没还原：');
+  polluted.forEach(f => console.error('    - ' + f));
+  console.error('  请先用干净副本恢复（主文件与 publish_water/index.html 必须字节一致），再重跑。');
+  process.exit(2);
+}
+
+/* ---------- 安全检查 ②：被 kill 时把「在途补丁」还原回去（①的治本版）----------
+   ① 只能挡住「上一次的污染」，挡不住「这一次被 kill」。所以再补一个信号处理器：
+   打补丁前登记 inFlight，finally / 信号回调里都能把它写回原样。 */
+let inFlight = null;
+function emergencyRestore() {
+  if (!inFlight) return;
+  try { fs.writeFileSync(inFlight.path, inFlight.original, 'utf8'); } catch (e) { }
+  inFlight = null;
+}
+['SIGINT', 'SIGTERM', 'SIGHUP'].forEach(sig => {
+  try { process.on(sig, () => { emergencyRestore(); process.exit(130); }); } catch (e) { }
+});
+
 /* ---- 快照「会被套件顺手重写的受版本控制产物」 ----
  * 踩到过（2026-09-29 05:00）：跑完一轮回滚验证后 `git diff qa_design_table.tsv` 显示
  * L18~L20 的「槽」列从 6 变成 5、密度跟着变 —— 看上去像"产品数值回归"。
@@ -868,6 +916,7 @@ for (const c of CASES) {
   try {
     if (c.crlfTamper) {
       /* 整个文件强转 CRLF：模拟「git 把工作区换行改了」这一类事故 */
+      inFlight = { path: O.path, original: original };
       fs.writeFileSync(O.path, original.replace(/\r\n/g, '\n').replace(/\n/g, '\r\n'), 'utf8');
     } else if (!c.noPatch) {
       const hits = original.split(c.find).length - 1;
@@ -879,6 +928,7 @@ for (const c of CASES) {
         });
         continue;
       }
+      inFlight = { path: O.path, original: original };
       fs.writeFileSync(O.path, original.replace(c.find, c.repl), 'utf8');
     }
     r = runSuite(c.suite, env);
@@ -886,6 +936,7 @@ for (const c of CASES) {
     err = e;
   } finally {
     if (!c.noPatch) fs.writeFileSync(O.path, original, 'utf8');
+    inFlight = null;
     if (tamper && tamper.proc) { try { tamper.proc.kill(); } catch (e) { } }
   }
 

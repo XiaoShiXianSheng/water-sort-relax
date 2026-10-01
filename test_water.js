@@ -57,6 +57,10 @@ code = code.slice(0, i)
   + 'cellRect:cellRect,cellAt:cellAt,checkStuck:checkStuck,'
   + 'layoutSolvable:layoutSolvable,iceAt:iceAt,drawJarCounter:drawJarCounter,get fatal(){return fatalShown;},'
   + 'plan:levelPlan,snapAnim:snapAnim,lvPickTap:lvPickTap,LV_PANEL:LV_PANEL,tubeCountFor:tubeCountFor,'
+  + 'maxTubesByWidth:maxTubesByWidth,moveBudgetFor:moveBudgetFor,'
+  + 'CURVE:{SLOT_CAP:SLOT_CAP,GATE_CAP:GATE_CAP,ICE_CAP:ICE_CAP,GRID_MAX_ROWS:GRID_MAX_ROWS,'
+  + 'GRID_MAX_COLS:GRID_MAX_COLS,TUBE_MIN_W:TUBE_MIN_W,ACTION_PER_BOTTLE:ACTION_PER_BOTTLE,'
+  + 'MAX_COLORS:STAGE_CURVE[STAGE_CURVE.length-1].colors[1]},'
   + 'tryDrinks:tryDrinks,manifoldTarget:manifoldTarget,'
   + 'CFG:CFG,AdService:AdService,Track:Track,Store:Store,TOOLBS:TOOLBS,FAIL_OPTS:FAIL_OPTS,'
   + 'WIN_UI:WIN_UI,TITLE_UI:TITLE_UI,TIER_UI:TIER_UI,inBox:inBox,'
@@ -493,8 +497,9 @@ try {
   chk('整体递增：第 30 关格子数 ≥ 第 20 关', c30 >= c20);
   chk('不会倒退：第 3 关格子数 ≥ 第 1 关', c3 >= c1);
   DBG.gen(8); frames(8);
-  chk('水管数在 3~7 之间（关卡驱动，7 根正好铺满 720 宽）', DBG.G.tubes.length >= 3 && DBG.G.tubes.length <= 7);
-  chk('台面槽 5~7 个', DBG.G.slots.length >= 5 && DBG.G.slots.length <= 7);
+  chk('水管数在 3~' + DBG.maxTubesByWidth() + ' 之间（上限由屏幕宽 + TUBE_MIN_W 反推）',
+    DBG.G.tubes.length >= 3 && DBG.G.tubes.length <= DBG.maxTubesByWidth());
+  chk('台面槽 5~' + DBG.CURVE.SLOT_CAP + ' 个', DBG.G.slots.length >= 5 && DBG.G.slots.length <= DBG.CURVE.SLOT_CAP);
   chk('第 8 关出现门洞', DBG.G.gates.length > 0);
   const usedCells = new Set(DBG.G.bottles.map(b => b.cell)).size;
   chk('高关卡格子仍能装下所有瓶子（门洞里的共用一格）', DBG.G.cellCount >= usedCells);
@@ -509,21 +514,35 @@ try {
     const maxL = Math.max.apply(null, G.tubes.map(t => t.units.length));
     return { tubes: G.tubes.length, layers: maxL, uh: G.uh, topY: BOTT_Y - (maxL * G.uh + 20), cells: G.cellCount };
   };
-  const s1 = snap(1), s15 = snap(15), s25 = snap(25), s30 = snap(30), s30b = snap(30);
-  chk('第 1 关 3 根管（新手关保持清爽）', s1.tubes === 3);
-  chk('第 15 关至少 6 根管（原版这里只有 4 根）', s15.tubes >= 6);
-  chk('第 25 关达到 7 根管上限（原版这里只有 4 根）', s25.tubes >= 7);
-  chk('管数封顶 7 根（7 根正好铺满 720 宽；8 根起最外侧的管会被切、点不到）', s30.tubes === 7);
+  const s1 = snap(1), s15 = snap(15), s25 = snap(25), s30 = snap(30), s30b = snap(30), s40 = snap(40), s90 = snap(90);
+  const TCAP = DBG.maxTubesByWidth();
+  chk('第 1 关 3~4 根管（新手关保持清爽，不要一上来就一堆管子）', s1.tubes >= 3 && s1.tubes <= 4);
+  chk('第 15 关至少 8 根管（V6.0 正式挑战阶段：管线明显变多）', s15.tubes >= 8);
+  chk('第 25 关至少 12 根管（V6.0 高密度阶段）', s25.tubes >= 12);
+  chk('第 40 关达到 ' + TCAP + ' 根管上限（上限 = maxTubesByWidth()，与 layoutAll 共用同一常量）', s40.tubes === TCAP);
+  chk('管数封顶 ' + TCAP + ' 根（第 90 关也不会更多 —— 再多最外侧的管就会被切、点不到）', s90.tubes === TCAP);
+  chk('管数随关卡单调不减（1 → 15 → 25 → 40 逐段变多，不会忽多忽少）',
+    s1.tubes <= s15.tubes && s15.tubes <= s25.tubes && s25.tubes <= s40.tubes);
   chk('水层高度下限 28（不再为了不出屏把水柱压扁到 14~19）', s1.uh >= 28 && s30.uh >= 28);
   chk('低关卡水柱不顶出画面（第 1 关看得见全貌）', s1.topY > TUBE_CUT_Y);
-  chk('高关卡水柱真的顶出画面（第 30 关管顶越过 ' + TUBE_CUT_Y + '）', s30.topY < TUBE_CUT_Y);
-  chk('水柱没有夸张到整根消失（管顶不低于 -150，还能看见大半截）', s30.topY > -150);
+  chk('高关卡水柱真的顶出画面（第 90 关管顶越过 ' + TUBE_CUT_Y + '）', s90.topY < TUBE_CUT_Y);
+  chk('水柱没有夸张到整根消失（管顶不低于 -150，还能看见大半截）', s90.topY > -150);
   // 老 bug 回归：CAP 数组写死 28，导致第 26 关起每关完全一样
-  /* V4.0 §5.1：停止单纯「把棋盘做大」。格数硬上限 26（水量与步数随之下降，
-     单局时长不再冲到 9~10 分钟）。所以这里断言的是「封顶生效」而不是「越大越好」。 */
-  chk('格数硬上限 26 生效（第 25 / 30 关都不超过 26 格）', s25.cells <= 26 && s30.cells <= 26);
+  /* V6.0：棋盘从「26 格封顶」放开到 9×6=54 格 —— 但**不是无限制放大**，
+     每一关都要落在本关的操作量预算里（≤25 关 150 步 / ≤60 关 175 步 / 61~90 关 200 步）。
+     所以这里断言的是「硬上限生效 + 每关都在自己的预算内」，
+     而不是「封顶在哪个具体数字」—— 具体数字属于曲线，改曲线不该动这条测试。 */
+  const CELL_CAP = DBG.CURVE.GRID_MAX_ROWS * DBG.CURVE.GRID_MAX_COLS;
+  chk('棋盘硬上限 ' + CELL_CAP + ' 格生效（第 25 / 30 关都不超过）', s25.cells <= CELL_CAP && s30.cells <= CELL_CAP);
   chk('后期不倒退：第 30 关格数 ≥ 第 25 关', s30.cells >= s25.cells);
-  chk('后期封顶后规模稳定（第 30 关两次生成格数一致）', s30.cells === s30b.cells);
+  chk('后期规模稳定（第 30 关两次生成格数一致）', s30.cells === s30b.cells);
+  /* 操作量预算按关卡分段：把 25/30/90 三关的实际瓶数换算成预估步数比一比 */
+  const budgetOk = [25, 30, 60, 90].every(function (lv) {
+    DBG.gen(lv); frames(4);
+    const bott = DBG.G.bottles.length;
+    return Math.round(bott * DBG.CURVE.ACTION_PER_BOTTLE) <= DBG.moveBudgetFor(lv) + 10;
+  });
+  chk('每一关的单局操作量都在本关预算内（分段预算，不是一条平线）', budgetOk);
 } catch (e) { console.error(e); chk('水管曲线与水柱套件执行', false); }
 
 // ============ 测试 3.27：瓶子进度改成刻度格，不再画 33% / 67% ============
@@ -581,19 +600,19 @@ try {
       const G = DBG.G;
       const used = new Set(G.bottles.map(b => b.cell)).size;
       if (G.cellCount !== used) badFill.push('L' + lv + ' 格' + G.cellCount + '≠占' + used);
-      if (G.gridRows < 3 || G.gridRows > 5) badRows.push('L' + lv + ' 行数' + G.gridRows);
+      if (G.gridRows < 3 || G.gridRows > DBG.CURVE.GRID_MAX_ROWS) badRows.push('L' + lv + ' 行数' + G.gridRows);
       const sum = G.rowLen.reduce((a, b) => a + b, 0);
       if (sum !== G.cellCount || G.rowLen.some(n => n < 2)) badLen.push('L' + lv + ' rowLen=' + G.rowLen.join(','));
-      if (Math.max.apply(null, G.rowLen) > 7) badCols.push('L' + lv + ' 列' + Math.max.apply(null, G.rowLen));
+      if (Math.max.apply(null, G.rowLen) > DBG.CURVE.GRID_MAX_COLS) badCols.push('L' + lv + ' 列' + Math.max.apply(null, G.rowLen));
     }
   }
   chk('开局货架没有任何空格子（格子数 == 占用格数）', badFill.length === 0);
   if (badFill.length) console.log('  ' + badFill.slice(0, 8).join(' | '));
-  chk('行数始终在 3~5 之间（不再永远 3 行）', badRows.length === 0);
+  chk('行数始终在 3~' + DBG.CURVE.GRID_MAX_ROWS + ' 之间（不再永远 3 行）', badRows.length === 0);
   if (badRows.length) console.log('  ' + badRows.slice(0, 8).join(' | '));
   chk('每行至少 2 格且总格数对得上', badLen.length === 0);
   if (badLen.length) console.log('  ' + badLen.slice(0, 8).join(' | '));
-  chk('列数不超过 7（再多格子就小到看不清）', badCols.length === 0);
+  chk('列数不超过 ' + DBG.CURVE.GRID_MAX_COLS + '（再多格子就小到看不清）', badCols.length === 0);
   if (badCols.length) console.log('  ' + badCols.slice(0, 8).join(' | '));
 } catch (e) { console.error(e); chk('货架布局套件执行', false); }
 
@@ -1015,28 +1034,41 @@ try {
   if (peakNotDeeper.length) console.log('  不符: ' + peakNotDeeper.slice(0, 10).join(' '));
   chk('第 1 关就有 3×3（9 格），不再是憋屈的 3×2', growth[0] === 9);
 
-  /* ① 教学期 1~3：恒 9 格 / 3 色 / 无门洞无冰冻 —— 「快速理解、快速成功、几乎不挫败」 */
+  /* ① 教学期 1~3：恒 9 格 / 3~4 色 / 无门洞无冰冻 —— 「快速理解、快速成功、几乎不挫败」
+     V6.0 把第 3 关放宽到 4 色（曲线起点），但门洞/冰冻这类**新规则**仍然一个都不上。 */
   let teachBad = [];
   for (let lv = 1; lv <= 3; lv++) {
     const p = DBG.plan(lv);
-    if (!(p.cells === 9 && p.colors === 3 && p.gates === 0 && p.ice === 0)) teachBad.push('L' + lv);
+    if (!(p.cells === 9 && p.colors >= 3 && p.colors <= 4 && p.gates === 0 && p.ice === 0)) teachBad.push('L' + lv);
   }
-  chk('教学期 1~3 关恒为 9 格 / 3 色 / 无门洞无冰冻', teachBad.length === 0);
+  chk('教学期 1~3 关恒为 9 格 / 3~4 色 / 无门洞无冰冻', teachBad.length === 0);
 
-  /* ② 过渡期 4~8：一次只加一种复杂度（先门洞、后冰冻），颜色不猛加（≤4） */
+  /* ② 入门正式 4~8：一次只加一种复杂度（先门洞、后冰冻），且每种新手段的量级受控 */
   const p4 = DBG.plan(4), p5 = DBG.plan(5), p6 = DBG.plan(6), p7 = DBG.plan(7);
-  chk('第 4~5 关仍是纯净局（无门洞无冰冻）', p4.gates === 0 && p4.ice === 0 && p5.gates === 0 && p5.ice === 0);
-  chk('第 6 关只引入门洞（有门洞、无冰冻）', p6.gates >= 1 && p6.ice === 0);
-  chk('第 7 关才引入冰冻（门洞 + 冰冻同时在场）', p7.ice >= 1);
+  chk('第 4 关仍是纯净局（无门洞无冰冻）', p4.gates === 0 && p4.ice === 0);
+  chk('第 5 关只引入门洞（有门洞、无冰冻）', p5.gates >= 1 && p5.ice === 0);
+  chk('第 6 关才引入冰冻（门洞 + 冰冻同时在场）', p6.ice >= 1);
+  chk('入门期新手段量级受控（第 7 关门洞 ≤2、冰冻 ≤1）', p7.gates <= 2 && p7.ice <= 1);
+  let onceBad = [];
+  for (let lv = 4; lv <= 8; lv++) {
+    const a = DBG.plan(lv - 1), b = DBG.plan(lv);
+    if (b.gates > a.gates && b.ice > a.ice) onceBad.push('L' + lv);
+  }
+  chk('入门期「干扰一次只加一种」（门洞与冰冻不得同关新增）', onceBad.length === 0);
   let colorJump = [];
-  for (let lv = 1; lv <= 8; lv++) if (DBG.plan(lv).colors > 4) colorJump.push('L' + lv);
-  chk('过渡期颜色不猛加（1~8 关 ≤ 4 色）', colorJump.length === 0);
+  for (let lv = 1; lv <= 8; lv++) if (DBG.plan(lv).colors > 6) colorJump.push('L' + lv);
+  chk('入门期颜色不猛加（1~8 关 ≤ 6 色）', colorJump.length === 0);
 
-  /* ③ 9 关以后：决策密度递进（不是容量递进），且格数封顶 26 */
+  /* ③ 9 关以后：决策密度递进（不是容量递进），且格数不超硬上限 */
+  const CELL_CAP2 = DBG.CURVE.GRID_MAX_ROWS * DBG.CURVE.GRID_MAX_COLS;
   chk('9 关以后决策密度真的在涨（第 30 关密度 > 第 10 关）', density[29] > density[9]);
   let overCap = [];
-  for (let lv = 1; lv <= 30; lv++) if (DBG.plan(lv).cells > 26) overCap.push('L' + lv);
-  chk('棋盘硬上限 26 格生效（1~30 关全部不超）', overCap.length === 0);
+  for (let lv = 1; lv <= 30; lv++) if (DBG.plan(lv).cells > CELL_CAP2) overCap.push('L' + lv);
+  chk('棋盘硬上限 ' + CELL_CAP2 + ' 格生效（1~30 关全部不超）', overCap.length === 0);
+  /* V6.0 专属：曲线到第 90 关仍在爬（旧版第 24 关就完全触顶，25~90 关只是换布局） */
+  const p30x = DBG.plan(30), p90x = DBG.plan(90);
+  chk('曲线不触顶：第 90 关的「色 + 洞 + 冰」严格高于第 30 关',
+    (p90x.colors + p90x.gates + p90x.ice) > (p30x.colors + p30x.gates + p30x.ice));
   /* 波浪保留：9 关以后（第 6~30 关，即周期 2~6）每个周期的峰值关「决策密度」最高。
      方案 F 之后第 19 关起货架恒 24 格（每行等长），cells 恒定 → 必须改用 density 口径，
      否则固定等长货架会让这条断言永远报假违规。 */

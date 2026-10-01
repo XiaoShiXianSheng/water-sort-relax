@@ -306,14 +306,18 @@ guard(rep, '难度档位', function () {
   rep.ok('同一关的挑战档「决策密度越来越难」（density 严格递增）', badDensity.length === 0, badDensity.join(' '));
   rep.ok('同一关的挑战档「干扰越来越多」（门洞数不减少）', badHarder.length === 0, badHarder.join(' '));
 
-  /* 教学关的挑战档也必须「能玩」（不能一上来就给 3 格） */
-  const e1 = P(1, 2);
-  rep.ok('教学关的挑战档也保证可玩（格子 ≥ 12 且不出现 0 色）', e1.cells >= 12 && e1.colors >= 3);
+  /* 教学关的挑战档也必须「能玩」（不能一上来就给 3 格、更不能 0 色）。
+     V6.0 教学关本来就是 9 格小盘，挑战档不许把它放大 —— 口径改成「3 档棋盘一致且 ≥9 格」。 */
+  const e0 = P(1, 0), e1 = P(1, 2);
+  rep.ok('教学关的挑战档也保证可玩（3 档同为 ' + e1.cells + ' 格、颜色 ≥3、槽 ≥5）',
+    e1.cells === e0.cells && e1.cells >= 9 && e1.colors >= 3 && e1.slots >= 5);
 
-  /* 极限档也不许突破棋盘上限 */
+  /* 极限档也不许突破棋盘上限（上限来自 CURVE，不再写死 26） */
+  const CELL_CAP = g.DBG.CURVE.GRID_MAX_ROWS * g.DBG.CURVE.GRID_MAX_COLS;
   let over = [];
-  for (let lv = 1; lv <= 40; lv++) for (let t = 0; t <= 2; t++) if (P(lv, t).cells > 26) over.push('L' + lv + 'T' + t);
-  rep.ok('任何档位都不突破棋盘硬上限 26 格', over.length === 0, over.slice(0, 6).join(' '));
+  for (let lv = 1; lv <= 90; lv++) for (let t = 0; t <= 2; t++) if (P(lv, t).cells > CELL_CAP) over.push('L' + lv + 'T' + t);
+  rep.ok('任何档位都不突破棋盘硬上限 ' + CELL_CAP + ' 格（' + g.DBG.CURVE.GRID_MAX_ROWS + '×' +
+    g.DBG.CURVE.GRID_MAX_COLS + '）', over.length === 0, over.slice(0, 6).join(' '));
 
   /* 解锁关系：没打赢普通档，就不该解锁困难/极限 */
   const S = g.DBG.Store;
@@ -326,14 +330,15 @@ guard(rep, '难度档位', function () {
 });
 
 /* =====================================================================
-   6. 单局规模：高关卡必须「封顶」，不能越玩越久
+   6. 单局规模与时长：V6.0 把棋盘放大到 9×6，所以不再是「一刀切封顶」，
+      而是「每一关都落在本关的动态预算里」（见 levelPlan 的校准③ + moveBudgetFor）
    ===================================================================== */
 guard(rep, '单局规模', function () {
   const g = boot(1);
   const D = g.DBG;
 
   const rows = [];
-  for (let lv = 1; lv <= 30; lv++) {
+  for (let lv = 1; lv <= 90; lv++) {
     D.gen(lv); g.frames(2);
     const G = D.G;
     rows.push({
@@ -346,29 +351,95 @@ guard(rep, '单局规模', function () {
   rep.ok('每瓶固定 3 口：水总量 == 瓶数 × 3（单局规模可以精确推算）', badConserve.length === 0,
     badConserve.slice(0, 5).map(function (r) { return 'L' + r.lv; }).join(' '));
 
+  const CV = D.CURVE;
+  const cellsCap = 54, bottleCap = 70;
   const maxCells = Math.max.apply(null, rows.map(function (r) { return r.cells; }));
   const maxBottles = Math.max.apply(null, rows.map(function (r) { return r.bottles; }));
-  rep.ok('单局棋盘封顶 26 格（不再越玩越多）', maxCells <= 26, '最大 ' + maxCells);
-  rep.ok('单局瓶子封顶（26 格 + 门洞最多多塞 8 瓶 = 34）', maxBottles <= 34, '最大 ' + maxBottles);
-  rep.ok('单局水量封顶 ≤ ' + (34 * 3) + ' 杯', Math.max.apply(null, rows.map(function (r) { return r.water; })) <= 102);
+  rep.ok('单局棋盘封顶 ' + cellsCap + ' 格（V6.0 的 9×6 硬上限）', maxCells <= cellsCap, '最大 ' + maxCells);
+  rep.ok('单局瓶子封顶 ' + bottleCap + ' 瓶（54 格 + 门洞最多多塞 16 瓶）', maxBottles <= bottleCap, '最大 ' + maxBottles);
+  rep.ok('单局水量封顶 ≤ ' + (bottleCap * 3) + ' 杯',
+    Math.max.apply(null, rows.map(function (r) { return r.water; })) <= bottleCap * 3);
 
-  const late = rows.filter(function (r) { return r.lv >= 20; });
-  const lateMin = Math.min.apply(null, late.map(function (r) { return r.water; }));
-  const lateMax = Math.max.apply(null, late.map(function (r) { return r.water; }));
-  rep.ok('第 20 关以后单局规模已经稳定（波动 ≤ 12 杯，不再越玩越久）',
-    lateMax - lateMin <= 12, lateMin + '~' + lateMax);
+  /* 单局时长：V6.0 的预算随关卡分段（≤25 关 150 步 / ≤60 关 175 步 / 61~90 关 200 步），
+     不再是一条 150 步的平线（平线会把 50~90 关压成同一个难度）。 */
+  const overBudget = rows.filter(function (r) {
+    return Math.round((r.water / 3) * CV.ACTION_PER_BOTTLE) > D.moveBudgetFor(r.lv) + 10;
+  });
+  rep.ok('每一关的单局操作量都在本关预算内（≤25 关 150 步 / ≤60 关 175 步 / 61~90 关 200 步）',
+    overBudget.length === 0, overBudget.slice(0, 6).map(function (r) { return 'L' + r.lv; }).join(' '));
 
   const w10 = rows[9].water, w30 = rows[29].water;
-  rep.ok('第 30 关水量不超过第 10 关的 1.8 倍（难度靠决策密度而不是堆量）',
-    w30 <= w10 * 1.8, w10 + ' → ' + w30);
+  rep.ok('第 30 关水量不超过第 10 关的 2.5 倍（V6.0 放大棋盘后的新口径：难度仍主要靠决策密度）',
+    w30 <= w10 * 2.5, w10 + ' → ' + w30);
 
   const maxPar = Math.max.apply(null, rows.map(function (r) { return r.par; }));
-  rep.ok('好成绩步数（par）封顶 ≤ 60 步（单局时长可控）', maxPar <= 60, '最大 par=' + maxPar);
+  rep.ok('好成绩步数（par）封顶 ≤ 130 步（单局时长可控；par = 理论最小步数 × 1.4 + 门洞 × 2，随规模上走）',
+    maxPar <= 130, '最大 par=' + maxPar);
 
-  /* 高关卡的难度提升应体现在「干扰」而不是「容量」 */
-  const p10 = D.plan(10), p30 = D.plan(30);
-  rep.ok('第 30 关比第 10 关难在做题密度（density 涨、格子不涨）',
-    p30.density > p10.density && p30.cells <= 26);
+  /* 高关卡的难度提升应体现在「干扰」而不是「纯容量」 */
+  const p10 = D.plan(10), p30 = D.plan(30), p90 = D.plan(90);
+  rep.ok('第 30 关比第 10 关难在做题密度（density 涨、颜色/干扰涨）',
+    p30.density > p10.density && p30.colors > p10.colors);
+  rep.ok('第 90 关的干扰量严格高于第 30 关（曲线到 90 关仍在爬，不触顶）',
+    (p90.colors + p90.gates + p90.ice) > (p30.colors + p30.gates + p30.ice),
+    'L30 ' + p30.colors + '/' + p30.gates + '/' + p30.ice + ' → L90 ' + p90.colors + '/' + p90.gates + '/' + p90.ice);
+});
+
+/* =====================================================================
+   7. 广告入口只有三类（V6.0 §六 红线）
+      —— ①失败复活激励 ②道具补次激励（含撤销补次） ③低频成功后插屏。
+      这条必须是**源码级**断言：广告入口是"多一行就多一个变现位"的地方，
+     跑起来永远看不出多了一个入口（玩家只是偶尔多看到一次广告），
+      只有数调用点才抓得住「悄悄加第四类」。
+   ===================================================================== */
+guard(rep, '广告入口只有三类', function () {
+  const fs = require('fs');
+  const path = require('path');
+  const html = fs.readFileSync(path.join(__dirname, 'outputs', '解压水消除.html'), 'utf8');
+
+  const count = (re) => (html.match(re) || []).length;
+  /* 取函数体（大括号配平）——用来证明「某个入口里没有挂广告」 */
+  const bodyOf = (name) => {
+    const i = html.indexOf('function ' + name + '(');
+    if (i < 0) return null;
+    let j = html.indexOf('{', i), d = 0;
+    for (let k = j; k < html.length; k++) {
+      if (html[k] === '{') d++;
+      else if (html[k] === '}') { d--; if (d === 0) return html.slice(j, k + 1); }
+    }
+    return null;
+  };
+
+  /* ① 激励广告只有一个统一封装入口：adReward → AdService.showRewarded */
+  rep.ok('激励广告只有一个统一入口（AdService.showRewarded 全文件恰好 1 个调用点，就在 adReward 里）',
+    count(/AdService\.showRewarded\(/g) === 1, '实际 ' + count(/AdService\.showRewarded\(/g) + ' 个');
+
+  /* ② 插屏只有一个调用点、且场景是「成功之后」（不在局内打断） */
+  rep.ok('插屏只有一个调用点、场景固定为 level_complete（成功之后，绝不在玩到一半打断）',
+    count(/AdService\.showInterstitial\(/g) === 1 && html.indexOf("showInterstitial('level_complete'") >= 0,
+    '调用点 ' + count(/AdService\.showInterstitial\(/g) + ' 个');
+
+  /* ③ 场景名集合必须恰好是这三类 */
+  const scenes = [];
+  const re = /adReward\('([^']*)'/g;
+  let m2;
+  while ((m2 = re.exec(html)) !== null) scenes.push(m2[1]);
+  const uniq = Array.from(new Set(scenes)).sort();
+  rep.ok('激励广告场景恰好三类：revive（失败复活）/ tool_（道具补次）/ undo（撤销补次）',
+    uniq.join(',') === 'revive,tool_,undo', '实际 [' + uniq.join(',') + ']');
+
+  /* ④ 这些入口不许挂广告（多一个就是第四类） */
+  const noAd = ['unlockSlot', 'hintTap', 'goHome', 'startDaily', 'bootSession', 'checkStuck', 'enterFail'];
+  const dirty = noAd.filter((fn) => {
+    const b = bodyOf(fn);
+    return b && (b.indexOf('adReward(') >= 0 || b.indexOf('showRewarded(') >= 0 || b.indexOf('showInterstitial(') >= 0);
+  });
+  rep.ok('解锁台面 / 软提示 / 回首页 / 每日挑战 / 启动 / 卡死判定 / 失败判定 都不挂广告（不许为广告造死局）',
+    dirty.length === 0, dirty.join(' '));
+
+  /* ⑤ 广告拉取失败必须「放行」而不是卡住流程 */
+  rep.ok('广告拉取失败时有免费降级通道（玩家不会被一次加载失败卡在失败页）',
+    /adFailFallback\s*:\s*'free'/.test(html) || /adFailFallback\s*:\s*"free"/.test(html));
 });
 
 rep.done();
