@@ -49,6 +49,27 @@
  *   · **三档「实际门洞/冰冻数 == 计划」**（原断言只跑普通档，困难/极限同样有静默降级路径）
  *   · **挑战档难度开关下限**（有效空槽 − 色 ≥ −3；受控实验 −2 已让贪心首战归零，−4 彻底没退路）
  *
+ * 2026-10-02 02:00 档再补 6 条（本档主题：**「钉幅度」不等于「钉方向」**；探针口径 1~90 关 × 5 档 = 450 次纯 plan 计算零漂移）：
+ *   · **阶段连续性铁律**（6 个接缝：格/色/管不许降，洞/冰掉幅 ≤1 = 一个波浪振幅）
+ *     —— `STAGE_CURVE` 注释里写死的承诺，此前只有「逐关不跳变（|Δ| ≤ N）」在守，
+ *     而那条**只管幅度不管方向**：把阶段起点整体调低 6 格，|Δ|=6 ≤ 8 → 全绿，
+ *     可「进新阶段反而变简单」已经回来了。回滚用例实测：这条只让本断言红（71 PASS/1 FAIL），
+ *     旁边的「逐关不跳变」纹丝不动 → 两条互不覆盖。
+ *   · **普通档台面槽 == 颜色数**（colors ≥ 5 时严格相等）+ **挑战档自第 10 关起每档恰好 −1 槽**
+ *     —— 比「槽 ≥ 色」强一档：只加一个白送的槽就能把首战通关率从 43% 抹到 88%（受控实验），
+ *     而「槽 ≥ 色」和「有效空槽−色 ≤ +1」合起来恰好放过这一档。
+ *   · **全局单调不减**（1~90 关：格数 / 颜色数 / 水管数 / 台面槽）—— V6.1 对外的承诺；
+ *     现有断言只钉了 7 个阶段末关的绝对值 + |Δ格| ≤ 8，「第 40 关比 39 关少 8 格」照样全绿。
+ *     ⚠ 唯独**不钉**「门洞 + 冰冻」合计（波浪每 5 关 −2/+2，它本来就不单调）。
+ *   · **峰值关的门洞/冰冻 ≥ 同周期相位 2、3 关** —— 原有「波浪节奏」只比加权后的 density，
+ *     「洞少 1 冰多 1」可以把密度抵平，造出「峰值关其实不更难」的假峰。
+ *   · **热身档（−1/−2）全维度 ≤ 普通档 + 退路更宽** —— 回归热身的全部意义；
+ *     留存套件只在几个固定关卡验，这条把 1~90 关全扫。
+ *   · **水管数 ≥ 颜色数** —— 少于颜色数时由抽屉原理必有管子同时是两种色的主要来源。
+ *
+ * 趋势（不判定）：末段峰值关的 +1 加成会被 GATE_CAP/ICE_CAP 吃掉（L85 / L90 的基数已是 8，
+ * +1 被 clamp），这两关的「峰值」只是名义上的 —— 上限封顶的算术后果，已写进评审文档当开放问题。
+ *
  * ================= 2026-10-01 V6.0 难度与留存重构（本档改动最大的一次）=================
  * 曲线从「6 色 / 24 格 / 第 24 关触顶」换成 V6.0 的 7 阶段硬路线，覆盖 1~90 关：
  *   教学 1~3（9 格 / 3~4 色）→ 入门正式 4~8（9→20 格 / 4~6 色）→
@@ -806,6 +827,132 @@ guard(rep, '设计', function () {
     ' ｜困难 ' + JSON.stringify(effTier[1]) + ' ｜极限 ' + JSON.stringify(effTier[2]) + '）');
   console.log('  （三档共 ' + gen270 + ' 次生成；冰冻瓶紧贴门洞的形态出现 ' + iceNearGateN +
     ' 次 —— 设计允许（只有「洞口箭头朝冰冻瓶」被禁止，已由另一条断言守））');
+
+  /* ============ 2026-10-02 02:00 档新增：6 条「还没被断言保护」的设计规则 ============
+     探针口径：1~90 关 × 5 个档位（普通/困难/极限/热身2 −1/热身1 −2）= 450 次**纯 plan 计算**
+     （不生成关卡），独立跑两轮零漂移才敢钉等号。每条都注明「它到底能抓什么」——
+     ① 阶段连续性铁律：`STAGE_CURVE` 注释里写死的「每段起点 = 上一段终点」。
+        现有断言里只有「逐关不跳变（|Δ| ≤ N）」这条**幅度**约束，方向（往下掉）它管不住：
+        把某个阶段的起点值调低 6 格，只要相邻关差值仍 ≤ 8，全绿。而玩家读到的是
+        「打进了新阶段反而变简单」（V4.x 的老毛病：L15 密度 98.1 → L16 89.7）。
+        实测：格/色/管在 6 个接缝上**完全相等**；洞/冰各掉 0~1 个（掉的那 1 个就是波浪振幅，
+        因为阶段末关都是 lv%5===0 的峰值关，带了 +1）。所以钉「不降」+「掉幅 ≤1」。
+     ② 普通档「台面槽 == 颜色数」（colors ≥ 5 时）—— 比现有的「槽 ≥ 色」强一档。
+        现有两条（`槽 ≥ 颜色数` + `有效空槽−色 ≤ +1`）合起来只排除 +2，
+        允许「多给一个槽」这种**抹平难度**的改动蒙混过关（受控实验：+1 槽 = 43% → 88%）。
+        实测 90 关里 colors≥5 的 86 关全部严格相等 → 可以钉等号。
+        同时钉挑战档**自第 10 关起每档恰好 −1 槽**（教学 1~9 关颜色还小、撞 clamp(≥5) 地板，
+        减不动是合法的，所以起点从第 10 关算）。
+     ③ 全局单调不减（格数 / 颜色数 / 水管数 / 台面槽，1~90 关）——
+        这是 V6.1 对外的承诺「格数仍单调不减（45→50→55→55）」。现有断言只钉了
+        7 个阶段末关的绝对值 + 相邻关 |Δ格| ≤ 8，「第 40 关比第 39 关小 8 格」照样全绿。
+        实测四列全单调不减（注意「门洞+冰冻」**不是**单调的：波浪每 5 关 −2/+2，不能一起钉）。
+     ④ 峰值关的门洞/冰冻 ≥ 同周期相位 2、3 关 —— 现有「波浪节奏」只比 density，
+        而 density 是加权和：完全可能出现「门洞少 1 个但冰冻多 1 个、密度持平」这种
+        「峰值关其实不更难」的假峰。这条把两个原始干扰量单独钉住。
+     ⑤ 热身档（−1/−2）全维度 ≤ 普通档，且「台面槽 − 颜色数」≥ 普通档 ——
+        回归热身的全部意义就是「盘面更轻 + 退路更宽」。现有留存套件只在几个固定关卡验，
+        这条把 1~90 关全扫一遍（谁把热身档调得比普通档还重，或把它的退路收窄，当场红）。
+     ⑥ 水管数 ≥ 颜色数（普通档）—— 源头管少于颜色数时，由抽屉原理必有至少一根管
+        同时是两种以上颜色的「主要来源」，开局第一手的可选项骤减；而且颜色上限 17
+        正是靠「管上限 17」撑住的（`STAGE_CURVE` 末段的 colors 天花板 = 管上限）。
+     另外顺手打一条**趋势**（不判定）：末段峰值关的 +1 加成会被 GATE_CAP/ICE_CAP 吃掉，
+     例如 L85/L90 的门洞基数已经是 8，+1 被 clamp 掉 → 峰值关与相位 3 关同参。
+     这是「上限封顶」的算术后果，不是 bug，但会影响「末段还在变难」这个说法，故记录下来。 */
+  const v3 = { stageLink: [], slotExact: [], mono: [], peakCmp: [], warm: [], tubeVsColor: [] };
+  const pl0 = [], pl1 = [], pl2 = [], plW1 = [], plW2 = [];
+  for (let lv = 1; lv <= LVMAX; lv++) {
+    pl0.push(D.plan(lv, 0)); pl1.push(D.plan(lv, 1)); pl2.push(D.plan(lv, 2));
+    plW1.push(D.plan(lv, -1)); plW2.push(D.plan(lv, -2));
+  }
+
+  /* ① 阶段连续性铁律（6 个接缝：[阶段末关, 下一阶段首关]） */
+  const STAGE_JOINS = [[3, 4], [8, 9], [15, 16], [25, 26], [40, 41], [60, 61]];
+  for (let ji = 0; ji < STAGE_JOINS.length; ji++) {
+    const lvA = STAGE_JOINS[ji][0], lvB = STAGE_JOINS[ji][1];
+    const A = pl0[lvA - 1], B = pl0[lvB - 1];
+    if (B.cells < A.cells) v3.stageLink.push('L' + lvA + '→L' + lvB + ' 格' + A.cells + '→' + B.cells);
+    if (B.colors < A.colors) v3.stageLink.push('L' + lvA + '→L' + lvB + ' 色' + A.colors + '→' + B.colors);
+    if (B.tubes < A.tubes) v3.stageLink.push('L' + lvA + '→L' + lvB + ' 管' + A.tubes + '→' + B.tubes);
+    if (A.gates - B.gates > 1) v3.stageLink.push('L' + lvA + '→L' + lvB + ' 门洞掉' + (A.gates - B.gates));
+    if (A.ice - B.ice > 1) v3.stageLink.push('L' + lvA + '→L' + lvB + ' 冰冻掉' + (A.ice - B.ice));
+  }
+  one('**阶段连续性铁律**（6 个阶段接缝上：格数/颜色/水管不许下降，门洞/冰冻掉幅 ≤1 = 一个波浪振幅；' +
+    '现有「逐关不跳变」只管幅度不管方向，把阶段起点调低照样全绿）', v3.stageLink);
+
+  /* ② 普通档台面槽 == 颜色数（colors ≥ 5）+ 挑战档自第 10 关起每档恰好 −1 槽 */
+  for (let lv = 1; lv <= LVMAX; lv++) {
+    const p0 = pl0[lv - 1], p1 = pl1[lv - 1], p2 = pl2[lv - 1];
+    if (p0.colors >= 5 && p0.slots !== p0.colors)
+      v3.slotExact.push('L' + lv + ' 普通档槽' + p0.slots + '≠色' + p0.colors);
+    if (lv >= 10) {
+      if (p0.slots - p1.slots !== 1) v3.slotExact.push('L' + lv + ' 困难档槽 ' + p0.slots + '→' + p1.slots + '（应 −1）');
+      if (p1.slots - p2.slots !== 1) v3.slotExact.push('L' + lv + ' 极限档槽 ' + p1.slots + '→' + p2.slots + '（应 −1）');
+    }
+  }
+  one('**普通档台面槽 == 颜色数**（colors ≥ 5 时严格相等；比「槽 ≥ 色」强一档，' +
+    '多给一个槽会把通关率从 43% 抹到 88%）+ **挑战档自第 10 关起每档恰好 −1 槽**', v3.slotExact);
+
+  /* ③ 全局单调不减（1~90 关）：格数 / 颜色数 / 水管数 / 台面槽 */
+  for (let lv = 2; lv <= LVMAX; lv++) {
+    const A = pl0[lv - 2], B = pl0[lv - 1];
+    if (B.cells < A.cells) v3.mono.push('L' + (lv - 1) + '→' + lv + ' 格' + A.cells + '→' + B.cells);
+    if (B.colors < A.colors) v3.mono.push('L' + (lv - 1) + '→' + lv + ' 色' + A.colors + '→' + B.colors);
+    if (B.tubes < A.tubes) v3.mono.push('L' + (lv - 1) + '→' + lv + ' 管' + A.tubes + '→' + B.tubes);
+    if (B.slots < A.slots) v3.mono.push('L' + (lv - 1) + '→' + lv + ' 槽' + A.slots + '→' + B.slots);
+  }
+  one('**全局单调不减**（1~' + LVMAX + ' 关：格数 / 颜色数 / 水管数 / 台面槽；' +
+    '现有断言只钉了 7 个阶段末关的绝对值 + |Δ格| ≤ 8，「第 40 关比 39 关少 8 格」照样全绿）',
+    v3.mono);
+
+  /* ④ 峰值关的门洞/冰冻 ≥ 同周期相位 2、3 关 */
+  const flatPeaks = [];
+  for (let cyc = 1; cyc * 5 + 5 <= LVMAX; cyc++) {
+    const lvPk = cyc * 5 + 5;
+    const pk = pl0[lvPk - 1];
+    for (let pi = 2; pi <= 3; pi++) {
+      const lvB = cyc * 5 + pi + 1, b = pl0[lvB - 1];
+      if (pk.gates < b.gates) v3.peakCmp.push('峰值L' + lvPk + ' 洞' + pk.gates + ' < L' + lvB + ' ' + b.gates);
+      if (pk.ice < b.ice) v3.peakCmp.push('峰值L' + lvPk + ' 冰' + pk.ice + ' < L' + lvB + ' ' + b.ice);
+    }
+    if (pk.density === pl0[cyc * 5 + 3].density) flatPeaks.push('L' + lvPk);
+  }
+  one('**峰值关的门洞/冰冻 ≥ 同周期相位 2、3 关**（「波浪节奏」只比加权后的 density，' +
+    '可能「洞少 1 冰多 1」抵平 —— 这条把两个原始干扰量单独钉住）', v3.peakCmp);
+
+  /* ⑤ 热身档（−1/−2）全维度 ≤ 普通档，且退路更宽 */
+  for (let lv = 1; lv <= LVMAX; lv++) {
+    const p0 = pl0[lv - 1], dN = p0.slots - p0.colors;
+    const list = [[-1, plW1[lv - 1]], [-2, plW2[lv - 1]]];
+    for (let wi = 0; wi < list.length; wi++) {
+      const t = list[wi][0], w = list[wi][1];
+      if (w.cells > p0.cells) v3.warm.push('L' + lv + ' t' + t + ' 格' + p0.cells + '→' + w.cells);
+      if (w.colors > p0.colors) v3.warm.push('L' + lv + ' t' + t + ' 色' + p0.colors + '→' + w.colors);
+      if (w.tubes > p0.tubes) v3.warm.push('L' + lv + ' t' + t + ' 管' + p0.tubes + '→' + w.tubes);
+      if (w.gates > p0.gates) v3.warm.push('L' + lv + ' t' + t + ' 洞' + p0.gates + '→' + w.gates);
+      if (w.ice > p0.ice) v3.warm.push('L' + lv + ' t' + t + ' 冰' + p0.ice + '→' + w.ice);
+      if ((w.slots - w.colors) < dN)
+        v3.warm.push('L' + lv + ' t' + t + ' 退路(槽−色) ' + dN + '→' + (w.slots - w.colors));
+    }
+  }
+  one('**热身档（−1/−2）全维度 ≤ 普通档 + 退路更宽**（格/色/管/洞/冰 一律不超，' +
+    '且「台面槽 − 颜色数」≥ 普通档；1~90 关全扫，不抽查）', v3.warm);
+
+  /* ⑥ 水管数 ≥ 颜色数（普通档） */
+  for (let lv = 1; lv <= LVMAX; lv++) {
+    const p0 = pl0[lv - 1];
+    if (p0.tubes < p0.colors) v3.tubeVsColor.push('L' + lv + ' 管' + p0.tubes + ' < 色' + p0.colors);
+  }
+  one('**水管数 ≥ 颜色数**（普通档；源头管少于颜色数时，由抽屉原理必有管子同时是两种色的主要来源，' +
+    '开局第一手可选项骤减。颜色上限 17 也正是靠管上限 17 撑住的）', v3.tubeVsColor);
+
+  console.log('  （末端波浪衰减趋势：峰值关与同周期相位 3 关密度相同的关卡 = ' +
+    (flatPeaks.length ? flatPeaks.join(' ') : '无') +
+    '；原因是末段门洞/冰冻基数已顶到 GATE_CAP/ICE_CAP，峰值 +1 被 clamp 吃掉 —— 算术后果，不是 bug）');
+  console.log('  （阶段接缝实测：' + STAGE_JOINS.map(function (j) {
+    const A = pl0[j[0] - 1], B = pl0[j[1] - 1];
+    return 'L' + j[0] + '→' + j[1] + ' 洞' + A.gates + '→' + B.gates + '/冰' + A.ice + '→' + B.ice;
+  }).join('　') + '）');
 
   /* 水柱出屏：这是产品要的「压迫感」，只有 0 才算白做 */
   rep.warnIf('水柱能真的顶出屏幕顶部（有压迫感）', maxOverflow < 4,

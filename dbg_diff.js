@@ -1,9 +1,24 @@
 // dbg_diff.js —— 难度量化：开局可选面 / 贪心单次通关率 / 绕路比
 // 用法：LVS=1,3,5,7,8,10 REPS=20 node dbg_diff.js "outputs/解压水消除.html"
+// ⚠ 结果**写进 `_diff.txt`**（不是 stdout）：跑完读那个文件，别在终端里等输出。
+// ⚠ 道具/撤销的点击坐标从产品常量读（见下面 toolCX 的注释）—— 2026-10-02 之前写死成 15，
+//   导致「贪心首战通关率」一直是不用道具的口径。
 const fs = require('fs');
 const path = require('path');
 const FILE = process.argv[2] || path.join(__dirname, 'outputs', '解压水消除.html');
 let html = fs.readFileSync(FILE, 'utf8');
+
+/* ⚠ 产品完整性闸门（2026-10-02 踩坑，血泪）：`qa_rollback.js` 被**硬杀**（`taskkill /F`、会话收尾杀后台）
+   时信号处理器根本不会执行 —— 产品文件会留在「已被故意改坏」的状态。
+   而本脚本不会报错，只是**安静地跑出一整套荒谬数据**（实测：8 个关卡全部 0% 或全部 100%），
+   足够让人写出错误结论。所以读进来第一件事就是查污染标记，宁可不跑。 */
+if (/rollback-test/.test(html)) {
+  console.error('✘ 拒绝运行：' + FILE + ' 里残留 rollback-test 标记 —— 回滚验证被中断且没还原。');
+  console.error('  先还原：git checkout -- outputs/解压水消除.html');
+  console.error('  （并核对 publish_water/index.html 与主文件字节一致，再重跑。）');
+  process.exit(2);
+}
+
 const m = html.match(/<script>([\s\S]*)<\/script>/);
 let code = m[1];
 
@@ -49,6 +64,7 @@ code = code.slice(0, i)
   + 'window.__DBG={get G(){return G;},tap:handleTap,gen:genLevel,freeSlot:freeSlot,'
   + 'gateBlocked:gateBlocked,gateFront:gateFront,gridPlayable:gridPlayable,'
   + 'neighborCell:neighborCell,cellRect:cellRect,checkStuck:checkStuck,'
+  + 'toolX:toolX,TOOL_Y:TOOL_Y,TOOL_H:TOOL_H,TOOL_W:TOOL_W,'
   + 'adj:function(a,b){return cellsAdjacent(a,b);}};\n  '
   + code.slice(i);
 
@@ -58,9 +74,15 @@ function frames(n) { for (let k = 0; k < n; k++) { T += 16.7; const cb = rafCb; 
 function click(x, y) { listeners['mousedown'] && listeners['mousedown']({ clientX: x, clientY: y }); }
 const DBG = global.__DBG;
 const BOTT_Y = 470;
-const TOOL_X0 = 15, TOOL_W = 130, TOOL_GAP = 10, TOOL_Y = 1176, TOOL_H = 96;
-function toolCX(i2) { return TOOL_X0 + i2 * (TOOL_W + TOOL_GAP) + TOOL_W / 2; }
-function toolCY() { return TOOL_Y + TOOL_H / 2; }
+/* ⚠ 工具栏坐标必须从产品里读，不能写死（2026-10-02 踩到，和 bot_run.js 当年踩的是同一个坑）：
+   这里原本写死 `TOOL_X0 = 15`，而产品去掉「假分享」按钮后早已重新居中到 **85**
+   （`TOOL_X0=85`）—— 于是 toolCX(0..3) 算出来的 4 个中心（80/220/360/500）全部落在按钮之外
+   （实测 toolAt 全部返回 −1），机器人**一次都没点到过道具/撤销**。
+   后果：本脚本报出的「贪心首战通关率」实际上是**「不用任何道具」的口径**，
+   而在 15/20/25/30 这种高关（需要清除/互换/撤销脱困）上，两者能差很多。
+   bot_run.js 早就改成读 `DBG.toolX(i)` 了（那边有注释），dbg_diff.js 当时漏改 —— 现在对齐。 */
+function toolCX(i2) { return DBG.toolX(i2) + DBG.TOOL_W / 2; }
+function toolCY() { return DBG.TOOL_Y + DBG.TOOL_H / 2; }
 function tubeMidY(t) { return BOTT_Y - t.h / 2; }
 function bottoms(G) { return G.tubes.map(t => t.units[0]).filter(c => c !== undefined && c >= 0); }
 

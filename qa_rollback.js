@@ -844,6 +844,53 @@ const CASES = [
     suite: 'qa_design.js', expect: /不存在纯色管/,
     find: 'function shuffle(a){for(var i=a.length-1;i>0;i--){var j=(Math.random()*(i+1))|0,t=a[i];a[i]=a[j];a[j]=t;}return a;}',
     repl: 'function shuffle(a){return a;}   /* rollback-test: 洗牌退化成不洗 */'
+  },
+
+  /* ---------- 2026-10-02 02:00 档新增的 6 条设计不变量，逐条做回滚验证 ----------
+     改法尽量挑「只让目标断言红」的：
+       ① 只动阶段起点的冰冻数（掉幅 2，`逐关不跳变` 的阈值是 ≤2 → 它不会红，
+          正好证明「只管幅度不管方向」的老断言确实漏了这条）；
+       ② 只把普通档槽位 +1（`槽 ≥ 色` 与 `有效空槽−色 ≤ +1` 都仍然绿 → 老断言抓不到）；
+       ④ 让峰值关反而归零（不是「不加成」而是「反向」——只减 1 的话它和相位 3 关打平，还不到 FAIL）；
+       ⑤ 把热身的「减颜色」翻号成「加颜色」；
+       ⑥ 把末段管数压到 13（低于颜色数 16/17）。
+     ③（全局单调不减）与 ⑥/①类改法天然交叉（任何「后面比前面小」都会同时点上它），
+     这是预期行为：它本来就是「兜住所有单调性倒退」的那张总网，这里只要求目标断言红。 */
+  {
+    name: '高密度阶段起点的冰冻基数被压到 1（阶段接缝上冰冻掉幅 2 > 一个波浪振幅）',
+    suite: 'qa_design.js', expect: /阶段连续性铁律/,
+    find: "  {to:25, name:'高密度',   cols:[7,9],   rows:[5,5], colors:[9,12],  tubes:[12,15], gates:[3,4], ice:[2,4], slotBias:0},",
+    repl: "  {to:25, name:'高密度',   cols:[7,9],   rows:[5,5], colors:[9,12],  tubes:[12,15], gates:[3,4], ice:[1,4], slotBias:0},   /* rollback-test */"
+  },
+  {
+    name: 'levelPlan：普通档白送一个台面槽（槽 > 颜色数 → 通关率被抹平）',
+    suite: 'qa_design.js', expect: /普通档台面槽 == 颜色数/,
+    find: 'var slots=clamp(colors+slotBias,5,SLOT_CAP);',
+    repl: 'var slots=clamp(colors+slotBias+1,5,SLOT_CAP);   /* rollback-test: 多给一个槽 */'
+  },
+  {
+    name: '末段颜色数反向回调（第 75 关起颜色「越打越少」，全局单调不减被破坏）',
+    suite: 'qa_design.js', expect: /全局单调不减/,
+    find: "  {to:90, name:'极限+',    cols:[11,11], rows:[5,5], colors:[16,17], tubes:[17,17], gates:[6,8], ice:[6,8], slotBias:0}",
+    repl: "  {to:90, name:'极限+',    cols:[11,11], rows:[5,5], colors:[16,14], tubes:[17,17], gates:[6,8], ice:[6,8], slotBias:0}   /* rollback-test */"
+  },
+  {
+    name: '峰值关的干扰反向下调（峰值关变成同周期最轻 → 「洞少 1 冰多 1」抵平的假峰也被抓）',
+    suite: 'qa_design.js', expect: /峰值关的门洞\/冰冻/,
+    find: 'if(peak){ gates+=1; ice+=1; }',
+    repl: 'if(peak){ gates=0; ice=0; }   /* rollback-test: 峰值关反而最轻 */'
+  },
+  {
+    name: '热身档把「减颜色」写成「加颜色」（回归热身的盘面比普通档还重、退路更窄）',
+    suite: 'qa_design.js', expect: /热身档（−1\/−2）全维度/,
+    find: 'colors-=Math.max(1,Math.round(colors*0.22*kk));',
+    repl: 'colors+=Math.max(1,Math.round(colors*0.22*kk));   /* rollback-test: 热身穿盘 */'
+  },
+  {
+    name: '末段水管数被压到 13 根（少于颜色数 16/17 → 必有管子同时是两种色的主要来源）',
+    suite: 'qa_design.js', expect: /水管数 ≥ 颜色数/,
+    find: "  {to:90, name:'极限+',    cols:[11,11], rows:[5,5], colors:[16,17], tubes:[17,17], gates:[6,8], ice:[6,8], slotBias:0}",
+    repl: "  {to:90, name:'极限+',    cols:[11,11], rows:[5,5], colors:[16,17], tubes:[13,13], gates:[6,8], ice:[6,8], slotBias:0}   /* rollback-test */"
   }
 ];
 
@@ -973,7 +1020,13 @@ const rows = [];
 
 /* 顶层 await 在 CommonJS 里不可用，而 liveTamper 用例要起本地服务器 → 包一层 async */
 (async function main() {
+/* RB_ONLY：只跑名字里含指定关键词的用例（多个关键词用 | 分隔），用于新加断言时**只验自己那几条**
+   —— 全量 100+ 个用例约 6 分钟，写一条新用例就跑一遍全量太慢。
+   例：RB_ONLY=阶段连续性|台面槽 == 颜色数 node qa_rollback.js
+   注意：它只筛选「跑哪些」，不影响「怎么判定」；被筛掉的用例不会计入分母。 */
+const RB_ONLY = process.env.RB_ONLY ? process.env.RB_ONLY.split('|').filter(Boolean) : null;
 for (const c of CASES) {
+  if (RB_ONLY && !RB_ONLY.some(k => c.name.indexOf(k) >= 0)) continue;
   const f = c.file || DEFAULT_FILE;
   const O = origOf(f);
   const original = O.text;

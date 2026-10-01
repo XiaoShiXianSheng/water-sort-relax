@@ -3,6 +3,15 @@ const fs = require('fs');
 const path = require('path');
 const FILE = process.argv[2] || path.join(__dirname, 'outputs', '解压水消除.html');
 let html = fs.readFileSync(FILE, 'utf8');
+
+/* ⚠ 产品完整性闸门（2026-10-02）：qa_rollback.js 被硬杀时文件会留在「已改坏」状态，
+   机器人脚本不报错、只给出假结果（实测 dbg_diff 会输出全 0% / 全 100%）。先查污染标记。 */
+if (/rollback-test/.test(html)) {
+  console.error('✘ 拒绝运行：' + FILE + ' 里残留 rollback-test 标记 —— 回滚验证被中断且没还原。');
+  console.error('  先还原：git checkout -- outputs/解压水消除.html');
+  process.exit(2);
+}
+
 const m = html.match(/<script>([\s\S]*)<\/script>/);
 let code = m[1];
 
