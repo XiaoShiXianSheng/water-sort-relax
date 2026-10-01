@@ -211,4 +211,7 @@ function withSeed(seed, fn) {
   try { return fn(); } finally { Math.random = orig; }
 }
 
-module.exports = { loadGame, Reporter, guard, withSeed, GAME };
+/* ★ qa_live_sim.js 要拿**线上真实字节**做真浏览器深测，而它拿不到 Node 侧的 eval 后门，
+   所以把 INJECT 导出 —— 由它用同一份后门文本注入到线上 HTML 里。
+   绝不许在别的测试文件里再抄一份后门（抄一份 = 两份会各自漂移）。 */
+module.exports = { loadGame, Reporter, guard, withSeed, GAME, INJECT, INJECT_ANCHOR: 'requestAnimationFrame(loop);' };

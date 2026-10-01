@@ -12,6 +12,7 @@
 - **上线门禁**：`node qa_run.js --gate` —— 17 条硬条件（0 FAIL / 无 flaky / 无崩溃 / 体积 / ES5 / 零依赖 / 1~40 关可解 / **面板显示的 1~90 关全部可解** / 机器人 1~40 全通 / 发布件==主文件 / **线上字节与本地一致** / 上传包内 index.html 一致 / **真浏览器跑起来不是白屏** / QA 脚本语法自检 / **出厂广告位 ID 已填** / **断网也能正常开局** / **真触摸事件点得动**），不过就打印「禁止上线」并退出码 3
 - **性能体检**：`node qa_perf.js` —— 真 Chrome headless 在 360×640 / dpr=1 下逐帧计时 → 见 [`qa_perf.md`](qa_perf.md)
 - **真机体检**：`node qa_smoke_live.js` —— 真 Chrome 跑 5 趟 × 90 帧 + **真触摸事件点「开始游戏」→ 必须真的进关**；再加 `SMK_OFFLINE=1` 跑一趟断网版
+- **线上环境模拟**（**覆盖线上后必跑**，独立套件，不计入上面三档）：`node qa_live_sim.js` → **28 PASS / 0 FAIL** —— A 趟真 Chrome 直连线上 URL 黑盒验「线上那份就是这一版 / 不是白屏 / 点得动 / 存档落 V6.0 字段」；B 趟从线上 HTTP 取回**真实字节**注入调试后门 + TapTap SDK mock，跑回归热身 8 条与 **ONLINE 真实广告链路**（adUnitId 正确、看完才发奖、中途退出不发奖、拉不起来不卡流程）
 - **商业化验收**：[`outputs/解压水消除_商业化上线验收报告.md`](outputs/解压水消除_商业化上线验收报告.md)（P0 18/18、P1 6/6、Money-OS 14 问逐项、上线条件结论）
 - **回归热身测试**：[`outputs/V6.0_回归热身机制测试报告.md`](outputs/V6.0_回归热身机制测试报告.md)（14 条验收断言：进度不丢正/反双查 · 不被误伤四条路径 · 反假绿回滚）
 - **关卡参数报告**：[`outputs/V6.0_关卡参数与难度报告.md`](outputs/V6.0_关卡参数与难度报告.md)（1~90 关逐关参数 · 阶段骨架 · 三档对比 · 数值宪法体检）
@@ -96,6 +97,7 @@ node qa_warmup.js         # 只跑留存套件（回归热身 14 条断言）
 node qa_perf.js           # 低端机性能体检：真 Chrome 逐帧计时
 node qa_smoke_live.js     # 真浏览器体检：5 趟 × 90 帧 + 标题页真触摸点击端到端
 SMK_OFFLINE=1 SMK_OUT=_offline.json node qa_smoke_live.js   # 同一套断网重跑（门禁 G12）
+node qa_live_sim.js       # 线上环境模拟：A 趟黑盒打真实线上 URL（7 条）+ B 趟拿线上字节注入后门跑 ONLINE 广告链路（21 条）
 ```
 
 > ⚠ **发布副本不在版本库里**（`.gitignore` 忽略了 `publish_water/index.html` 和 `publish_taptap/index.html`
@@ -119,6 +121,7 @@ SMK_OFFLINE=1 SMK_OUT=_offline.json node qa_smoke_live.js   # 同一套断网重
 | 上线门禁 | `qa_gate.js` | 10 | 体积 / ES5 / 无外部依赖 / 广告位 ID 已填 / 1~40 关可解 / **面板显示的 1~90 关全部可解** / 发布件同步 / 线上字节一致 / 上传包内 index.html 一致 / QA 脚本语法自检 |
 | 真浏览器冒烟 | `qa_smoke_live.js` | 28 | **真机上是不是白屏 + 到底点不点得动**（真 Chrome 360×640，5 趟 × 90 帧；含**真触摸事件点「开始游戏」→ 必须真的进关**） |
 | 断网冒烟 | `qa_smoke_live.js`（`SMK_OFFLINE=1` 再跑一趟） | 21 | **断网还能不能玩**（外部 http(s) 全被拦掉：守"零依赖单文件"这个卖点） |
+| **线上环境模拟**（独立套件，不算上面三档） | `qa_live_sim.js` | 28 | **线上那份就是这一版、而且真能玩 + ONLINE 广告链路真通**。A 趟真 Chrome 直连 `https://water-sort-relax.app.workbuddy.host/` 黑盒验（版本 / 无未捕获错误 / 主循环在跑 / 画面非单色 / 点「开始游戏」真进第 1 关 / 存档落 V6.0 新字段 / 配置为 online）；B 趟从线上 HTTP 取回真实字节注入后门 + TapTap SDK mock 跑回归热身 8 条与真实激励视频链路（**看完才发奖 / 中途退出不发奖 / 拉不起来不卡流程**、adUnitId 必须是 `1067564`）。**它比 `qa_gate` 的 G8b 多证明一层**：G8b 只比字节相同，这条证明线上那份加载完能玩、广告真走得通 |
 
 结果写入 `qa_report.md`（人看，含门禁表）/ `qa_report.json`（机器看）/ `qa_design_table.tsv`（1~90 关指标表）。
 **退出码即结论**：全绿 0，有失败 1，门禁不过 3。
