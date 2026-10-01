@@ -1,9 +1,115 @@
 {
-  "at": "2026-10-01T11:23:46.203Z",
+  "at": "2026-10-01T15:54:28.429Z",
   "green": true,
-  "gate": null,
+  "gate": {
+    "ok": true,
+    "items": [
+      {
+        "id": "G1",
+        "name": "全部套件 0 FAIL",
+        "ok": true,
+        "detail": "565 项断言全过"
+      },
+      {
+        "id": "G2",
+        "name": "无 flaky（快速套件重跑 2 遍结果一致）",
+        "ok": true,
+        "detail": "2 遍重跑全部一致"
+      },
+      {
+        "id": "G2b",
+        "name": "没有套件崩溃 / 静默跳过",
+        "ok": true,
+        "detail": "10 个套件全部产出结论"
+      },
+      {
+        "id": "G3",
+        "name": "单文件体积 < 200KB（零依赖交付形态没退化）",
+        "ok": true,
+        "detail": "169.6KB / 上限 200KB"
+      },
+      {
+        "id": "G4",
+        "name": "ES5 合规（剥掉注释/字符串/正则后无 ES6+ 语法）",
+        "ok": true,
+        "detail": "扫过 101KB 纯代码，0 命中"
+      },
+      {
+        "id": "G5",
+        "name": "无外部依赖（自包含单文件）",
+        "ok": true,
+        "detail": "1 个内联 <script>，0 个 src/link/@import/url(http)"
+      },
+      {
+        "id": "G6",
+        "name": "1~40 关全部可解（每关 3 次生成）+ 水量守恒",
+        "ok": true,
+        "detail": "40 关 × 3 次，全部通过剥落式自检且水量守恒"
+      },
+      {
+        "id": "G6b",
+        "name": "选关面板显示的每一关都能生成且可解（面板 30×3 = 90 关）",
+        "ok": true,
+        "detail": "1~90 关逐关生成通过（最大 54 格 / 68 瓶），可解性与水量守恒全过"
+      },
+      {
+        "id": "G7",
+        "name": "机器人 1~40 关全通（固定种子，可复现）",
+        "ok": true,
+        "detail": "40/40 通关；其中 1~30 关 30/30"
+      },
+      {
+        "id": "G8a",
+        "name": "所有发布副本与主文件字节一致（改了主文件必须同步每一个发布目录）",
+        "ok": true,
+        "detail": "2 份副本全部 md5 364ba65e4fa4d22cf1e4f4464cdc2ced（173711B）"
+      },
+      {
+        "id": "G8b",
+        "name": "线上字节与本地一致（带 ?t= 破 CDN 缓存）",
+        "ok": true,
+        "detail": "线上 173711B / md5 364ba65e4fa4d22cf1e4f4464cdc2ced 与发布件逐字节相同"
+      },
+      {
+        "id": "G8c",
+        "name": "所有上传包内的 index.html 与主文件一致（拆包比 md5，肉眼看不出版本）",
+        "ok": true,
+        "detail": "已核对：tap_upload_v6.0.zip（173711B md5 364ba65e4fa4d22cf1e4f4464cdc2ced）"
+      },
+      {
+        "id": "G9",
+        "name": "真浏览器启动冒烟（5 趟 × 90 帧：无错误 / 非白屏 / 主循环在跑）",
+        "ok": true,
+        "detail": "28 项全过（Chrome headless 360×640，见 _smoke.json）"
+      },
+      {
+        "id": "G10",
+        "name": "QA 脚本自身语法自检（验证器必须先能被验证）",
+        "ok": true,
+        "detail": "13 个 QA 脚本全部通过语法编译：qa_arch.js qa_biz.js qa_design.js qa_gate.js qa_lib.js qa_live_sim.js qa_perf.js qa_rollback.js qa_run.js qa_smoke_live.js qa_ui.js qa_warmup.js test_water.js"
+      },
+      {
+        "id": "G11",
+        "name": "出厂广告位 ID 已填（两个都非空且没被注释掉；空了会静默降级成模拟广告 = 零收益）",
+        "ok": true,
+        "detail": "激励视频 1067564 / 插屏 1067565　（⚠ 平台侧仍需确认推广位属性为「正式」）"
+      },
+      {
+        "id": "G12",
+        "name": "断网冒烟：外部网络 100% 失败时仍能正常开局（零依赖不是自述）",
+        "ok": true,
+        "detail": "21 项全过（外部请求拦截明细见 _offline.json）"
+      },
+      {
+        "id": "G13",
+        "name": "真浏览器端到端：真触摸事件点「开始游戏」进第 1 关 + 点货架瓶飞上台面",
+        "ok": true,
+        "detail": "标题页→第 1 关=true　点瓶子上台面=true　canvas 在视口原点=true　输入通道=touch"
+      }
+    ]
+  },
   "total": {
-    "pass": 484,
+    "pass": 565,
     "fail": 0,
     "warn": 0
   },
@@ -14,7 +120,7 @@
       "pass": 171,
       "fail": 0,
       "warn": 0,
-      "ms": 4394,
+      "ms": 3138,
       "fails": [],
       "warns": [],
       "unstable": false
@@ -25,7 +131,7 @@
       "pass": 74,
       "fail": 0,
       "warn": 0,
-      "ms": 1369,
+      "ms": 861,
       "fails": [],
       "warns": [],
       "unstable": false
@@ -36,7 +142,7 @@
       "pass": 31,
       "fail": 0,
       "warn": 0,
-      "ms": 585,
+      "ms": 262,
       "fails": [],
       "warns": [],
       "unstable": false
@@ -47,7 +153,7 @@
       "pass": 66,
       "fail": 0,
       "warn": 0,
-      "ms": 2040,
+      "ms": 1499,
       "fails": [],
       "warns": [],
       "unstable": false
@@ -58,7 +164,7 @@
       "pass": 14,
       "fail": 0,
       "warn": 0,
-      "ms": 730,
+      "ms": 352,
       "fails": [],
       "warns": [],
       "unstable": false
@@ -66,10 +172,10 @@
     {
       "key": "ui",
       "name": "UI 测试（命中回转 / 拒绝反馈 / 多分辨率）",
-      "pass": 98,
+      "pass": 110,
       "fail": 0,
       "warn": 0,
-      "ms": 5329,
+      "ms": 10458,
       "fails": [],
       "warns": [],
       "unstable": false
@@ -77,10 +183,10 @@
     {
       "key": "bot",
       "name": "合理性测试（机器人贪心通关）",
-      "pass": 30,
+      "pass": 40,
       "fail": 0,
       "warn": 0,
-      "ms": 71598,
+      "ms": 126088,
       "fails": [],
       "warns": [],
       "unstable": false,
@@ -114,9 +220,52 @@
         27,
         28,
         29,
-        30
+        30,
+        31,
+        32,
+        33,
+        34,
+        35,
+        36,
+        37,
+        38,
+        39,
+        40
       ],
       "botLost": []
+    },
+    {
+      "key": "gate",
+      "name": "上线门禁（体积 / ES5 / 依赖 / 可解性 / 线上一致）",
+      "pass": 10,
+      "fail": 0,
+      "warn": 0,
+      "ms": 1352,
+      "fails": [],
+      "warns": [],
+      "unstable": false
+    },
+    {
+      "key": "smoke",
+      "name": "真浏览器冒烟（Chrome 360×640 · 5 趟 × 90 帧 · 含标题页端到端点击）",
+      "pass": 28,
+      "fail": 0,
+      "warn": 0,
+      "ms": 12158,
+      "fails": [],
+      "warns": [],
+      "unstable": false
+    },
+    {
+      "key": "smokeOffline",
+      "name": "断网冒烟（外部网络全断 · 3 趟 × 90 帧 · 含标题页端到端）",
+      "pass": 21,
+      "fail": 0,
+      "warn": 0,
+      "ms": 8368,
+      "fails": [],
+      "warns": [],
+      "unstable": false
     }
   ]
 }

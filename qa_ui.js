@@ -99,11 +99,16 @@ guard(rep, 'UI', function () {
      ⚠ 第二次踩坑：只在 9 个关卡取样（1/3/5/9/10/15/20/25/30），
      而 11~14、16~19、21~24、26~29、31~40 这些关卡从来没被戳过 ——
      格子尺寸、瓶子宽度、行长度都随关卡变，命中框却写死 ±52，
-     一旦某一档的几何越界，抽查不到的关卡会漏掉。所以扩到 1~40 全量。 */
+     一旦某一档的几何越界，抽查不到的关卡会漏掉。所以扩到 1~40 全量。
+     ⚠ 第三次踩坑（2026-10-01 23:00）：1~40 仍然不够 —— 面板显示 90 关，
+     而 41~90 是**完全不同的几何**（V6.0 把水管上限从写死的 7 根抬到 17 根、
+     台面槽最多 17 个、格子铺满 9×6=54 格、颜色最多 18 种）。
+     命中框 hw=min(52,(tile+GX)/2) 跟着格子缩，格子越小命中框越窄 ——
+     晚局最容易「点不中」，却恰好一关都没进过这套探针。所以扩到 1~90 全量。 */
   const g1 = fresh(); enter(g1);
   const D = g1.DBG;
   const missSelf = [], stackWrong = [], missJar = [], badTool = [];
-  const LEVELS = []; for (let lv = 1; lv <= 40; lv++) LEVELS.push(lv);
+  const LEVELS = []; for (let lv = 1; lv <= 90; lv++) LEVELS.push(lv);
   let probeCount = 0, gateLevels = 0, thickGates = 0;
   for (const lv of LEVELS) {
     D.gen(lv); g1.frames(4);
@@ -135,7 +140,7 @@ guard(rep, 'UI', function () {
       }
     }
   }
-  rep.ok('命中回转：点在瓶子身上任意位置（' + probeCount + ' 次探针 / 1~40 关全量取样，'
+  rep.ok('命中回转：点在瓶子身上任意位置（' + probeCount + ' 次探针 / 1~90 关全量取样，'
     + gateLevels + ' 关含门洞 / ' + thickGates + ' 个洞内多瓶）都命中它自己',
     missSelf.length === 0, missSelf.slice(0, 6).join(' '));
   rep.ok('门洞里叠着的后排瓶子不会点错到别的格子', stackWrong.length === 0, stackWrong.slice(0, 6).join(' '));
@@ -196,12 +201,16 @@ guard(rep, 'UI', function () {
     }
   }
 
-  /* ============ 6. 视觉层不重叠、不越界 ============ */
+  /* ============ 6. 视觉层不重叠、不越界 ============
+     ⚠ 2026-10-01 23:00：取样从 1~40 扩到 1~90。晚局（41~90）是几何最紧的一段 ——
+     17 根管挤在 720 宽的虚拟画布里、台面最多 17 个槽、格子铺满 9×6。
+     6.4 的「槽间距 ≥ 38px 触控下限」正是为晚局写的（间距从 124px 一路收到 41px），
+     但那段代码从来没在 41~90 关上跑过 —— 断言写对了，样本却不在风险区。 */
   {
     const g = fresh(); enter(g);
     const D = g.DBG, C = D.consts();
     const bleed = [], overlap = [], toolClash = [];
-    for (let lv = 1; lv <= 40; lv++) {
+    for (let lv = 1; lv <= 90; lv++) {
       D.gen(lv); g.frames(3);
       const G = D.G;
       /* 6.1 货架瓶子视觉框左右不出屏 */
@@ -224,9 +233,9 @@ guard(rep, 'UI', function () {
         if (step2 < 38) overlap.push('L' + lv + ' 槽' + s + ' 间距' + step2.toFixed(0) + '<38（触控下限）');
       }
     }
-    rep.ok('货架瓶子的视觉框左右不出屏（1~40 关）', bleed.length === 0, Array.from(new Set(bleed)).slice(0, 5).join(' '));
+    rep.ok('货架瓶子的视觉框左右不出屏（1~90 关）', bleed.length === 0, Array.from(new Set(bleed)).slice(0, 5).join(' '));
     rep.ok('货架瓶子不压底部工具栏', toolClash.length === 0, toolClash.slice(0, 5).join(' '));
-    rep.ok('瓶子之间不重叠：瓶宽 < 格距、台面槽间距 ≥ 瓶宽+6px 且 ≥38px（触控下限）', overlap.length === 0, overlap.slice(0, 5).join(' '));
+    rep.ok('瓶子之间不重叠：瓶宽 < 格距、台面槽间距 ≥ 瓶宽+6px 且 ≥38px（触控下限，1~90 关）', overlap.length === 0, overlap.slice(0, 5).join(' '));
   }
 
   /* ============ 7. 文字纯净 + 关键文案在位 ============ */
@@ -1308,6 +1317,263 @@ guard(rep, '多步撤销', function () {
     (placed < 3 ? '有效样本只有 ' + placed + ' 步；' : '') + badLayer.slice(0, 3).join(' | '));
   rep.ok('连续撤销 ' + placed + ' 次消耗 ' + placed + ' 次额度（不是免费无限撤）',
     G.undoLeft === 9 - placed, 'undoLeft=' + G.undoLeft);
+});
+
+/* ============ 23. 存档续玩：点「开始游戏」必须回到**玩家上次那一关** ============
+   2026-10-01 23:00 档补。这是「进度存了却没人读」的体感级 bug：
+   存档写得好好的、标题页上也显示着「进度：第 12 关」，点开始却永远从第 1 关重来 ——
+   玩家会直接读成「这游戏不记我 / 我的进度没了」，而这正是留存最怕的那一下。
+   这条把 startFromTitle 的三条分支（存档 / 脏存档 / URL 参数优先）全钉住。 */
+guard(rep, '存档续玩', function () {
+  const tapStart = (g) => {
+    const S = g.DBG.TITLE_UI.start;
+    g.viewClick(S.x + S.w / 2, S.y + S.h / 2);   // 真点「开 始 游 戏」按钮
+    g.frames(6);
+    return g.DBG.G;
+  };
+
+  /* ---- 23.1 有存档 → 从存档那一关开始 ---- */
+  {
+    const g = loadGame({});
+    g.frames(3);
+    const onTitle = g.DBG.G.state === 'title';
+    g.DBG.Store.set('level', 12);
+    g.DBG.Store.set('maxLevel', 12);
+    const G = tapStart(g);
+    rep.ok('存档续玩：存档写着第 12 关 → 点「开始游戏」真的进第 12 关（不是从第 1 关重来）',
+      onTitle && G.state === 'play' && G.level === 12,
+      'onTitle=' + onTitle + ' state=' + G.state + ' level=' + G.level);
+  }
+
+  /* ---- 23.2 脏存档（level=0）→ 落到第 1 关，不能开出「第 0 关」 ---- */
+  {
+    const g = loadGame({});
+    g.frames(3);
+    g.DBG.Store.set('level', 0);
+    const G = tapStart(g);
+    rep.ok('存档续玩：存档 level=0（脏值）→ 兜底到第 1 关，不会开出第 0 关 / NaN 关',
+      G.state === 'play' && G.level === 1, 'state=' + G.state + ' level=' + G.level);
+  }
+
+  /* ---- 23.3 ?lvl=30 优先于存档（分享/调试链接必须说了算） ---- */
+  {
+    const g = loadGame({ search: '?lvl=30' });
+    g.frames(4);
+    const bootLv = g.DBG.G.level;                 // 带 ?lvl= 启动时应直接进第 30 关
+    g.DBG.goHome(); g.frames(3);                  // 回标题页（此时存档已被写成 30）
+    g.DBG.Store.set('level', 7);                  // 再手动把存档改成 7，检验谁的优先级高
+    const G = tapStart(g);
+    rep.ok('存档续玩：URL 带 ?lvl=30 时优先于存档（开屏直接进 30，回标题再点也不被存档 level=7 覆盖）',
+      bootLv === 30 && G.state === 'play' && G.level === 30,
+      '开屏 level=' + bootLv + '；点开始后 state=' + G.state + ' level=' + G.level
+      + '（URL_LVL=' + g.DBG.URL_LVL + '）');
+  }
+});
+
+/* ============ 24. 复活兜底阶梯 rescueGrant()：花钱看完广告，必须真的能继续 ============
+   doRevive() 的硬指标是「复活后 hasLegalDecision() 为真」，靠 rescueGrant() 逐级兜底：
+   ① 把接不到水的瓶子退回货架 → ② 台面腾不出来就收走一瓶 → ③ 开一个槽位
+   → ④ 连槽都开满了就补 1 次「随心互换」。
+   四级里**任何一级被删**，极端局面下玩家就是「看完广告还是死」—— 广告费花了、人跑了。
+   旧断言只覆盖了 ①② 能生效的普通局面，③④ 从未被点亮过。这组把四级逐个点火。 */
+guard(rep, '复活兜底阶梯', function () {
+  const g = fresh(); const D = g.DBG; const G = D.G;
+  enter(g);
+  const onGrid = () => G.bottles.filter(b => b.place === 'grid');
+  /* 统一造局：所有瓶子回货架（清干净，保证构造是确定的），再由调用方摆台面 */
+  function clearBoard() {
+    G.slots.forEach(s => { s.open = true; });
+    G.bottles.forEach(b => {
+      if (b.place !== 'gone') { b.place = 'grid'; b.slot = -1; b.fill = 0; b.capT = 0; }
+    });
+    D.layoutAll();
+  }
+
+  /* ---- ① 优选「把接不到水的瓶子退回货架」：不耗水、不牺牲别的瓶子 ---- */
+  {
+    withSeed(4101, () => D.gen(15));
+    g.frames(8); g.waitIdle(); g.frames(4);
+    clearBoard();
+    const A = onGrid()[0];
+    const other = onGrid().find(b => b.col !== A.col) || A;
+    G.tubes.forEach(t => { t.units = [other.col]; });      // 管底全是别的颜色 → A 接不到水
+    A.place = 'counter'; A.slot = 0; A.fill = 0; A.capT = 1;
+    D.layoutAll();
+    const W0 = totalWater(D);
+    const ok = D.rescueGrant();
+    rep.ok('复活兜底①：台面有「接不到水」的瓶子时，优先把它退回货架（不耗水、不牺牲别的瓶子）',
+      ok === true && A.place === 'grid' && A.slot === -1 && totalWater(D).sum === W0.sum,
+      'place=' + A.place + ' slot=' + A.slot + ' 水 ' + W0.sum + '→' + totalWater(D).sum);
+  }
+
+  /* ---- ② 台面腾不出来 → 收走一瓶，把位置让出来 ---- */
+  {
+    withSeed(4202, () => D.gen(15));
+    g.frames(8); g.waitIdle(); g.frames(4);
+    clearBoard();
+    const A = onGrid()[0];
+    G.tubes.forEach(t => { t.units = [A.col]; });          // 管底就是 A 的颜色 → ① 不会动它
+    A.place = 'counter'; A.slot = 0; A.fill = 0; A.capT = 1;
+    D.layoutAll();
+    const gone0 = G.bottles.filter(b => b.place === 'gone').length;
+    const ok = D.rescueGrant();
+    rep.ok('复活兜底②：没有「接不到水」的瓶子可退时，改为收走一瓶释放位置（台面能继续转）',
+      ok === true && A.place === 'gone' && A.slot === -1
+      && G.bottles.filter(b => b.place === 'gone').length === gone0 + 1,
+      'place=' + A.place + ' slot=' + A.slot);
+  }
+
+  /* ---- ③ 台面没瓶子可退 → 开一个槽位（保证至少能放一瓶上去） ---- */
+  {
+    withSeed(4303, () => D.gen(15));
+    g.frames(8); g.waitIdle(); g.frames(4);
+    G.slots.forEach(s => { s.open = false; });             // 槽全锁上 → ①② 都没事可做
+    G.bottles.forEach(b => {
+      if (b.place !== 'gone') { b.place = 'grid'; b.slot = -1; b.fill = 0; b.capT = 0; }
+    });
+    D.layoutAll();
+    const before = D.openSlotCount();
+    const ok = D.rescueGrant();
+    rep.ok('复活兜底③：台面没瓶子可退时，改为开一个台面槽位（否则复活回来还是没位置放瓶）',
+      ok === true && D.openSlotCount() > before,
+      '开放槽位 ' + before + '→' + D.openSlotCount());
+  }
+
+  /* ---- ④ 终极兜底：补 1 次「随心互换」—— §11 硬指标的最后一道保险 ---- */
+  {
+    withSeed(4404, () => D.gen(15));
+    g.frames(8); g.waitIdle(); g.frames(4);
+    G.slots.forEach(s => { s.open = true; });              // 槽已开满 → ③ 也无事可做
+    G.bottles.forEach(b => {
+      if (b.place !== 'gone') { b.place = 'grid'; b.slot = -1; b.locked = 1; }   // 全冻住，取不出
+    });
+    G.tools = { clear: 0, finger: 0, swap: 0 }; G.unlockLeft = 0;
+    D.layoutAll();
+    const dead = D.boardPlayable() === false;
+    const ok = D.rescueGrant();
+    rep.ok('复活兜底④：连槽都开满了还走不动时，补 1 次「随心互换」（只要 ≥2 根管，它就一定是合法决策）',
+      dead && ok === true && G.tools.swap >= 1 && D.boardPlayable() === true,
+      'dead=' + dead + ' swap=' + G.tools.swap + ' playable=' + D.boardPlayable());
+  }
+
+  /* ---- ⑤ 硬指标：逐级施放必须收敛（doRevive 里那个 while 循环的可终止性）----
+     这里的局面**同时需要 ③ 和 ④**（槽全锁 + 瓶子全冻住），所以 ③④ 任一级被删都会红，
+     而 ①② 的两条用例各自独立 —— 一条改坏不会让四条一起红，各自有独立效力。 */
+  {
+    const bad = [];
+    let cases = 0, maxGuard = 0;
+    for (const lv of [9, 15, 24, 40, 60, 90]) {
+      withSeed(4500 + lv, () => D.gen(lv));
+      g.frames(8); g.waitIdle(); g.frames(4);
+      G.slots.forEach(s => { s.open = false; });
+      G.bottles.forEach(b => {
+        if (b.place !== 'gone') { b.place = 'grid'; b.slot = -1; b.locked = 1; }
+      });
+      G.tools = { clear: 0, finger: 0, swap: 0 }; G.unlockLeft = 0;
+      G.undoLeft = 0; G.history.length = 0;                // 连「还能撤销」这条路也堵死
+      D.layoutAll();
+      const dead0 = D.hasLegalDecision() === false;
+      let guard = 0;
+      while (!D.hasLegalDecision() && guard++ < 6) D.rescueGrant();
+      cases++;
+      maxGuard = Math.max(maxGuard, guard);
+      if (!dead0) bad.push('L' + lv + ' 构造的局面并不是死局（断言前提不成立）');
+      else if (!D.hasLegalDecision()) bad.push('L' + lv + ' 施放 ' + guard + ' 次后仍无合法决策');
+    }
+    rep.ok('复活兜底硬指标：逐级施放 rescueGrant() 后必然回到「有合法决策」'
+      + '（' + cases + ' 种死局 × 最多 ' + maxGuard + ' 次施放全部收敛，管数 ≥2 时必定成立）',
+      cases >= 6 && bad.length === 0, bad.slice(0, 4).join(' | '));
+  }
+});
+
+/* ============ 25. 撤销的两条上限：额度 9 次封顶 + 撤销栈最多 30 层 ============
+   两条都是「防无限刷」的账：上限被改掉/删掉，玩家（或脚本）可以把撤销刷成无限次，
+   星级与难度平衡当场失去意义；栈上限被删则是长局里悄悄吃内存。
+   旧套件只验了「撤销逐层正确」，从没验过「栈装不下时会怎样」。 */
+guard(rep, '撤销上限', function () {
+  /* ---- 25.1 撤销额度：连补 12 次，最多到 9 次就拒绝 ---- */
+  {
+    const g = fresh(); const D = g.DBG; const G = enter(g);
+    G.undoLeft = 0; G.toast = null;
+    let refusals = 0;
+    for (let i = 0; i < 12; i++) {
+      const before = G.undoLeft;
+      D.addUndo();
+      if (G.undoLeft === before) refusals++;
+    }
+    rep.ok('撤销额度封顶：连点 12 次补次，最多补到 9 次、其余全部拒绝（撤销刷不成无限次）',
+      G.undoLeft === 9 && refusals === 3,
+      'undoLeft=' + G.undoLeft + ' 被拒绝 ' + refusals + ' 次');
+    rep.ok('撤销额度封顶：被拒绝时给了可见提示（不是静默无反应）',
+      !!G.toast && G.toast.msg.indexOf('已满') >= 0, G.toast && G.toast.msg);
+  }
+
+  /* ---- 25.2 撤销栈上限 30：超出的丢最旧的，栈顶保留最近 30 步 ---- */
+  {
+    const g = fresh(); const D = g.DBG; const G = enter(g);
+    G.history.length = 0; G.undoLeft = 99;
+    for (let k = 1; k <= 40; k++) { G.moves = k; D.snapshot(); }   // 40 个**互不相同**的快照
+    const first = JSON.parse(G.history[0]);
+    const last = JSON.parse(G.history[G.history.length - 1]);
+    rep.ok('撤销栈封顶 30 层：连做 40 次操作快照，栈长度恰为 30、丢掉的正是最旧的 10 步（栈顶保留最近 30 步）',
+      G.history.length === 30 && first.moves === 11 && last.moves === 40,
+      'len=' + G.history.length + ' 栈底 moves=' + first.moves + ' 栈顶 moves=' + last.moves);
+  }
+});
+
+/* ============ 26. 台面账目自洽：瓶子数 / 开放槽位数 / freeSlot() 三者必须对得上 ============
+   counterCount() 与 openSlotCount() 是「台面还剩几个位置」这份账的两半，
+   以前没有任何断言碰过它们。账目对不上时玩家看到的是：明明还有空位却放不上瓶子
+   （freeSlot 返回 -1），或者反过来 —— 台面上的瓶子数超过了槽位数（状态早就错乱了）。
+   ⚠ 首版的假绿（被 qa_rollback 当场抓出来，第 7 次）：三种构造**全是空台面**，
+   于是把 counterCount() 改成恒返回 0 它照样全绿 —— 「台面有 0 个瓶子」这句话在空台面上恒真。
+   修法：装载程度取 0 / 一半 / 装满三档，并加一条「counterCount() == 台面实际瓶子数」的直查。
+   教训与 3.4 那六次同源：**构造的局面必须让被测的那条路径真的被走到**。 */
+guard(rep, '台面账目', function () {
+  const g = fresh(); const D = g.DBG; const G = D.G;
+  enter(g);
+  const bad = [];
+  let checks = 0, loaded = 0;
+  for (let lv = 1; lv <= 90; lv++) {
+    withSeed(6600 + lv, () => D.gen(lv));
+    g.frames(3);
+    /* 三档装载：空 / 一半 / 装满（空台面是「恒真」的温床，必须配一个非空的） */
+    for (const fillRatio of [0, 0.5, 1]) {
+      G.slots.forEach(s => { s.open = true; });
+      G.bottles.forEach(b => { if (b.place === 'counter') { b.place = 'grid'; b.slot = -1; } });
+      D.layoutAll();
+      const pool = G.bottles.filter(b => b.place === 'grid');
+      const oc = D.openSlotCount();
+      const put = Math.min(pool.length, Math.round(oc * fillRatio));
+      for (let k = 0; k < put; k++) { pool[k].place = 'counter'; pool[k].slot = k; }
+      D.layoutAll();
+      const cc = D.counterCount(), fs = D.freeSlot();
+      const real = G.bottles.filter(b => b.place === 'counter').length;
+      checks++;
+      if (real > 0) loaded++;
+      /* ① 直查：counterCount() 必须等于台面上真实的瓶子数（返回值写死/漏算都会在这一条上暴露） */
+      if (cc !== real) {
+        bad.push('L' + lv + '(装 ' + put + ') counterCount()=' + cc + ' 但台面实际有 ' + real + ' 个瓶子');
+      }
+      if (cc > oc) bad.push('L' + lv + '(装 ' + put + ') 台面瓶数 ' + cc + ' > 开放槽 ' + oc);
+      /* ② 「有没有空位」必须严格等价于「瓶数 < 槽数」—— 差一个就是点击被静默吞掉 */
+      if ((fs >= 0) !== (real < oc)) {
+        bad.push('L' + lv + '(装 ' + put + ') freeSlot=' + fs
+          + ' 与 瓶数/槽数(' + real + '/' + oc + ') 不一致');
+      }
+    }
+    /* ③ 槽全锁 → freeSlot 必须是 -1（一个位置都不许开出来） */
+    G.slots.forEach(s => { s.open = false; });
+    G.bottles.forEach(b => { if (b.place === 'counter') { b.place = 'grid'; b.slot = -1; } });
+    D.layoutAll();
+    checks++;
+    if (D.freeSlot() !== -1) bad.push('L' + lv + ' 槽全锁时 freeSlot 仍返回 ' + D.freeSlot());
+  }
+  rep.ok('台面账目自洽：counterCount() == 台面实际瓶数、瓶数 ≤ 开放槽位数，'
+    + '且 freeSlot() 的有无与「瓶数 < 槽数」严格等价'
+    + '（1~90 关 × 空/半/满 + 全锁，共 ' + checks + ' 次检查，其中 ' + loaded + ' 次台面非空）',
+    /* 区分度自检：非空台面的样本太少时这条会退化成恒真（防止下次又被搬到空台面上测） */
+    loaded >= 60 && checks >= 300 && bad.length === 0, bad.slice(0, 5).join(' | '));
 });
 
 rep.done();

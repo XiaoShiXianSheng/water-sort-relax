@@ -1015,10 +1015,25 @@ function genLevel(lv,opts){
   var uh=Math.min(UH,Math.floor((BOTT_Y-118)/maxLayers));
   if(uh<uhMin)uh=uhMin;
   G.uh=uh;
-  var tubes=[],p=0;
-  for(var t=0;t<nt;t++){
-    var units=pool.slice(p,p+sizes[t]); p+=sizes[t];
-    tubes.push({units:units,h:sizes[t]*uh+20,x:0,drop:0}); // 玻璃管刚好装满初始水量（贴合无空腔）
+  /* 切管：重洗到「没有整根同色的管」为止 —— 整根同色 = 一口气接完，是白送的假难度。
+     某色总水量 > 单管层数时（实测只有「4 关极限档：色4/管6/瓶10，色0 有 9 滴 vs 单管 5 层」），
+     随机切片会以约 2.5%/局的概率把 5 滴同色切进同一根管 —— 概率很低但每次开局都可能撞上，
+     所以这里用「重洗重切」而不是运气质检：洗牌一旦退化成不洗，40 次全败 → 关卡明显变简单，
+     而 qa_design.js 的「不存在纯色管」断言会当场把它抓出来。 */
+  var tubes=[],pureN=1;
+  for(var guard=0;guard<40&&pureN;guard++){
+    shuffle(pool);
+    tubes=[]; pureN=0;
+    var p=0;
+    for(var t=0;t<nt;t++){
+      var units=pool.slice(p,p+sizes[t]); p+=sizes[t];
+      tubes.push({units:units,h:sizes[t]*uh+20,x:0,drop:0}); // 玻璃管刚好装满初始水量（贴合无空腔）
+      if(units.length>1){
+        var same=true;
+        for(var k=1;k<units.length;k++)if(units[k]!==units[0]){same=false;break;}
+        if(same)pureN++;
+      }
+    }
   }
   G.tubes=tubes;
   G.slots=[];

@@ -753,6 +753,97 @@ const CASES = [
     find: "canvas.addEventListener('touchstart',function(e){if(e.cancelable)e.preventDefault();"
       + "var t=e.changedTouches[0];if(t)handleTap(t.clientX,t.clientY);},{passive:false});",
     repl: '/* rollback-test: 触屏入口被删（真机点不动） */'
+  },
+
+  /* ---------- 2026-10-01 23:00 档新增的 12 条断言，逐条做回滚验证 ----------
+     这一档补的四组（存档续玩 / 复活兜底阶梯 / 撤销上限 / 台面账目）在此之前
+     **一次都没被任何测试引用过** —— 是机械比对（抽产品所有 function → grep 全部测试文件）
+     找出来的真盲区，不是凭感觉挑的。 */
+  {
+    /* 存档续玩的牙齿：点「开始游戏」永远从第 1 关重来。
+       这条同时打掉 23.1（存档被无视）与 23.3（?lvl= 被存档无视）——
+       两半都是同一个「没人读存档」的根因，所以一起红是预期的。 */
+    name: 'startFromTitle() 写死从第 1 关开始（存档写了也不读 → 进度白存）',
+    suite: 'qa_ui.js', expect: /存档续玩/,
+    find: "var lv=URL_LVL||Math.max(1,Store.get('level',1)||1);   // 有存档就从上次进度继续",
+    repl: 'var lv=1;   /* rollback-test: 无视存档 */'
+  },
+  {
+    /* 复活兜底①：接不到水的瓶子不再退回货架（玩家看完广告回来还是被卡着） */
+    name: 'rescueGrant() 去掉第①级兜底（接不到水的瓶子不再退回货架）',
+    suite: 'qa_ui.js', expect: /复活兜底①/,
+    find: "if(b.place==='counter'&&b.fill<b.cap&&!bottoms[b.col]){ b.place='grid'; b.slot=-1; moved=true; }",
+    repl: '/* rollback-test: ① 级兜底被删 */'
+  },
+  {
+    /* 复活兜底②：改成"返回 true 但什么都不做" —— 面板会关掉、局面却没变 */
+    name: 'rescueGrant() 第②级改成「假装成功但什么都不做」（面板关了、局面没动）',
+    suite: 'qa_ui.js', expect: /复活兜底②/,
+    find: "b2.place='gone'; b2.fill=0; b2.capT=0; b2.slot=-1;",
+    repl: '/* rollback-test: ② 级假装成功 */'
+  },
+  {
+    /* 复活兜底③：槽位不再自动打开。注意 ③ 和 ⑤ 会一起红 ——
+       ⑤ 的构造局面**同时需要 ③ 和 ④**，这正是它「证明硬指标可收敛」的方式；
+       ① ② 各有独立用例，一条改坏不会让五条一起红。 */
+    name: 'rescueGrant() 去掉第③级兜底（槽位不再自动打开；⑤ 硬指标同时失效）',
+    suite: 'qa_ui.js', expect: /复活兜底③/,
+    find: 'for(i=0;i<G.slots.length;i++)if(!G.slots[i].open){ G.slots[i].open=true; moved=true; }',
+    repl: '/* rollback-test: ③ 级兜底被删 */'
+  },
+  {
+    /* 复活兜底④：终极保险被删 → 极端局面下「看完广告还是死」（⑤ 同时红） */
+    name: 'rescueGrant() 去掉第④级兜底（不补随心互换 → 极端局面复活后仍无合法决策）',
+    suite: 'qa_ui.js', expect: /复活兜底④/,
+    find: 'G.tools.swap=(G.tools.swap||0)+1;',
+    repl: '/* rollback-test: ④ 级兜底被删 */'
+  },
+  {
+    /* 撤销额度上限：9 次封顶被拿掉 → 撤销可以刷到无限次，平衡与星级当场失效 */
+    name: 'addUndo() 的 9 次封顶被拿掉（撤销能被刷成无限次）',
+    suite: 'qa_ui.js', expect: /撤销额度封顶/,
+    find: "if(G.undoLeft>=9){toast('撤销次数已满');SFX.no();return;}",
+    repl: '/* rollback-test: 封顶被拿掉 */'
+  },
+  {
+    /* 撤销栈上限：30 层封顶被拿掉 → 长局里快照无限堆积（吃内存 + 撤销能退到开局） */
+    name: 'snapshot() 的 30 层封顶被拿掉（撤销栈无限增长）',
+    suite: 'qa_ui.js', expect: /撤销栈封顶 30 层/,
+    find: 'if(G.history.length>30)G.history.shift();',
+    repl: '/* rollback-test: 栈上限被拿掉 */'
+  },
+  {
+    /* 台面账目：counterCount 恒返回 0 → freeSlot() 与「瓶数 < 槽数」立刻对不上。
+       这条守的是「明明还有空位却放不上瓶子」这类静默吞点击的状态错乱。 */
+    name: 'counterCount() 恒返回 0（台面账目与 freeSlot 失去自洽）',
+    suite: 'qa_ui.js', expect: /台面账目自洽/,
+    find: "function counterCount(){ var n=0; for(var i=0;i<G.bottles.length;i++)if(G.bottles[i].place==='counter')n++; return n; }",
+    repl: 'function counterCount(){ return 0; }   /* rollback-test: 账目写死 */'
+  },
+  {
+    /* §6 视觉层扩到 1~90 关之后的第一条牙齿：台面瓶子尺寸不再跟着槽间距缩。
+       用例刻意写成 **G.level>40 才改坏** —— 这样 1~40 关的几何原封不动，
+       旧版「只跑 1~40 关」的断言会照常全绿，只有扩到 1~90 之后才抓得到。
+       这正是「扩大关卡覆盖」这条改动的**独立证据**，不是把同一件事换个说法。
+       41~90 关最多 17 个槽，step≈41px，jw 被抬到 45px → 相邻瓶子视觉上真的叠住。 */
+    name: '台面瓶子尺寸不再跟着槽间距缩（仅第 41 关起：旧断言只跑 1~40 关 → 照样全绿，看不见）',
+    suite: 'qa_ui.js', expect: /瓶子之间不重叠/,
+    find: 'G.jw=Math.max(26,Math.min(76,Math.floor(step*0.78)));',
+    repl: 'G.jw=Math.max(26,Math.min(76,Math.floor(step*(G.level>40?1.1:0.78))));   /* rollback-test: 晚局瓶子比槽还宽 */'
+  },
+  {
+    /* 纯色管：洗牌退化成「不洗」→ 同色水滴在水池里连成一片，切片时整根切进同一根管。
+       这是「整根同色 = 白送一步的假难度」这条断言的**唯一确定性复现**，
+       也正是这条断言立项时写下的用途（见 qa_design.js ③ 的注释：
+       「生成器的洗牌退化只会表现为关卡变简单，不报错」）。
+       新加的「重洗到没有纯色管」循环（genLevel 内 guard<40）在洗牌坏掉时是故意连败 40 次的
+       —— 它**不负责兜住洗牌退化**，否则等于把「随机性坏了」悄悄抹平。
+       实测：修复后 270 组合 × 30 轮 = 8100 局，纯色管 0 根；L4T2 单关压 4000 局也是 0 根；
+       修复前 L4T2 约 2.5%/局（某色 9 滴 > 单管 5 层），正是 23:30 那次 --gate 偶发 2 条 FAIL 的来源。 */
+    name: 'shuffle() 退化成「不洗」（同色水滴连片 → 整根同色的管，白送一步的假难度）',
+    suite: 'qa_design.js', expect: /不存在纯色管/,
+    find: 'function shuffle(a){for(var i=a.length-1;i>0;i--){var j=(Math.random()*(i+1))|0,t=a[i];a[i]=a[j];a[j]=t;}return a;}',
+    repl: 'function shuffle(a){return a;}   /* rollback-test: 洗牌退化成不洗 */'
   }
 ];
 
