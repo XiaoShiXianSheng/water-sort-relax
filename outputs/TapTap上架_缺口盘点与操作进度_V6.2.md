@@ -97,7 +97,18 @@ https://accounts.taptap.cn/device?qrcode=1&user_code=<每次不同>
 2. **不要同时发起两个 `auth login`**：它们共用一份待授权状态，会互相冲掉，
    两个都失败。一次只跑一个。
 
-已经失败过的码（作废，仅作记录）：`twbxx` / `45ttg` / `awlxg` / `eyg2a`。
+已经失败过的码（作废，仅作记录）：`twbxx` / `45ttg` / `awlxg` / `eyg2a` / `8v6nn`。
+
+**解法：别再让"人赶 5 分钟"。** 写入 `auth_loop.js` —— 串行一轮轮发起 `auth login`，
+每拿到新码就覆盖刷新 `_taptap_auth_qr.png`（二维码）和 `_taptap_auth_url.txt`（链接文本），
+安静等到这轮超时再换下一个，**跑 14 轮 ≈ 70 分钟**：
+
+```bash
+node auth_loop.js 14      # 参数=轮数；人什么时候来扫，扫到的都是当前有效的码
+```
+
+一旦授权成功（每轮结束用 `auth status` 判定"认证: 已配置"）脚本自己退出。
+一轮里只跑一个 `auth login`，不会自己冲掉自己。
 
 ### 3.2 开发者入驻 + 实名认证 · 后台点几下
 
