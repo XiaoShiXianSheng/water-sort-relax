@@ -17,7 +17,7 @@ const fs = require('fs'), path = require('path'), zlib = require('zlib'), crypto
 
 const ROOT = __dirname;
 const MAIN = path.join(ROOT, 'outputs', '解压水消除.html');
-const OUT = path.join(ROOT, 'outputs', 'tap_upload_v6.0.zip');
+const OUT = path.join(ROOT, 'outputs', process.env.ZIP_NAME || 'tap_upload_v6.2.zip');
 const ENTRIES = [
   { name: 'index.html', file: MAIN },
   { name: 'icon_512.png', file: path.join(ROOT, 'publish_taptap', 'icon_512.png') },
