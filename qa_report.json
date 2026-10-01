@@ -1,5 +1,5 @@
 {
-  "at": "2026-10-01T18:45:29.909Z",
+  "at": "2026-10-01T21:30:37.354Z",
   "green": true,
   "gate": {
     "ok": true,
@@ -8,7 +8,7 @@
         "id": "G1",
         "name": "全部套件 0 FAIL",
         "ok": true,
-        "detail": "571 项断言全过"
+        "detail": "572 项断言全过"
       },
       {
         "id": "G2",
@@ -39,6 +39,12 @@
         "name": "无外部依赖（自包含单文件）",
         "ok": true,
         "detail": "1 个内联 <script>，0 个 src/link/@import/url(http)"
+      },
+      {
+        "id": "G14",
+        "name": "ES5 运行期兼容：代码里没有 ES6+ 内置 API（语法合法但老 WebView 里 undefined → 白屏）",
+        "ok": true,
+        "detail": "扫过 101KB 纯代码：Promise / Map / Symbol / Proxy / Object.assign / Array.from / Number.is* / Math.trunc* / .includes( / .padStart( / .startsWith( 全部 0 命中"
       },
       {
         "id": "G6",
@@ -109,7 +115,7 @@
     ]
   },
   "total": {
-    "pass": 571,
+    "pass": 572,
     "fail": 0,
     "warn": 0
   },
@@ -120,7 +126,7 @@
       "pass": 171,
       "fail": 0,
       "warn": 0,
-      "ms": 3649,
+      "ms": 3655,
       "fails": [],
       "warns": [],
       "unstable": false
@@ -131,7 +137,7 @@
       "pass": 74,
       "fail": 0,
       "warn": 0,
-      "ms": 1055,
+      "ms": 940,
       "fails": [],
       "warns": [],
       "unstable": false
@@ -142,7 +148,7 @@
       "pass": 31,
       "fail": 0,
       "warn": 0,
-      "ms": 389,
+      "ms": 330,
       "fails": [],
       "warns": [],
       "unstable": false
@@ -153,7 +159,7 @@
       "pass": 72,
       "fail": 0,
       "warn": 0,
-      "ms": 1627,
+      "ms": 1689,
       "fails": [],
       "warns": [],
       "unstable": false
@@ -164,7 +170,7 @@
       "pass": 14,
       "fail": 0,
       "warn": 0,
-      "ms": 469,
+      "ms": 318,
       "fails": [],
       "warns": [],
       "unstable": false
@@ -175,7 +181,7 @@
       "pass": 110,
       "fail": 0,
       "warn": 0,
-      "ms": 10883,
+      "ms": 6155,
       "fails": [],
       "warns": [],
       "unstable": false
@@ -186,7 +192,7 @@
       "pass": 40,
       "fail": 0,
       "warn": 0,
-      "ms": 160228,
+      "ms": 104852,
       "fails": [],
       "warns": [],
       "unstable": false,
@@ -237,10 +243,10 @@
     {
       "key": "gate",
       "name": "上线门禁（体积 / ES5 / 依赖 / 可解性 / 线上一致）",
-      "pass": 10,
+      "pass": 11,
       "fail": 0,
       "warn": 0,
-      "ms": 14141,
+      "ms": 14004,
       "fails": [],
       "warns": [],
       "unstable": false
@@ -251,7 +257,7 @@
       "pass": 28,
       "fail": 0,
       "warn": 0,
-      "ms": 17582,
+      "ms": 15094,
       "fails": [],
       "warns": [],
       "unstable": false
@@ -262,7 +268,7 @@
       "pass": 21,
       "fail": 0,
       "warn": 0,
-      "ms": 12839,
+      "ms": 10900,
       "fails": [],
       "warns": [],
       "unstable": false
