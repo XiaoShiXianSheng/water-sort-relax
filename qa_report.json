@@ -1,9 +1,9 @@
 {
-  "at": "2026-10-01T16:48:51.625Z",
+  "at": "2026-10-01T18:02:35.276Z",
   "green": true,
   "gate": null,
   "total": {
-    "pass": 496,
+    "pass": 466,
     "fail": 0,
     "warn": 0
   },
@@ -14,7 +14,7 @@
       "pass": 171,
       "fail": 0,
       "warn": 0,
-      "ms": 3486,
+      "ms": 6895,
       "fails": [],
       "warns": [],
       "unstable": false
@@ -25,7 +25,7 @@
       "pass": 74,
       "fail": 0,
       "warn": 0,
-      "ms": 1598,
+      "ms": 1324,
       "fails": [],
       "warns": [],
       "unstable": false
@@ -36,7 +36,7 @@
       "pass": 31,
       "fail": 0,
       "warn": 0,
-      "ms": 796,
+      "ms": 470,
       "fails": [],
       "warns": [],
       "unstable": false
@@ -47,7 +47,7 @@
       "pass": 66,
       "fail": 0,
       "warn": 0,
-      "ms": 2351,
+      "ms": 2668,
       "fails": [],
       "warns": [],
       "unstable": false
@@ -58,7 +58,7 @@
       "pass": 14,
       "fail": 0,
       "warn": 0,
-      "ms": 791,
+      "ms": 497,
       "fails": [],
       "warns": [],
       "unstable": false
@@ -69,54 +69,10 @@
       "pass": 110,
       "fail": 0,
       "warn": 0,
-      "ms": 18102,
+      "ms": 10051,
       "fails": [],
       "warns": [],
       "unstable": false
-    },
-    {
-      "key": "bot",
-      "name": "合理性测试（机器人贪心通关）",
-      "pass": 30,
-      "fail": 0,
-      "warn": 0,
-      "ms": 123996,
-      "fails": [],
-      "warns": [],
-      "unstable": false,
-      "botWon": [
-        1,
-        2,
-        3,
-        4,
-        5,
-        6,
-        7,
-        8,
-        9,
-        10,
-        11,
-        12,
-        13,
-        14,
-        15,
-        16,
-        17,
-        18,
-        19,
-        20,
-        21,
-        22,
-        23,
-        24,
-        25,
-        26,
-        27,
-        28,
-        29,
-        30
-      ],
-      "botLost": []
     }
   ]
 }
