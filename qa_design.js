@@ -196,9 +196,11 @@ guard(rep, '设计', function () {
        2026-10-02 候选A：普通档 eff=−2（色≥7 收1槽）bot 全量 90 关全过。
        方案B（用户实测仍嫌太易）：普通档再收紧到 eff=−3（色≥7 收2槽），困难/极限统一锁在 slotBias≥−2 地板
        （eff≥−3 = 线上极限档难度），三档靠 +门洞/+冰冻 维持非严格更难。bot 全量复测（TIER=0/1/2）
-       eff=−3 仍 90 关全可解。−4 才是真必输区。 */
+       eff=−3 仍 90 关全可解。
+       V6.2.5（用户要求「9 色就该减四」）：普通档色≥9 再收到 eff=−4（色 7~8 仍 −3），
+       bot 全量 90 关 × 三档复测 eff=−4 仍全可解；−5 才是真没退路。 */
     const effSlots = D.G.slots.length - 1 - pl.colors;
-    if (effSlots < -3)
+    if (effSlots < -4)
       bad.effFloor.push('L' + lv + ' 有效空槽' + (D.G.slots.length - 1) + ' − 色' + pl.colors + ' = ' + effSlots);
     /* ② 槽位预算：普通档台面槽 =「颜色数 + slotBias」（slotBias 见 STAGE_CURVE，2/1/0 递减），
        上下限 5~SLOT_CAP；且**有效空槽 − 颜色数 ≤ +1**。
@@ -283,11 +285,12 @@ guard(rep, '设计', function () {
     /* --- 台面槽 --- */
     if (G.slots.length < 5 || G.slots.length > CV.SLOT_CAP) bad.slots.push('L' + lv + '=' + G.slots.length);
     /* 槽位与颜色数的配比（普通档）：台面槽是「给某种颜色接水的工位」，
-       方案B（2026-10-02）把普通档难度开关从固定 eff=−1 改为色≥7 时 eff=−3（收 2 个开放槽），
-       故普通档台面槽下限从「≥ 颜色数」放宽到「≥ 颜色数 − 2」（每种颜色仍有接水工位，广告位补齐最后那一个）。
-       挑战档（困难/极限）刻意少槽、允许 < 颜色数−2，那是它难在哪儿的定义，不算违规。 */
-    if (G.slots.length < pl.colors - 2)
-      bad.slotVsColor.push('L' + lv + ' 槽' + G.slots.length + '<色' + pl.colors + '−2');
+       方案B（2026-10-02）把普通档难度开关从固定 eff=−1 改为色≥7 时 eff=−3（收 2 个开放槽）；
+       V6.2.5 再紧一档：色≥9 时 eff=−4（收 3 个开放槽）。
+       故普通档台面槽下限从「≥ 颜色数」放宽到「≥ 颜色数 − 3」（每种颜色仍有接水工位，广告位补齐最后那一个）。
+       挑战档（困难/极限）刻意少槽、允许 < 颜色数−3，那是它难在哪儿的定义，不算违规。 */
+    if (G.slots.length < pl.colors - 3)
+      bad.slotVsColor.push('L' + lv + ' 槽' + G.slots.length + '<色' + pl.colors + '−3');
 
     /* --- 每色瓶数均衡：彼此相差 ≤1，且每色 ≥2 瓶 ---
        「某色只有 1 瓶」= 这个颜色的水只有 3 滴，玩家几乎不用为它做决策，
@@ -646,14 +649,19 @@ guard(rep, '设计', function () {
       (p0.slots - p1.slots) <= 1 && (p1.slots - p2.slots) <= 1 && p2.slots >= 5;
     if (!slotDrop) tierRule.push('L' + lv + ' 槽递进异常 ' + p0.slots + '/' + p1.slots + '/' + p2.slots);
     const wantG1 = lv >= 6 ? Math.min(CV.GATE_CAP, p0.gates + 1) : p0.gates;
-    if (!(p1.gates === wantG1 && p2.gates === Math.min(CV.GATE_CAP, p1.gates + 1)))
+    /* V6.2.5：色≥9 时极限档**不再叠门洞**（槽已压到 −4 地板，再叠一个洞会造出
+       L19 那种「贪心 bot 要 5 次才通」的关卡），故允许极限档门洞 == 困难档。 */
+    const wantG2 = (p0.colors >= 9) ? p1.gates : Math.min(CV.GATE_CAP, p1.gates + 1);
+    if (!(p1.gates === wantG1 && p2.gates === wantG2))
       tierRule.push('L' + lv + ' 门洞递进异常 ' + p0.gates + '/' + p1.gates + '/' + p2.gates);
-    if (!(p1.ice === p0.ice && p2.ice === Math.min(CV.ICE_CAP, p0.ice + 1)))
+    /* V6.2.5：挑战档**完全不加冰**。色≥9 时槽已压到 −4 地板，极限档再叠任何约束都会出事
+       （多一个门洞 = L19 要 5 次才通；多一个冰冻 = L23 打不通），故三档冰保持一致。 */
+    if (!(p1.ice === p0.ice && p2.ice === p0.ice))
       tierRule.push('L' + lv + ' 冰冻递进异常 ' + p0.ice + '/' + p1.ice + '/' + p2.ice);
     if (p1.slots < 5 || p2.slots < 5) tierRule.push('L' + lv + ' 挑战档台面槽 < 5');
   }
   rep.ok('**三档挑战「只调约束、不加美术」**（格/色/管三档一致；槽每档 −1 下限 5；洞 +1/+1 上限 ' +
-    CV.GATE_CAP + '；冰 +1 上限 ' + CV.ICE_CAP + '）', tierRule.length === 0, tierRule.join(' ').slice(0, 240));
+    CV.GATE_CAP + '；冰三档一致）', tierRule.length === 0, tierRule.join(' ').slice(0, 240));
 
   /* ---------- 普通档「台面槽 − 颜色数」随关卡单调不增 ----------
      STAGE_CURVE 的 slotBias 是 2 → 1 → 0 逐段收紧的（退路只减不增）。
@@ -800,7 +808,7 @@ guard(rep, '设计', function () {
       const ek = String(eff2);
       if (!effTier[tier]) effTier[tier] = {};
       effTier[tier][ek] = (effTier[tier][ek] || 0) + 1;
-      if (tier > 0 && eff2 < -3)
+      if (tier > 0 && eff2 < -4)
         v2.tierFloor.push(key + ' 有效空槽' + (G2.slots.length - 1) + ' − 色' + pl.colors + ' = ' + eff2);
       /* 顺手数一下「冰冻瓶紧贴门洞」的形态（设计允许，只做趋势，不判定） */
       for (let gi = 0; gi < G2.gates.length; gi++) {
@@ -830,7 +838,7 @@ guard(rep, '设计', function () {
     '　L' + LATE_KEY.from + ' → L' + LATE_KEY.to + ' 对比见 qa_design_table.tsv');
   one('**三档「实际门洞/冰冻数 == 计划」**（原断言只跑普通档；困难/极限同样有「放不下就静默少放」的降级路径）',
     v2.tierPlan, '　' + gen270 + ' 次生成');
-  one('**挑战档难度开关下限**（有效空槽 − 颜色数 ≥ −3；受控实验 −2 已让贪心首战归零，−4 就彻底没有退路）',
+  one('**挑战档难度开关下限**（有效空槽 − 颜色数 ≥ −4；V6.2.5 用户要求 9+ 色收3槽到 −4 仍全可解；−5 才彻底没退路）',
     v2.tierFloor);
   console.log('  （三档「有效空槽 − 颜色数」分布：普通 ' + JSON.stringify(effTier[0]) +
     ' ｜困难 ' + JSON.stringify(effTier[1]) + ' ｜极限 ' + JSON.stringify(effTier[2]) + '）');
@@ -889,18 +897,18 @@ guard(rep, '设计', function () {
   one('**阶段连续性铁律**（6 个阶段接缝上：格数/颜色/水管不许下降，门洞/冰冻掉幅 ≤1 = 一个波浪振幅；' +
     '现有「逐关不跳变」只管幅度不管方向，把阶段起点调低照样全绿）', v3.stageLink);
 
-  /* ② 普通档台面槽 == 颜色数 − (色≥7?2:0)（方案B：色≥7 收 2 槽）+ 困难档至多 −1 槽（普通已触地板时允许相等）+ 极限档 ≤ 困难档 */
+  /* ② 普通档台面槽 == 颜色数 − (色≥9?3:色≥7?2:0)（V6.2.5：色≥9 收 3 槽）+ 困难档至多 −1 槽（普通已触地板时允许相等）+ 极限档 ≤ 困难档 */
   for (let lv = 1; lv <= LVMAX; lv++) {
     const p0 = pl0[lv - 1], p1 = pl1[lv - 1], p2 = pl2[lv - 1];
-    if (p0.colors >= 5 && p0.slots !== p0.colors - (p0.colors >= 7 ? 2 : 0))
-      v3.slotExact.push('L' + lv + ' 普通档槽' + p0.slots + '≠色' + p0.colors + '−' + (p0.colors >= 7 ? 2 : 0));
+    if (p0.colors >= 5 && p0.slots !== p0.colors - (p0.colors >= 9 ? 3 : (p0.colors >= 7 ? 2 : 0)))
+      v3.slotExact.push('L' + lv + ' 普通档槽' + p0.slots + '≠色' + p0.colors + '−' + (p0.colors >= 9 ? 3 : (p0.colors >= 7 ? 2 : 0)));
     if (lv >= 10) {
       if (p0.slots - p1.slots < 0 || p0.slots - p1.slots > 1) v3.slotExact.push('L' + lv + ' 困难档槽 ' + p0.slots + '→' + p1.slots + '（应 −0~1）');
       if (p2.slots > p1.slots) v3.slotExact.push('L' + lv + ' 极限档槽 ' + p1.slots + '→' + p2.slots + '（应 ≤ 困难）');
     }
   }
-  one('**普通档台面槽 == 颜色数 − (色≥7?2:0)**（方案B：色≥7 收2槽，少2个开放槽更紧）+ ' +
-    '**困难档至多 −1 槽（普通已触地板时可相等）、极限档 ≤ 困难档**（三档压在 −3 地板，属正常收敛）', v3.slotExact);
+  one('**普通档台面槽 == 颜色数 − (色≥9?3:色≥7?2:0)**（V6.2.5：色≥9 收3槽(eff=−4 促广告) / 7~8 收2槽(eff=−3) / <7 不收）+ ' +
+    '**困难档至多 −1 槽（普通已触地板时可相等）、极限档 ≤ 困难档**（三档压在 −4 地板，属正常收敛）', v3.slotExact);
 
   /* ③ 全局单调不减（1~90 关）：格数 / 颜色数 / 水管数。
      ⚠ 台面槽不在此列：槽是「难度开关」不是「棋盘大小」，方案B 让普通档在色≥7 时一次性收紧 2 槽

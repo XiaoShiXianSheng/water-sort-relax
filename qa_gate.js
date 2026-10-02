@@ -343,21 +343,36 @@ function fetchLive(url, depth) {
      面板上第 41~90 关是**真的能被手指点到**的；而 G6 与 G7 只覆盖 1~40 关。
      一旦生成器在高关位出问题（数组越界、关卡表被写死、高关不可解），
      玩家点开一个开不起来（或必输）的关，现有测试**一条都不会红** —— 典型的门禁盲区。
-     实现上：常量**从源码读**，不硬编码 90。面板改了，门禁自动跟着走，避免两处口径漂移。 */
+     实现上：常量**从产品读**，不硬编码 90。面板改了，门禁自动跟着走，避免两处口径漂移。 */
   let panelN = 0;
   try {
-    /* 两个常量分别解析（而不是钉死「var A=x, B=y;」这一种写法），
-       但值必须是**紧跟分隔符的纯数字字面量** —— 写成 `LV_PAGES=1+2` 这种表达式时
-       宁可报「读不到」也不去猜：门禁一旦猜错就会少测几十关，而它自己看不出来。
-       「读不到」按不许上线处理（没验证 ≠ 通过），跟 --no-live 那一条一个道理。 */
+    /* ⚠ 2026-10-02 23:00 修：这里原来只认**源码里的数字字面量**（正则 `LV_PAGES\s*=\s*(\d+)`），
+       而 V6.1 把 `LV_PAGES` 改成了 `Math.ceil(CFG.maxLevel/LV_PER_PAGE)`（页数随关卡上限走）
+       → 正则再也匹配不上 → G6b 每天都报「读不到 LV_PAGES」并判 FAIL，
+       **上线门禁从此一直被自己拦住**（却没人当真，因为文档里还写着 18/18 全过）。
+       教训与 §3.4.1 同源：测试不该对产品的**声明写法**有意见，它只关心「面板到底多少关」。
+       所以改成**优先正则、读不到就回落到运行期读真值**（同一份真相，且跟着产品走）；
+       只有当运行期也拿不到「有限的整数」时才判 FAIL —— 那时才是真的「读不到」。 */
     const gpA = html ? html.match(/\bLV_PER_PAGE\s*=\s*(\d+)\s*[,;]/) : null;
     const gpB = html ? html.match(/\bLV_PAGES\s*=\s*(\d+)\s*[,;]/) : null;
-    if (!gpA || !gpB) {
-      item('G6b', '选关面板显示的每一关都能生成且可解（关数从源码读）', false,
-        '读不到 `LV_PER_PAGE` / `LV_PAGES` 的数字字面量（' + (gpA ? '' : 'LV_PER_PAGE 缺; ') + (gpB ? '' : 'LV_PAGES 缺; ')
-        + '）—— 常量改名 / 删掉 / 写成表达式了？请同步更新这条断言，否则等于放弃这条门禁，按不许上线处理');
+    let perPage = gpA ? +gpA[1] : NaN, pages = gpB ? +gpB[1] : NaN;
+    let srcKind = (gpA && gpB) ? '源码字面量' : '';
+    if (!(perPage > 0) || !(pages > 0)) {
+      const { loadGame } = require('./qa_lib.js');
+      const g1 = loadGame({});
+      g1.frames(2);
+      perPage = g1.DBG.LV_PER_PAGE; pages = g1.DBG.LV_PAGES;
+      srcKind = '运行期值';
+    }
+    /* 「读不到」= 不是有限正整数。字符串 '3' / undefined / NaN / 0 一律算读不到。 */
+    const badNum = v => !(typeof v === 'number' && isFinite(v) && v > 0 && Math.floor(v) === v);
+    if (badNum(perPage) || badNum(pages)) {
+      item('G6b', '选关面板显示的每一关都能生成且可解（关数从产品读）', false,
+        '读不到 `LV_PER_PAGE` / `LV_PAGES` 的有限正整数（源码字面量与运行期值都不可用：'
+        + (badNum(perPage) ? 'LV_PER_PAGE=' + perPage + '; ' : '') + (badNum(pages) ? 'LV_PAGES=' + pages + '; ' : '')
+        + '）—— 常量改名 / 删掉 / 变成非数字了？请同步更新这条断言，否则等于放弃这条门禁，按不许上线处理');
     } else {
-      panelN = (+gpA[1]) * (+gpB[1]);
+      panelN = perPage * pages;
       const { loadGame } = require('./qa_lib.js');
       const g2 = loadGame({});
       g2.frames(3);
@@ -381,7 +396,7 @@ function fetchLive(url, depth) {
           maxBottles = Math.max(maxBottles, G2.bottles.length);
         } catch (e) { bad2.push('L' + lv + ' 抛错 ' + (e && e.message)); }
       }
-      item('G6b', '选关面板显示的每一关都能生成且可解（面板 ' + gpA[1] + '×' + gpB[1] + ' = ' + panelN + ' 关）',
+      item('G6b', '选关面板显示的每一关都能生成且可解（面板 ' + perPage + '×' + pages + ' = ' + panelN + ' 关，常量取自' + srcKind + '）',
         bad2.length === 0,
         bad2.length ? '共 ' + bad2.length + ' 处：' + [...new Set(bad2)].slice(0, 6).join('、')
           : '1~' + panelN + ' 关逐关生成通过（最大 ' + maxCells + ' 格 / ' + maxBottles + ' 瓶），可解性与水量守恒全过');

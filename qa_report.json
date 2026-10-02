@@ -1,10 +1,122 @@
 {
-  "at": "2026-10-02T01:46:37.560Z",
+  "at": "2026-10-02T18:14:49.975Z",
   "green": false,
-  "gate": null,
+  "gate": {
+    "ok": false,
+    "items": [
+      {
+        "id": "G1",
+        "name": "全部套件 0 FAIL",
+        "ok": false,
+        "detail": "有 9 项失败（见上表）"
+      },
+      {
+        "id": "G2",
+        "name": "无 flaky（快速套件重跑 2 遍结果一致）",
+        "ok": true,
+        "detail": "2 遍重跑全部一致"
+      },
+      {
+        "id": "G2b",
+        "name": "没有套件崩溃 / 静默跳过",
+        "ok": false,
+        "detail": "商业化测试（广告/存档/埋点/档位/单局规模）、架构测试（单文件 / ES5 / 零依赖 / 兜底）、设计测试（关卡与布局不变量）、留存测试（回归热身 / 递进挑战 / 存档迁移）、UI 测试（命中回转 / 拒绝反馈 / 多分辨率）、上线门禁（体积 / ES5 / 依赖 / 可解性 / 线上一致）、真浏览器冒烟（Chrome 360×640 · 5 趟 × 90 帧 · 含标题页端到端点击）、断网冒烟（外部网络全断 · 3 趟 × 90 帧 · 含标题页端到端） 没产出结论"
+      },
+      {
+        "id": "G3",
+        "name": "单文件体积 < 200KB（零依赖交付形态没退化）",
+        "ok": true,
+        "detail": "175.3KB / 上限 200KB"
+      },
+      {
+        "id": "G4",
+        "name": "ES5 合规（剥掉注释/字符串/正则后无 ES6+ 语法）",
+        "ok": true,
+        "detail": "扫过 102KB 纯代码，0 命中"
+      },
+      {
+        "id": "G5",
+        "name": "无外部依赖（自包含单文件）",
+        "ok": true,
+        "detail": "1 个内联 <script>，0 个 src/link/@import/url(http)"
+      },
+      {
+        "id": "G14",
+        "name": "ES5 运行期兼容：代码里没有 ES6+ 内置 API（语法合法但老 WebView 里 undefined → 白屏）",
+        "ok": true,
+        "detail": "扫过 102KB 纯代码：Promise / Map / Symbol / Proxy / Object.assign / Array.from / Number.is* / Math.trunc* / .includes( / .padStart( / .startsWith( 全部 0 命中"
+      },
+      {
+        "id": "G6",
+        "name": "1~40 关全部可解（每关 3 次生成）+ 水量守恒",
+        "ok": true,
+        "detail": "40 关 × 3 次，全部通过剥落式自检且水量守恒"
+      },
+      {
+        "id": "G6b",
+        "name": "选关面板显示的每一关都能生成且可解（面板 30×3 = 90 关，常量取自运行期值）",
+        "ok": true,
+        "detail": "1~90 关逐关生成通过（最大 55 格 / 68 瓶），可解性与水量守恒全过"
+      },
+      {
+        "id": "G7",
+        "name": "机器人 1~40 关全通（固定种子，可复现）",
+        "ok": false,
+        "detail": "未通过第  关（共测 0 关）"
+      },
+      {
+        "id": "G8a",
+        "name": "所有发布副本与主文件字节一致（改了主文件必须同步每一个发布目录）",
+        "ok": false,
+        "detail": "不一致：publish_water/index.html c016306bcd45592baf98805db9390f09（182932B）≠ 主文件 9f8760e4eef93b573fe73d1ca13e7671　⚠ 内容其实**完全一致**，只差换行符（CRLF vs LF）—— 检查 `core.autocrlf` 与 `.gitattributes`"
+      },
+      {
+        "id": "G8b",
+        "name": "线上字节与本地一致（带 ?t= 破 CDN 缓存）",
+        "ok": false,
+        "detail": "线上 179498B / md5 9f8760e4eef93b573fe73d1ca13e7671　vs 本地发布件 182932B / md5 c016306bcd45592baf98805db9390f09　→ 线上是旧版或没同步　⚠ 内容其实**完全一致**，只差换行符（CRLF vs LF）—— 检查 `core.autocrlf` 与 `.gitattributes`"
+      },
+      {
+        "id": "G8c",
+        "name": "所有上传包内的 index.html 与主文件一致（拆包比 md5，肉眼看不出版本）",
+        "ok": true,
+        "detail": "没有含 index.html 的包；不含 index.html 未核对：tap_upload_v6.2.3.zip、tap_upload_v6.2.4.zip"
+      },
+      {
+        "id": "G9",
+        "name": "真浏览器启动冒烟（5 趟 × 90 帧：无错误 / 非白屏 / 主循环在跑）",
+        "ok": false,
+        "detail": "套件未产出 __QA__ 结果行（可能崩溃了，看原始输出）"
+      },
+      {
+        "id": "G10",
+        "name": "QA 脚本自身语法自检（验证器必须先能被验证）",
+        "ok": true,
+        "detail": "14 个 QA 脚本全部通过语法编译：qa_arch.js qa_biz.js qa_bot_tiers.js qa_design.js qa_gate.js qa_lib.js qa_live_sim.js qa_perf.js qa_rollback.js qa_run.js qa_smoke_live.js qa_ui.js qa_warmup.js test_water.js"
+      },
+      {
+        "id": "G11",
+        "name": "出厂广告位 ID 已填（两个都非空且没被注释掉；空了会静默降级成模拟广告 = 零收益）",
+        "ok": true,
+        "detail": "激励视频 1067564 / 插屏 1067565　（⚠ 平台侧仍需确认推广位属性为「正式」）"
+      },
+      {
+        "id": "G12",
+        "name": "断网冒烟：外部网络 100% 失败时仍能正常开局（零依赖不是自述）",
+        "ok": false,
+        "detail": "这套件没自报模式 → 无法确认它真的断网了，按不许上线处理"
+      },
+      {
+        "id": "G13",
+        "name": "真浏览器端到端：真触摸事件点「开始游戏」进第 1 关 + 点货架瓶飞上台面",
+        "ok": false,
+        "detail": "冒烟套件没回传端到端结果（标题页那条链路没跑）→ 没证据不算通过"
+      }
+    ]
+  },
   "total": {
-    "pass": 40,
-    "fail": 6,
+    "pass": 0,
+    "fail": 9,
     "warn": 0
   },
   "suites": [
@@ -14,7 +126,7 @@
       "pass": 0,
       "fail": 1,
       "warn": 0,
-      "ms": 10,
+      "ms": 15,
       "fails": [
         "进程异常：spawnSync C:\\Users\\Administrator\\.workbuddy\\binaries\\node\\versions\\22.22.2-5\\node.exe EBUSY"
       ],
@@ -27,7 +139,7 @@
       "pass": 0,
       "fail": 1,
       "warn": 0,
-      "ms": 1,
+      "ms": 10,
       "fails": [
         "套件未产出 __QA__ 结果行（可能崩溃了，看原始输出）"
       ],
@@ -40,7 +152,7 @@
       "pass": 0,
       "fail": 1,
       "warn": 0,
-      "ms": 4,
+      "ms": 7,
       "fails": [
         "套件未产出 __QA__ 结果行（可能崩溃了，看原始输出）"
       ],
@@ -53,7 +165,7 @@
       "pass": 0,
       "fail": 1,
       "warn": 0,
-      "ms": 19,
+      "ms": 3,
       "fails": [
         "套件未产出 __QA__ 结果行（可能崩溃了，看原始输出）"
       ],
@@ -66,7 +178,7 @@
       "pass": 0,
       "fail": 1,
       "warn": 0,
-      "ms": 4,
+      "ms": 6,
       "fails": [
         "套件未产出 __QA__ 结果行（可能崩溃了，看原始输出）"
       ],
@@ -89,56 +201,54 @@
     {
       "key": "bot",
       "name": "合理性测试（机器人贪心通关）",
-      "pass": 40,
+      "pass": 0,
       "fail": 0,
       "warn": 0,
       "ms": 2,
       "fails": [],
       "warns": [],
       "unstable": false,
-      "botWon": [
-        1,
-        2,
-        3,
-        4,
-        5,
-        6,
-        7,
-        8,
-        9,
-        10,
-        11,
-        12,
-        13,
-        14,
-        15,
-        16,
-        17,
-        18,
-        19,
-        20,
-        21,
-        22,
-        23,
-        24,
-        25,
-        26,
-        27,
-        28,
-        29,
-        30,
-        31,
-        32,
-        33,
-        34,
-        35,
-        36,
-        37,
-        38,
-        39,
-        40
-      ],
+      "botWon": [],
       "botLost": []
+    },
+    {
+      "key": "gate",
+      "name": "上线门禁（体积 / ES5 / 依赖 / 可解性 / 线上一致）",
+      "pass": 0,
+      "fail": 1,
+      "warn": 0,
+      "ms": 2,
+      "fails": [
+        "套件未产出 __QA__ 结果行（可能崩溃了，看原始输出）"
+      ],
+      "warns": [],
+      "unstable": false
+    },
+    {
+      "key": "smoke",
+      "name": "真浏览器冒烟（Chrome 360×640 · 5 趟 × 90 帧 · 含标题页端到端点击）",
+      "pass": 0,
+      "fail": 1,
+      "warn": 0,
+      "ms": 2,
+      "fails": [
+        "套件未产出 __QA__ 结果行（可能崩溃了，看原始输出）"
+      ],
+      "warns": [],
+      "unstable": false
+    },
+    {
+      "key": "smokeOffline",
+      "name": "断网冒烟（外部网络全断 · 3 趟 × 90 帧 · 含标题页端到端）",
+      "pass": 0,
+      "fail": 1,
+      "warn": 0,
+      "ms": 3,
+      "fails": [
+        "套件未产出 __QA__ 结果行（可能崩溃了，看原始输出）"
+      ],
+      "warns": [],
+      "unstable": false
     }
   ]
 }

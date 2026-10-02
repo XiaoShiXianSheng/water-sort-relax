@@ -1576,4 +1576,274 @@ guard(rep, '台面账目', function () {
     loaded >= 60 && checks >= 300 && bad.length === 0, bad.slice(0, 5).join(' | '));
 });
 
+/* ============ 27. 每日挑战完成标记：通关当天必须落盘、跨天不认 ============
+   2026-10-02 23:00 档补。dailyDoneToday() 是标题页那句「✓ 今日挑战已完成」的唯一依据
+   （drawTitle 里就是 dailyDoneToday() ? '✓ 今日挑战已完成' : '每日挑战（每天同一局）'）。
+   这条链以前零断言：通关时 levelDone() 往 Store.data.daily 写 {date,done:1}，标题页再读回来。
+   两头任何一头写错，玩家看到的都是「明明打完了，还是显示『每日挑战』」
+   （标记没写 / 写的时候漏 date）或者反过来的「没打就显示已完成」（比对条件被写松）。
+   顺带钉住：**只开一局每日题不算完成**，必须真的通关。 */
+guard(rep, '每日挑战完成标记', function () {
+  /* ---- 27.1 干净档 / 只开了每日题但没通关 → 一律 false ---- */
+  {
+    const g = fresh(); const D = g.DBG; enter(g);
+    const clean = D.dailyDoneToday();
+    D.gen(12, { daily: true, date: D.dateKey(), quiet: true });   // 开了每日题，但没通关
+    g.frames(4);
+    rep.ok('每日挑战完成标记：干净存档、以及「开了每日题但没通关」时都必须为 false（不能凭空显示已完成）',
+      clean === false && D.dailyDoneToday() === false,
+      '干净档=' + clean + ' 开题未通关=' + D.dailyDoneToday());
+  }
+
+  /* ---- 27.2 每日题通关 → 标记必须真的写进存档，而且读得回来 ---- */
+  {
+    const g = fresh(); const D = g.DBG; const G = enter(g);
+    const key = D.dateKey();
+    D.gen(12, { daily: true, date: key, quiet: true });
+    g.frames(4);
+    G.moves = 3; G.par = 99;
+    D.levelDone();
+    const saved = D.Store.get('daily', null);
+    rep.ok('每日挑战完成标记：通关后写进存档的 {date,done} 必须是「今天 + 已完成」，且 dailyDoneToday() 真读得回来',
+      D.dailyDoneToday() === true && !!saved && saved.date === key && !!saved.done,
+      'dailyDoneToday=' + D.dailyDoneToday() + ' 存档=' + JSON.stringify(saved) + ' 今天=' + key);
+  }
+
+  /* ---- 27.3 跨天不认 + done 必须为真（两个比对条件各钉一条） ---- */
+  {
+    const g = fresh(); const D = g.DBG; const G = enter(g);
+    const key = D.dateKey();
+    D.gen(12, { daily: true, date: key, quiet: true });
+    g.frames(4); G.moves = 3; G.par = 99; D.levelDone();
+    const today = D.dailyDoneToday();
+    D.Store.data.daily = { date: '2020-01-01', done: 1, stars: 3 };   // 昨天的完成记录
+    const stale = D.dailyDoneToday();
+    D.Store.data.daily = { date: key, done: 0, stars: 0 };            // 日期对了但没完成
+    const notDone = D.dailyDoneToday();
+    rep.ok('每日挑战完成标记：昨天的完成记录 / done=0 都不算「今天已完成」（日期与 done 两个条件缺一不可）',
+      today === true && stale === false && notDone === false,
+      '今天=' + today + ' 换成昨天的date=' + stale + ' 把done改0=' + notDone);
+  }
+});
+
+/* ============ 28. 魔法清除的「目标选择」语义：只能挑台面 / 同色 / 未接满的瓶子 ============
+   §13 只验了「清掉的那杯水倒进同色瓶」的**守恒**，从没验过它**选中了谁**。
+   选错目标的后果一样致命，而且守恒断言照样绿：
+     · 挑到货架瓶 → 那一杯水被"倒"进了货架瓶，台面上该补的没补；
+     · 挑到已接满的瓶子 → fill 超过 cap，瓶子永远收不走（死局）；
+     · 挑到异色瓶 → 颜色错位，玩家看到的是「清除把水倒错了地方」。
+   构造手法：把**干扰瓶排在合法目标之前**（bottles 的顺序决定 for 循环先碰到谁）——
+   三条判定任何一条被删/被放宽，返回的就是干扰瓶。三条判定各配一条独立断言。 */
+guard(rep, '清除目标选择', function () {
+  const g = fresh(); const D = g.DBG; const G = D.G;
+  enter(g);
+  /* 造一块干净台面：所有瓶子先设成「一定不满足条件」（异色 + 回货架），
+     再由用例只摆「干扰瓶（bottles[0]）+ 合法目标（bottles[1]）」。 */
+  function board(setDecoyAndLegal) {
+    D.gen(15, { quiet: true });
+    g.frames(3);
+    G.slots.forEach(s => { s.open = true; });
+    const c = G.tubes.filter(t => t.units.length)[0].units[0];
+    const N = D.consts().COLORS.length;
+    G.bottles.forEach((b, i) => {
+      b.col = (c + 7 + i) % N;
+      b.place = 'grid'; b.slot = -1; b.fill = 0; b.done = false; b.capT = 0;
+    });
+    const dcy = G.bottles[0], legal = G.bottles[1];
+    setDecoyAndLegal(dcy, legal, c, N);
+    D.layoutAll();
+    return { c, dcy, legal };
+  }
+  const who = (B, hit) => (hit === B.legal ? '合法目标' : hit === B.dcy ? '干扰瓶' : String(hit));
+
+  /* 28.1 干扰 = 同色但在货架上（place 判定） */
+  {
+    const B = board((d, l, c) => {
+      d.col = c; d.place = 'grid'; d.fill = 0;
+      l.col = c; l.place = 'counter'; l.slot = 0; l.fill = 0;
+    });
+    const hit = D.clearJarFor(B.c);
+    rep.ok('清除目标只挑「台面上」的瓶子：排在合法目标前面的同色货架瓶绝不会被选中',
+      hit === B.legal, '选中=' + who(B, hit));
+  }
+
+  /* 28.2 干扰 = 已接满的同色瓶（fill<cap 判定） */
+  {
+    const B = board((d, l, c) => {
+      d.col = c; d.place = 'counter'; d.slot = 0; d.fill = d.cap;
+      l.col = c; l.place = 'counter'; l.slot = 1; l.fill = 0;
+    });
+    const hit = D.clearJarFor(B.c);
+    rep.ok('清除目标只挑「还没接满」的瓶子：已满（fill==cap）的同色瓶绝不会被选中（否则超容、永远收不走）',
+      hit === B.legal, '选中=' + who(B, hit));
+  }
+
+  /* 28.3 干扰 = 异色台面瓶（col 判定） */
+  {
+    const B = board((d, l, c, N) => {
+      d.col = (c + 1) % N; d.place = 'counter'; d.slot = 0; d.fill = 0;
+      l.col = c; l.place = 'counter'; l.slot = 1; l.fill = 0;
+    });
+    const hit = D.clearJarFor(B.c);
+    rep.ok('清除目标只挑「同色」的瓶子：排在合法目标前面的异色台面瓶绝不会被选中（否则水被倒错颜色）',
+      hit === B.legal, '选中=' + who(B, hit));
+  }
+
+  /* 28.4 clearTargetExists() 必须与「逐管扫描」的独立实现完全一致 ----
+     它是 hintOpts / boardPlayable 判断「清除这个道具此刻能不能用」的唯一依据：
+     写成恒 true → 提示条给出一个点了必被拒的按钮；写成恒 false → 明明能用却灰着。
+     独立实现这里手写一遍（不调产品函数），这才叫交叉验证而不是自证。 */
+  {
+    const existsIndep = () => {
+      for (const t of G.tubes) {
+        if (!t.units.length) continue;
+        const col = t.units[0];
+        for (const b of G.bottles) {
+          if (b.col === col && b.place === 'counter' && b.fill < b.cap) return true;
+        }
+      }
+      return false;
+    };
+    const bad = [];
+    let checks = 0;
+    for (let lv = 1; lv <= 30; lv++) for (const tier of [0, 1, 2]) {
+      D.gen(lv, { tier: tier, quiet: true });
+      g.frames(2);
+      checks++;
+      const p = D.clearTargetExists(), i2 = existsIndep();
+      if (p !== i2) bad.push('L' + lv + 'T' + tier + ' 产品=' + p + ' 独立=' + i2);
+    }
+    /* 手工补两个极端：有目标 / 无目标。没有这两例，「整批样本天生同值」会让断言退化成恒真。 */
+    G.tubes.forEach((t, i) => { t.units = [i % 4]; });
+    G.bottles.forEach((b, i) => {
+      b.col = i % 4; b.fill = 0;
+      if (i < 2) { b.place = 'counter'; b.slot = i; } else { b.place = 'grid'; b.slot = -1; }
+    });
+    D.layoutAll();
+    const hasT = D.clearTargetExists();
+    G.bottles.forEach(b => { if (b.place === 'counter') { b.place = 'grid'; b.slot = -1; } });
+    D.layoutAll();
+    const noT = D.clearTargetExists();
+    rep.ok('clearTargetExists() 与「逐管扫描是否存在可接目标」的独立实现完全一致'
+      + '（1~30 关 × 3 档 共 ' + checks + ' 次 + 手工构造的「有目标 / 无目标」各 1 例）',
+      bad.length === 0 && hasT === true && noT === false,
+      (hasT !== true || noT !== false
+        ? '手工两例没覆盖到「有/无目标」（has=' + hasT + ' no=' + noT + '）；' : '')
+      + bad.slice(0, 4).join(' | '));
+  }
+});
+
+/* ============ 29. 提示条按钮的「分发」：id 必须走到对应那支分支 ============
+   §16 只验了提示条按钮「画在哪、点得到」（hintRects / hintHit），从没验过**点下去走哪条路**。
+   分发写错的表现全是「点了 A 却发生了 B」或者「点了没反应」：
+     swap / clear 串台 → 想换管却进了清除模式；restart 漏掉 → 点重开没反应；
+     unlock / undo 被删 → 提示条给出按钮却什么都不做（比不给按钮还糟，玩家会以为游戏坏了）。 */
+guard(rep, '提示条分发', function () {
+  const g = fresh(); const D = g.DBG; const G = D.G;
+  enter(g);
+
+  /* 29.1 模式类：swap / clear 各自进对应的模式，不串台 */
+  {
+    D.gen(9, { quiet: true }); g.frames(3);
+    D.hintAction('swap');
+    const mSwap = G.mode, fSwap = G.swapFirst;
+    D.gen(9, { quiet: true }); g.frames(3);
+    D.hintAction('clear');
+    const mClear = G.mode;
+    rep.ok('提示条「随心互换」→ 只进 swap 模式、「魔法清除」→ 只进 clear 模式（两支互不串台）',
+      mSwap === 'swap' && fSwap === -1 && mClear === 'clear',
+      'swap→mode=' + mSwap + '、clear→mode=' + mClear);
+  }
+
+  /* 29.2 重开本关：关卡号不变、步数归零、台面清空 */
+  {
+    D.gen(9, { quiet: true }); g.frames(3);
+    const lv0 = G.level;
+    const b = G.bottles.filter(x => x.place === 'grid' && x.gate < 0)[0];
+    b.place = 'counter'; b.slot = 0; b.capT = 1; D.layoutAll();
+    G.moves = 7;
+    const before = G.bottles.filter(x => x.place === 'counter').length;
+    D.hintAction('restart');
+    const after = G.bottles.filter(x => x.place === 'counter').length;
+    rep.ok('提示条「重开本关」→ 重开的确实是**本关**（关卡号不变）、步数归零、台面清空（'
+      + before + ' → ' + after + '）',
+      G.level === lv0 && G.moves === 0 && after === 0,
+      'level ' + lv0 + '→' + G.level + '，moves 7→' + G.moves + '，台面 ' + before + '→' + after);
+  }
+
+  /* 29.3 解锁台面：必须真的走 unlockSlot()（开放槽 +1、免费次数 −1、锁定槽 −1） */
+  {
+    let ok = false, detail = '未找到「有锁定槽 + 有免费解锁次数」的局面';
+    for (const lv of [9, 15, 20, 25, 30]) {
+      D.gen(lv, { quiet: true }); g.frames(3);
+      const locked0 = D.lockedSlots().length;
+      if (locked0 <= 0 || G.unlockLeft <= 0) continue;
+      const oc0 = D.openSlotCount(), ul0 = G.unlockLeft;
+      D.hintAction('unlock');
+      const got = [D.openSlotCount() - oc0, ul0 - G.unlockLeft, locked0 - D.lockedSlots().length].join('/');
+      ok = got === '1/1/1';
+      detail = 'L' + lv + ' 开放槽+1 / 次数−1 / 锁定槽−1 = ' + got;
+      break;
+    }
+    rep.ok('提示条「解锁台面」→ 真的走 unlockSlot()：开放槽 +1、免费解锁次数 −1、锁定槽 −1', ok, detail);
+  }
+
+  /* 29.4 撤销：必须真的走 doUndo()（撤销栈 −1、额度 −1），不是空点 */
+  {
+    D.gen(9, { quiet: true }); g.frames(3);
+    G.undoLeft = 5; G.history.length = 0;
+    G.moves = 0; D.snapshot();
+    const h0 = G.history.length, u0 = G.undoLeft;
+    D.hintAction('undo');
+    rep.ok('提示条「撤销一瓶」→ 真的走 doUndo()：撤销栈 −1、额度 −1，且提示条自身状态被清掉（不是点了没反应）',
+      G.history.length === h0 - 1 && G.undoLeft === u0 - 1 && G.hint === false && G.hintHold === 0,
+      '栈 ' + h0 + '→' + G.history.length + '，额度 ' + u0 + '→' + G.undoLeft
+      + '，hint=' + G.hint + ' hintHold=' + G.hintHold);
+  }
+});
+
+/* ============ 30. 胜局判定：最后一个瓶子收走才算赢 ============
+   checkAllGone() 是 completeJar() 的收尾调用，也是「通关」这件事的唯一判定点，此前零断言。
+   写松（漏了 place 判断）→ 台面还剩一堆瓶子就弹结算页，玩家一脸问号；
+   写死 → 清完了却永远不结算（这局白打，比崩溃更气人）。 */
+guard(rep, '胜局判定', function () {
+  const g = fresh(); const D = g.DBG; const G = D.G;
+  enter(g);
+  D.gen(15, { quiet: true }); g.frames(3);
+
+  /* 30.1 只收走一半 → 绝不能进 win */
+  const alive = G.bottles.filter(b => b.place !== 'gone');
+  for (let i = 0; i < Math.floor(alive.length / 2); i++) {
+    alive[i].place = 'gone'; alive[i].slot = -1; alive[i].fill = 0;
+  }
+  const remain = G.bottles.filter(b => b.place !== 'gone').length;
+  D.checkAllGone();
+  rep.ok('胜局判定：台面/货架上还有 ' + remain + ' 个瓶子时，checkAllGone() 不得判定通关',
+    remain > 0 && G.state !== 'win', 'state=' + G.state + ' 剩余瓶子=' + remain);
+
+  /* 30.2 最后一个瓶子也收走 → 必须立刻进 win 并生成结算数据 */
+  G.bottles.forEach(b => { b.place = 'gone'; b.slot = -1; b.fill = 0; });
+  D.checkAllGone();
+  rep.ok('胜局判定：最后一个瓶子收走 → 真的判定通关（state=win 且结算数据 winStats 已生成）',
+    G.state === 'win' && !!G.winStats, 'state=' + G.state + ' winStats=' + !!G.winStats);
+});
+
+/* ============ 31. 星级读取 starsOf(lv,tier)：档位必须对得上、越界档位落回普通档 ============
+   starsOf 是选关面板 / 结算页 / 首页三处共用的一套读法（drawTitle 与 TIER_UI 都直接调它）。
+   读错档位的体感是「我困难档明明拿了 2 星，面板上却显示 3 星 / 0 星」。
+   另一条是热身档（tier 为负数）：热身只是「这次从哪个难度起步」，
+   绝不能凭空点亮困难/极限的星 —— 否则热身就成了刷星捷径。 */
+guard(rep, '星级读取', function () {
+  const g = fresh(); const D = g.DBG;
+  enter(g);
+  D.Store.data.stars['9'] = { normal: 3, hard: 2, extreme: 1 };
+  rep.ok('星级读取 starsOf：普通/困难/极限三档各读自己那一格；没通关的关一律 0 星',
+    D.starsOf(9, 0) === 3 && D.starsOf(9, 1) === 2 && D.starsOf(9, 2) === 1 && D.starsOf(77, 0) === 0,
+    'normal=' + D.starsOf(9, 0) + ' hard=' + D.starsOf(9, 1) + ' extreme=' + D.starsOf(9, 2)
+    + ' 未通关=' + D.starsOf(77, 0));
+  rep.ok('星级读取 starsOf：越界/负数档位（热身 −1/−2、脏档 5）一律落回「普通」那一格，不许点亮别的档',
+    D.starsOf(9, -1) === 3 && D.starsOf(9, -2) === 3 && D.starsOf(9, 5) === 3,
+    'tier−1=' + D.starsOf(9, -1) + ' tier−2=' + D.starsOf(9, -2) + ' tier5=' + D.starsOf(9, 5));
+});
+
 rep.done();

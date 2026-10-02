@@ -93,12 +93,15 @@ const CASES = [
     repl: 'function moveBudgetFor(lv){ return 10; }   /* rollback-test: 预算被压成 10 步 */'
   },
   {
-    /* V6.0：slots = clamp(colors + slotBias, 5, SLOT_CAP)，普通档保证 槽 ≥ 色。
-       把 slotBias 抹掉再 −3 → 高关卡的槽比颜色数还少。 */
-    name: 'levelPlan：普通档台面槽比颜色数还少（slotBias 被抹掉）',
+    /* V6.0：slots = clamp(colors + slotBias, 5, SLOT_CAP)，普通档保证 槽 ≥ 色 − k。
+       ⚠ 2026-10-02 23:00 改过这条：原来砍成 `colors-3`，而 V6.2.5 把「槽 ≥ 色 − k」的 k
+       从 2 放宽到 3 → `colors-3` 正好落在**合法边界上**，断言不再红 = 典型的「假绿」。
+       教训：改坏量**不许贴着阈值写**（阈值一挪，用例就悄悄失效）。
+       现在直接把槽压成常数 5 —— 对任何 colors ≥ 9 的关卡都远低于 `色 − k`，阈值怎么挪都红。 */
+    name: 'levelPlan：普通档台面槽被压成常数 5（高关必然「槽 < 色 − k」，阈值怎么挪都红）',
     suite: 'qa_design.js', expect: /台面槽 ≥ 颜色数/,
     find: '  var slots=clamp(colors+slotBias,5,SLOT_CAP);',
-    repl: '  var slots=clamp(colors-3,5,SLOT_CAP);   /* rollback-test */'
+    repl: '  var slots=5;   /* rollback-test: 台面槽恒为 5 */'
   },
   {
     name: 'genLevel：某色瓶数多塞 2 瓶（每色瓶数不均衡）',
@@ -125,20 +128,31 @@ const CASES = [
     repl: 'for(var gk=0;gk<maxGates;gk++){var w=4;ws.push(w);es+=w-1;}' + '   /* rollback-test */'
   },
   {
-    /* V6.0：档位只改 slotBias / gates / ice。把 tier>=2 整段短路 → 极限 == 困难。
-       断言标题已从「三档挑战严格更难」改成「三档挑战真的更难」，expect 跟着换。 */
-    name: 'levelPlan：极限档 tier>=2 整段失效（极限 == 困难）',
-    suite: 'qa_design.js', expect: /三档挑战真的更难/,
-    find: '  if(tier>=2){ slotBias-=1; gates+=1; ice+=1; }',
-    repl: '  if(tier>=2&&false){ slotBias-=1; gates+=1; ice+=1; }' + '   /* rollback-test */'
+    /* V6.0：档位只改 slotBias / gates / ice。
+       ⚠ 2026-10-02 23:00 重写过这条。原来改的是「tier>=2 短路 → 极限 == 困难」，
+       但守着它的断言当年叫「三档挑战真的更难」，后来被重命名/改口径成
+       「三档挑战非严格更难（困难 ≥ 普通 且 极限 ≥ 困难）」—— 一个 **≥** 断言，
+       天生抓不到「极限 == 困难」（等号满足 ≥）；而且 V6.2.x 的设计是**主动**让三档
+       在难度地板上收敛相等（见 levelPlan 注释「三档压在 −4 地板，属正常收敛不是 bug」）。
+       也就是说：这条用例的**改坏手法本身失效了** —— 改坏了确实没有断言会红，
+       因为它已经不是「坏」了。这种「假绿」比锚点过期更隐蔽，改判新口径：
+       换成同一条断言**能**抓的形态 —— 困难档反向变简单（困难 < 普通）。
+       ⚠ 锚点只吃到 `Math.max(slotBias-1,` 为止。难度地板是个会变的常量
+       （V6.2.4 = −2 → V6.2.5 = −3），把整行钉死在 find 里就没意义了：
+       产品每调一次地板值，这条用例就静默失效一次（§3.4.1「锚点过期」）。 */
+    name: 'levelPlan：困难档被写反（困难比普通更容易 → 「三档挑战非严格更难」失守）',
+    suite: 'qa_design.js', expect: /三档挑战非严格更难/,
+    find: '  if(tier>=1){ slotBias=Math.max(slotBias-1,',
+    repl: '  if(tier>=1){ slotBias=2; if(0)/* rollback-test*/ slotBias=Math.max(slotBias-1,'
   },
   {
     /* V6.0：教学关的极限档靠切片区间 + 全局 clamp 自然被限制在 9 格 / 5 管。
-       这里直接给 tier2 的棋盘加行列 → 教学关被撑成 36 格，触碰「≤12 格」红线。 */
+       这里让极限档把行列各撑大 → 教学关被撑成 36 格，触碰「≤12 格」红线。
+       锚点同样只吃到地板值之前（理由见上一条）。 */
     name: '教学关的极限档把棋盘撑成 36 格（新手第一关变劝退关）',
     suite: 'qa_design.js', expect: /教学关的极限档/,
-    find: '  if(tier>=2){ slotBias-=1; gates+=1; ice+=1; }',
-    repl: '  if(tier>=2){ slotBias-=1; gates+=1; ice+=1; rows+=3; cols+=3; }' + '   /* rollback-test */'
+    find: '  if(tier>=2){ slotBias=Math.max(slotBias-1,',
+    repl: '  if(tier>=2){ rows+=3; cols+=3; /* rollback-test */ slotBias=Math.max(slotBias-1,'
   },
   /* ---------- FIX-02：结算弹窗的三档方块从「纯展示」变成「可点」 ---------- */
   {
@@ -487,8 +501,8 @@ const CASES = [
   {
     name: 'levelPlan：困难档一档就交掉 2 个台面槽（槽位递进超出「每档 −1」）',
     suite: 'qa_design.js', expect: /三档挑战「只调约束/,
-    find: '  if(tier>=1){ slotBias-=1; if(lv>=6)gates+=1; }',
-    repl: '  if(tier>=1){ slotBias-=2; if(lv>=6)gates+=1; }   /* rollback-test */'
+    find: '  if(tier>=1){ slotBias=Math.max(slotBias-1,',
+    repl: '  if(tier>=1){ slotBias-=2; if(0)/* rollback-test*/ slotBias=Math.max(slotBias-1,'
   },
   {
     name: 'genLevel：门洞候选从「≥3 个货架内方向」放宽到「≥2」（角落也能当门洞）',
@@ -648,13 +662,20 @@ const CASES = [
     repl: "  G.state='play';\n  if(lv>40)G.state='win';   /* rollback-test: 模拟高关位关卡表写坏 */"
   },
   {
-    /* 同一条门禁的第二种形态：面板关数常量读不出来时**必须报错**，不能静默按小数字跑。
-       用 `2+1` 而不是 `4`：值其实还是 3，游戏本体完全正常 ——
-       这条验的就是「读不到就说读不到，不许猜」（没验证 ≠ 通过）。 */
-    name: '门禁 G6b：面板关数常量写成表达式（读不到就必须报错，不许猜着往下跑）',
+    /* 同一条门禁的第二种形态：面板关数常量既扒不到源码字面量、运行期也不是有限正整数时
+       **必须报错**，不能静默按小数字跑（没验证 ≠ 通过）。
+       ⚠ 2026-10-02 23:00 改写过这条：V6.1 把 LV_PAGES 从字面量 3 改成
+       `Math.ceil(CFG.maxLevel/LV_PER_PAGE)` 之后，G6b 原来只认字面量的写法永远匹配不上 →
+       每天都误判 FAIL（门禁被自己拦住）。修法是「优先正则、扒不到就回落到运行期读真值」，
+       于是这条用例的改坏手法必须跟着换：只把声明写成表达式已经**不该**报错了
+       （那是产品现在的正常写法！），要证明「读不到就说读不到」，得让**两条路都拿不到合法值**。
+       所以改成 `+0.5`：正则扒不到（不是字面量），运行期拿到 3.5（不是整数）→ 必须判 FAIL。
+       注：游戏本体在这条改坏下完全正常（3.5 参与的比较/循环 JS 都会数值化），
+       所以这里验的纯粹是「断言有没有在说话」，不是「产品有没有坏」。 */
+    name: '门禁 G6b：面板关数常量两条路都拿不到合法值（扒不到字面量 + 运行期非整数 → 必须报错，不许猜）',
     suite: 'qa_gate.js', expect: /读不到/,
-    find: 'var LV_PER_PAGE=30, LV_PAGES=3;',
-    repl: 'var LV_PER_PAGE=30, LV_PAGES=2+1;   /* rollback-test: 值仍是 3，但断言读不出来 */'
+    find: 'var LV_PER_PAGE=30, LV_PAGES=Math.ceil(CFG.maxLevel/LV_PER_PAGE);',
+    repl: 'var LV_PER_PAGE=30, LV_PAGES=Math.ceil(CFG.maxLevel/LV_PER_PAGE)+0.5;   /* rollback-test: 非整数 */'
   },
 
   /* ---------- 2026-10-02 05:00 档新增：门禁 G14（ES5 运行期兼容）----------
@@ -740,10 +761,10 @@ const CASES = [
   {
     /* ⑦ 挑战档难度开关下限：极限档一次砍 2 个槽（而不是 1 个）。
        受控实验里 −2 已让贪心首战归零，−4 就彻底没有退路 —— 属于「点了必输」的形态。 */
-    name: '极限档台面槽多砍 2 格（有效空槽 − 色 = −4，掉出「必输区」下限）',
+    name: '极限档台面槽多砍 2 格（绕过难度地板 → 有效空槽 − 色 掉到 −5 真必输区）',
     suite: 'qa_design.js', expect: /挑战档难度开关下限/,
-    find: '  if(tier>=2){ slotBias-=1; gates+=1; ice+=1; }',
-    repl: '  if(tier>=2){ slotBias-=3; gates+=1; ice+=1; }   /* rollback-test: 极限档再砍两刀 */'
+    find: '  if(tier>=2){ slotBias=Math.max(slotBias-1,',
+    repl: '  if(tier>=2){ slotBias-=2; if(0)/* rollback-test*/ slotBias=Math.max(slotBias-1,'
   },
 
   /* ---------- 2026-10-01 05:00 档新增：两条真浏览器门禁（G12 断网 / G13 端到端点击）----------
@@ -922,6 +943,96 @@ const CASES = [
     suite: 'qa_design.js', expect: /水管数 ≥ 颜色数/,
     find: "  {to:90, name:'极限+',    cols:[11,11], rows:[5,5], colors:[16,17], tubes:[17,17], gates:[6,8], ice:[6,8], slotBias:0}",
     repl: "  {to:90, name:'极限+',    cols:[11,11], rows:[5,5], colors:[16,17], tubes:[13,13], gates:[6,8], ice:[6,8], slotBias:0}   /* rollback-test */"
+  },
+  /* ===== 2026-10-02 23:00 档新增：五组此前零断言的行为（每日挑战完成标记 / 清除目标选择 /
+     提示条分发 / 胜局判定 / 星级读取）。
+     ⚠ 本档刻意**没**给 clearJarFor 里的 `!b.done` 配用例 —— 全文件搜不到任何把 bottle.done
+     置 true 的地方（只有 completeJar / applySnapshotObj 两处置 false），所以删掉那个条件
+     根本不会让任何断言变红。给死条件配回滚用例 = 制造一条必然报「假绿」的噪声用例。
+     这本身就是本档的发现之一（见报告：clearJarFor 的 !b.done 是恒真死条件）。 ===== */
+  {
+    name: '【每日挑战标记】dailyDoneToday 漏掉日期比对（昨天的完成记录被当成今天）',
+    suite: 'qa_ui.js', expect: /每日挑战完成标记/,
+    find: 'return !!(d&&d.date===dateKey()&&d.done); }',
+    repl: 'return !!(d&&d.done); }   /* rollback-test: 日期比对被写松 */'
+  },
+  {
+    name: '【每日挑战标记】通关时写存档漏掉 date 字段（打了等于没打）',
+    suite: 'qa_ui.js', expect: /每日挑战完成标记/,
+    find: 'Store.data.daily={date:G.dailyDate,done:1,stars:stars,moves:G.moves};',
+    repl: 'Store.data.daily={done:1,stars:stars,moves:G.moves};   /* rollback-test: 漏写 date */'
+  },
+  {
+    name: '【清除目标】clearJarFor 去掉「台面」判定（水被倒进货架瓶）',
+    suite: 'qa_ui.js', expect: /清除目标只挑「台面上」/,
+    find: "if(b.col===col&&b.place==='counter'&&!b.done&&b.fill<b.cap)return b;",
+    repl: "if(b.col===col&&!b.done&&b.fill<b.cap)return b;   /* rollback-test: 去掉台面判定 */"
+  },
+  {
+    name: '【清除目标】clearJarFor 去掉「未接满」判定（挑到满杯 → 超容、永远收不走）',
+    suite: 'qa_ui.js', expect: /清除目标只挑「还没接满」/,
+    find: "if(b.col===col&&b.place==='counter'&&!b.done&&b.fill<b.cap)return b;",
+    repl: "if(b.col===col&&b.place==='counter'&&!b.done)return b;   /* rollback-test: 去掉未满判定 */"
+  },
+  {
+    name: '【清除目标】clearJarFor 去掉「同色」判定（水被倒错颜色）',
+    suite: 'qa_ui.js', expect: /清除目标只挑「同色」/,
+    find: "if(b.col===col&&b.place==='counter'&&!b.done&&b.fill<b.cap)return b;",
+    repl: "if(b.place==='counter'&&!b.done&&b.fill<b.cap)return b;   /* rollback-test: 去掉同色判定 */"
+  },
+  {
+    name: '【清除目标】clearTargetExists 只问「管子还有没有水」（提示条给出点了必被拒的按钮）',
+    suite: 'qa_ui.js', expect: /clearTargetExists\(\) 与「逐管扫描/,
+    find: 'if(cu.length&&clearJarFor(cu[0]))return true;',
+    repl: 'if(cu.length)return true;   /* rollback-test: 不看有没有目标 */'
+  },
+  {
+    name: '【提示条分发】clear 分支被改成进 swap 模式（想清除却开始换管）',
+    suite: 'qa_ui.js', expect: /提示条「随心互换」/,
+    find: "if(id==='clear'){ G.mode='clear'; G.swapFirst=-1;",
+    repl: "if(id==='clear'){ G.mode='swap'; G.swapFirst=-1;   /* rollback-test: 串台 */"
+  },
+  {
+    name: '【提示条分发】restart 分支被删（点「重开本关」没反应）',
+    suite: 'qa_ui.js', expect: /提示条「重开本关」/,
+    find: "if(id==='restart'){ genLevel(G.level,{restart:1}); SFX.tap(); return; }",
+    repl: "if(id==='restart'){ return; }   /* rollback-test: 重开分支被删 */"
+  },
+  {
+    name: '【提示条分发】unlock 分支被删（提示条给了「解锁台面」按钮却什么都不做）',
+    suite: 'qa_ui.js', expect: /提示条「解锁台面」/,
+    find: "if(id==='unlock'){ unlockSlot(); return; }",
+    repl: "if(id==='unlock'){ return; }   /* rollback-test: 解锁分支被删 */"
+  },
+  {
+    name: '【提示条分发】undo 分支被删（点「撤销一瓶」没反应）',
+    suite: 'qa_ui.js', expect: /提示条「撤销一瓶」/,
+    find: "if(id==='undo'){ doUndo(); return; }",
+    repl: "if(id==='undo'){ return; }   /* rollback-test: 撤销分支被删 */"
+  },
+  {
+    name: '【胜局判定】checkAllGone 无条件结算（台面还剩一堆瓶子就通关）',
+    suite: 'qa_ui.js', expect: /胜局判定/,
+    find: 'if(all)levelDone();',
+    repl: 'if(true)levelDone();   /* rollback-test: 无条件结算 */'
+  },
+  {
+    name: '【胜局判定】checkAllGone 永远不结算（清完了也不给过）',
+    suite: 'qa_ui.js', expect: /胜局判定/,
+    find: 'if(all)levelDone();',
+    repl: 'if(false)levelDone();   /* rollback-test: 永远不结算 */'
+  },
+  {
+    name: '【星级读取】starsOf 只读普通档（困难/极限的星读不出来）',
+    suite: 'qa_ui.js', expect: /星级读取 starsOf：普通/,
+    find: "return rec[(['normal','hard','extreme'])[tier]||'normal']||0;",
+    repl: "return rec.normal||0;   /* rollback-test: 只读普通档 */"
+  },
+  {
+    name: '【星级读取】starsOf 越界档位落到「困难」而不是「普通」（热身档凭空点亮困难星）',
+    suite: 'qa_ui.js', expect: /越界\/负数档位/,
+    find: ")[tier]||'normal']||0;",
+    repl: ")[tier]||'hard']||0;   /* rollback-test: 越界档位落错格 */"
   }
 ];
 
@@ -1049,6 +1160,16 @@ console.log('');
 let bad = 0;
 const rows = [];
 
+/* 结果**边跑边写**，不是攒到最后一次性打印 —— 2026-10-03 踩到：
+   本脚本被中断时，攒在数组里的结果会**全部丢失**（日志只剩开头两行），
+   「跑过没有 / 哪条没过 / 文件停在哪条用例的改坏状态」全都无从判断。
+   所以每确定一条就立刻 `fs.writeSync(1,…)` 落盘：writeSync 不走 stdout 缓冲，被 kill 也留得住。 */
+function report(x) {
+  rows.push(x);
+  try { fs.writeSync(1, (x.ok ? '  ✔ ' : '  ✘ ') + x.name + '\n      ' + x.why + '\n'); }
+  catch (e) { /* 实在写不出去就算了，rows 里还有一份 */ }
+}
+
 /* 顶层 await 在 CommonJS 里不可用，而 liveTamper 用例要起本地服务器 → 包一层 async */
 (async function main() {
 /* RB_ONLY：只跑名字里含指定关键词的用例（多个关键词用 | 分隔），用于新加断言时**只验自己那几条**
@@ -1056,8 +1177,12 @@ const rows = [];
    例：RB_ONLY=阶段连续性|台面槽 == 颜色数 node qa_rollback.js
    注意：它只筛选「跑哪些」，不影响「怎么判定」；被筛掉的用例不会计入分母。 */
 const RB_ONLY = process.env.RB_ONLY ? process.env.RB_ONLY.split('|').filter(Boolean) : null;
+let caseNo = 0;
 for (const c of CASES) {
   if (RB_ONLY && !RB_ONLY.some(k => c.name.indexOf(k) >= 0)) continue;
+  caseNo++;
+  /* 每条开始先打一行：被中断时至少知道「停在哪条」，配合 report() 的即时输出可判断进度 */
+  try { fs.writeSync(1, '▶ [' + caseNo + '/' + CASES.length + '] ' + c.name + '\n'); } catch (e) { }
   const f = c.file || DEFAULT_FILE;
   const O = origOf(f);
   const original = O.text;
@@ -1068,7 +1193,7 @@ for (const c of CASES) {
     tamper = await startServer(HELPER_CODE);
     if (!tamper.url) {
       bad++;
-      rows.push({ ok: false, name: c.name, why: '起不了本地篡改站点，这条用例没跑（不能算通过）' });
+      report({ ok: false, name: c.name, why: '起不了本地篡改站点，这条用例没跑（不能算通过）' });
       if (tamper.proc) { try { tamper.proc.kill(); } catch (e) { } }
       continue;
     }
@@ -1080,7 +1205,7 @@ for (const c of CASES) {
     tamper = await startServer(SERVE_CODE);
     if (!tamper.url) {
       bad++;
-      rows.push({ ok: false, name: c.name, why: '起不了本地转发站点，这条用例没跑（不能算通过）' });
+      report({ ok: false, name: c.name, why: '起不了本地转发站点，这条用例没跑（不能算通过）' });
       if (tamper.proc) { try { tamper.proc.kill(); } catch (e) { } }
       continue;
     }
@@ -1097,7 +1222,7 @@ for (const c of CASES) {
       const hits = original.split(c.find).length - 1;
       if (hits !== 1) {
         bad++;
-        rows.push({
+        report({
           ok: false, name: c.name,
           why: '原文片段在 ' + f + ' 里出现 ' + hits + ' 次（应为 1 次）—— 文件改过？请更新回滚用例'
         });
@@ -1116,11 +1241,11 @@ for (const c of CASES) {
   }
 
   const restored = md5(fs.readFileSync(O.path, 'utf8')) === O.hash;
-  if (!restored) { bad++; rows.push({ ok: false, name: c.name, why: f + ' 没能还原（md5 不一致）！' }); continue; }
-  if (err) { bad++; rows.push({ ok: false, name: c.name, why: '套件跑崩：' + err.message }); continue; }
+  if (!restored) { bad++; report({ ok: false, name: c.name, why: f + ' 没能还原（md5 不一致）！' }); continue; }
+  if (err) { bad++; report({ ok: false, name: c.name, why: '套件跑崩：' + err.message }); continue; }
 
   const hit = r.fails.filter(x => c.expect.test(x));
-  rows.push({
+  report({
     ok: hit.length > 0, name: c.name, why: hit.length
       ? '如期 FAIL「' + hit[0].slice(0, 70) + '」（该套件 ' + r.pass + ' PASS / ' + r.fails.length + ' FAIL）'
       : '❌ 改坏了却没有对应 FAIL（该套件 ' + r.pass + ' PASS / ' + r.fails.length + ' FAIL）→ 这条断言是假绿'
@@ -1128,7 +1253,7 @@ for (const c of CASES) {
   if (hit.length === 0) bad++;
 }
 
-rows.forEach(x => console.log((x.ok ? '  ✔ ' : '  ✘ ') + x.name + '\n      ' + x.why));
+/* 每条结果在 report() 里已经边跑边打过了，这里不再重复打印 */
 const volFixed = restoreVolatile();
 console.log('');
 console.log('  已还原被套件重写的产物：' + (volFixed.length ? volFixed.join('、') : '（无变化）'));

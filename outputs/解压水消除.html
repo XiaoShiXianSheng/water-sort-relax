@@ -159,7 +159,7 @@ function toolX(i){return TOOL_X0+i*(TOOL_W+TOOL_GAP);}
    adUnitId 为空时（尚未在开发者中心开通广告）会自动降级为 TEST，流程绝不被卡死。 */
 
 var CFG={
-  version:'6.2.4',                         // 对外版本号：随每条埋点上报，出事时能区分线上跑的是哪一版
+  version:'6.2.5',                         // 对外版本号：随每条埋点上报，出事时能区分线上跑的是哪一版
   maxLevel:90,                             // 关卡总数上限：完整内容就是 90 关；过关推进/选关页数/起点读取都以此为准，杜绝溢出到 91+
   env:'online',                            // 'online'(默认：真机有 tap 就真实拉广告) | 'test'(模拟完成，供开发/自动化测试)
                                            // 自动降级：无 window.tap → test(no-tap-runtime)；无 adUnitId → test(no-ad-unit-id)。
@@ -771,7 +771,7 @@ function levelPlan(lv,tier){
      挑战档在普通档基线上每档再 −1，但统一锁在 slotBias≥−2（eff≥−3 = 线上极限档难度，bot 全量复测可玩）；
      绝不进 −4（必输区）。故色≥7 时 普通==困难==极限（都压在 −3 地板，槽相同），
      三档难度靠 +门洞/+冰冻 维持非严格更难，属正常收敛不是 bug。 */
-  var slotBias = (colors>=7) ? -2 : 0;                 // 普通档目标（tier 0，方案B）：色≥7 收 2 槽（eff=−3）
+  var slotBias = (colors>=9) ? -3 : ((colors>=7) ? -2 : 0);   // 普通档(tier0)：色≥9 收3槽(eff=−4) / 7~8 收2槽(eff=−3) / <7 不收(eff=−1)
   var phase=(lv-1)%5, peak=(phase===4), breathe=(phase===0||phase===1);
   /* 「本阶段第一关」不放水：阶段起点直接吃上一段的终点值。
      不然 L15（峰值，洞4）→ L16（阶段起点 + 放水，洞2）会掉 8 分，
@@ -798,11 +798,14 @@ function levelPlan(lv,tier){
   }
   /* ---- 正档 = 玩家自选的挑战：只调约束，不动棋盘 ----
      方案B：普通档已是「色≥7 收 2 槽」基线（eff=−3）。困难/极限在此基线上每档再 −1 收紧，
-     但统一锁在 slotBias≥−2（eff≥−3 = 线上极限档难度，bot 全量复测可玩）：绝不进 −4 必输区。
-     色≥7 时普通已触地板，困难/极限 == 普通（槽相同），三档难度靠 +门洞/+冰冻 维持非严格更难；
-     色<7（前段）三档仍严格 −1/−2/−3 递进。 */
-  if(tier>=1){ slotBias=Math.max(slotBias-1,-2); if(lv>=6)gates+=1; }   // 困难 = min(普通−1, −2 地板)
-  if(tier>=2){ slotBias=Math.max(slotBias-1,-2); gates+=1; ice+=1; }    // 极限 = min(困难−1, −2)：压在 −3 地板
+     统一锁在 slotBias≥−3（eff≥−4；bot 全量 90 关 × 三档复测 eff=−4 仍全可解）。
+     色≥9 时普通已触地板，三档槽相同，极限档此时也不再叠门洞（避免造出 L19 类 5 次才通的关）；
+     色<7（前段）三档仍严格 −1/−2/−3 递进，极限档另多 1 个门洞。 */
+  if(tier>=1){ slotBias=Math.max(slotBias-1,-3); if(lv>=6)gates+=1; }   // 困难 = min(普通−1, −3 地板)
+  if(tier>=2){ slotBias=Math.max(slotBias-1,-3); if(colors<9)gates+=1; }  // 极限 = min(困难−1, −3)；
+  // 只在色<9 时多 1 个门洞：色≥9 时槽已压到 −4 地板，再叠一个洞会造出 L19 那种
+  // 「贪心 bot 要 5 次才通」的关卡（实测可通但要 355 步）；换冰冻则 L23 打不通。
+  // 故色≥9 时极限档与困难档收敛为同一约束 —— 宁可少一层难度，也不给必输局
   /* ---- 插值之后逐项夹到合法范围（这里是唯一允许出现数字上限的地方） ---- */
   cols  = clamp(cols,3,GRID_MAX_COLS);
   rows  = clamp(rows,3,GRID_MAX_ROWS);
@@ -822,8 +825,9 @@ function levelPlan(lv,tier){
   }
   cells=cols*rows;
   /* ---- 台面槽：有效空槽 − 颜色数 = slotBias（方案B 难度开关） ----
-     普通档：色≥7 时 slots=颜色−2（eff=−3，更紧更不易通关）；色<7 时 slots=颜色（eff=−1 新手舒适区）。
-     挑战档：困难/极限每档 −1 收紧，统一压在 slotBias≥−2 地板（eff≥−3，不进必输区）。 */
+     普通档(V6.2.5)：色≥9 时 slots=颜色−3（eff=−4，紧到会逼出看广告）；
+     色 7~8 时 slots=颜色−2（eff=−3）；色<7 时 slots=颜色（eff=−1 新手舒适区）。
+     挑战档：困难/极限每档 −1 收紧，统一压在 slotBias≥−3 地板（eff≥−4，bot 全量复测仍可解）。 */
   var slots=clamp(colors+slotBias,5,SLOT_CAP);
   /* ---- 决策密度分：颜色 / 门洞 / 冰冻 / 水管 / 格数 / 空间压力 的加权 ---- */
   var slotPressure=Math.max(0,colors-(slots-1));

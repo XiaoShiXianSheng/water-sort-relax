@@ -67,6 +67,17 @@ const INJECT = `window.__DBG={
   startFromTitle:startFromTitle, goHome:goHome, TITLE_UI:TITLE_UI,
   rescueGrant:rescueGrant, addUndo:addUndo,
   counterCount:counterCount, openSlotCount:openSlotCount, clearTargetExists:clearTargetExists,
+  /* 2026-10-02 23:00 档补：选关面板几何（G6b 要它）。
+     ⚠ 为什么要从运行期读而不是继续正则扒源码：V6.1 把 LV_PAGES 从数字字面量改成了
+     Math.ceil(CFG.maxLevel/LV_PER_PAGE)（页数随关卡上限走），qa_gate 里那条
+     匹配 LV_PAGES 后接一个数字的正则**再也匹配不上** → G6b 一直报「读不到」直接判 FAIL，
+     连「线上能不能上」都被它拦住。读运行期的值是同一份真相、而且不会因为声明风格而失效。
+     注：本段在模版字符串里，注释内严禁出现反引号（会把模版串截断 → 整个 qa_lib 语法错）。 */
+  LV_PER_PAGE:LV_PER_PAGE, LV_PAGES:LV_PAGES,
+  /* 2026-10-02 23:00 档补：清除目标选择的**语义**（只挑台面 / 同色 / 未满的瓶子）。
+     此前只验了「清掉的那杯水倒进同色瓶」的守恒，没验过「选中了谁」——
+     选错目标（挑到货架瓶 / 已满瓶 / 异色瓶）一样会让水消失或错位，守恒断言照样绿。 */
+  clearJarFor:clearJarFor,
   /* FIX-04：软提示按钮 + 失败面板撤销按钮（绘制与命中必须共用 hintRects） */
   FAIL_OPTS:FAIL_OPTS, hintRects:hintRects, hintHit:hintHit, hintTap:hintTap,
   hintOpts:hintOpts, hintAction:hintAction,

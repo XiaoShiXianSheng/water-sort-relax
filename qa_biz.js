@@ -299,7 +299,12 @@ guard(rep, '难度档位', function () {
   for (let lv = 9; lv <= 30; lv++) {
     const t0 = P(lv, 0), t1 = P(lv, 1), t2 = P(lv, 2);
     if (!(t0.slots >= t1.slots && t1.slots >= t2.slots)) badSlots.push('L' + lv);
-    if (!(t2.density > t1.density && t1.density > t0.density)) badDensity.push('L' + lv);
+    /* V6.2.5：色≥9 时三档的**槽位旋钮已饱和**（都压在 eff=−4 地板），极限档再叠任何约束都会出事
+       （实测：多一个门洞 → L19 要 5 次才通；多一个冰冻 → L23 直接打不通）。
+       故色≥9 时极限档与困难档**收敛为同一约束**（只要求 ≥）；色<9 仍要求严格递增。
+       这是「把普通档收到 −4 地板」的固有代价，与设计套件里「高关三档收敛属正常」同一口径。 */
+    if (!(t2.density >= t1.density && t1.density > t0.density)) badDensity.push('L' + lv + '(递减)');
+    if (t0.colors < 9 && !(t2.density > t1.density)) badDensity.push('L' + lv + '(色<9 未严格递增)');
     if (!(t2.gates >= t1.gates && t1.gates >= t0.gates)) badHarder.push('L' + lv);
   }
   rep.ok('同一关的挑战档「空间越来越紧」（普通槽位 ≥ 困难 ≥ 极限）', badSlots.length === 0, badSlots.join(' '));
