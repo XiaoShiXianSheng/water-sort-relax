@@ -1,0 +1,51 @@
+{
+  "changes": [
+    {
+      "field_id": "icon",
+      "value": "https://img-tc.tapimg.com/market/images/df4c1e2feef05f4c157d5b8e490647e3.png",
+      "expected": "https://img-tc.tapimg.com/market/images/ef4719159691d7db73760cadfc67eac4.png"
+    },
+    {
+      "field_id": "description",
+      "value": "一款不催你、不倒计时的解压小游戏。\n\n水管里混着五颜六色的水，你的活儿很简单：把它们分装进同色瓶子，每瓶接满 3 口就自动收走，收完所有瓶子过关。\n\n没有倒计时，没有体力条，也没有步数限制。卡住了随时撤销；实在走不动，看一段广告就能换一个道具或者原地复活，继续把这一局打完。\n\n一共 90 个关卡。开头 3 关教你怎么倒水，之后货架一层层变宽、颜色一管管变多：第 1 关 3 种颜色 9 个瓶子，一路长到第 55 关的 17 种颜色、68 个瓶子、17 根水管同时作业。第 55 关之后难度稳定在高位档位上，靠布局和节奏继续换花样——不会再变难，也不会变简单。\n\n通关之后还有三档挑战（普通 / 困难 / 极限）和每天一局的每日挑战——同一个关卡换个档位，能明显感觉到空间变紧、能用的槽位变少。\n\n全部美术由代码绘制，全部音效由代码现场合成，没有任何图片和音频素材。\n\n· 单文件小游戏，打开就玩，不占空间\n· 完全单机，断网也能玩（只有看广告需要联网）\n· 没有排行榜、没有好友、不催你上线",
+      "expected": []
+    },
+    {
+      "field_id": "developer_message",
+      "value": "做这个游戏的起因很简单：我玩水管分类类游戏的时候，最烦的不是难，是被赶。\n\n倒计时压着你、体力条拦着你、一步点错就重开——本来想放松一下，结果比上班还紧张。\n\n所以这一版我砍掉了几样东西：没有倒计时，没有体力，没有步数上限；点错了能撤销，走不动了能复活。你可以慢慢想，也可以随手点两下就走人，进度自己会存。\n\n美术和音效全部是代码画出来、算出来的，所以整个游戏就是一个小文件，不吃内存也不申请权限。\n\n如果你玩到某一关觉得这关有点意思，或者觉得某关纯属浪费生命，都欢迎告诉我，我会调。",
+      "expected": []
+    },
+    {
+      "field_id": "promotion_text",
+      "value": "把混色水分装回同色瓶，超解压",
+      "expected": []
+    },
+    {
+      "field_id": "promotion_material_type",
+      "value": "BANNER_4",
+      "expected": []
+    },
+    {
+      "field_id": "banner_4",
+      "value": "https://img-tc.tapimg.com/market/images/c946e972a0b2ac765a3cda64c23bff0c.png",
+      "expected": []
+    },
+    {
+      "field_id": "screenshots",
+      "op": "replace",
+      "value": [
+        "https://img-tc.tapimg.com/market/images/7d33cf59a7284c7a8c3a1cb24f882b8c.png",
+        "https://img-tc.tapimg.com/market/images/ceb13496bf6a629f55652904dbc19d77.png",
+        "https://img-tc.tapimg.com/market/images/617d8347d665a4662aa2012add161aee.png",
+        "https://img-tc.tapimg.com/market/images/68bc2e0bdbe5c275a2fd45986825634c.png",
+        "https://img-tc.tapimg.com/market/images/1084dead1fe7a8eb69f4fb61521412ec.png"
+      ],
+      "expected": []
+    },
+    {
+      "field_id": "gameplay_demo_video",
+      "value": 5935222,
+      "expected": []
+    }
+  ]
+}

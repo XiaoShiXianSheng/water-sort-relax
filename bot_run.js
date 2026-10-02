@@ -199,7 +199,7 @@ function botPlay(level, maxTries) {
        也确定）。否则「贪心机器人偶尔差一步」会让这个套件时红时绿（flaky），
        而 flaky 的门禁等于没有门禁 —— 真出问题时反而看不出来。 */
     seedRandom(level * 7919 + attempt * 104729);
-    DBG.gen(level, { seed: level * 7919 + attempt * 104729 }); frames(10); frames(5);
+    DBG.gen(level, { seed: level * 7919 + attempt * 104729, tier: +(process.env.TIER || 0) }); frames(10); frames(5);
     STAT.revives = 0; STAT.restarts = 0;
     let guard = 0, ok = true, end = '';
     while (DBG.G.state !== 'win' && guard++ < 2000) {
@@ -216,17 +216,18 @@ function botPlay(level, maxTries) {
 }
 
 const out = [];
-out.push('关卡 | 格子 | 瓶子 | 门洞 | 结果 | 步数 | 尝试 | 复活 | 重开');
-out.push('-----+------+------+------+------+-----+-----+-----+-----');
+out.push('关卡    | 格子 | 瓶子 | 门洞 | 结果 | 步数 | 尝试 | 复活 | 重开');
+out.push('-------+------+------+------+------+-----+-----+-----+-----');
 const ONLY = (process.env.ONLY || '').trim();
 const TRIES = +(process.env.TRIES || 3);
 const MAXLV = +(process.env.MAX || 30);
+const TIER = +(process.env.TIER || 0);
 const LVS = ONLY ? ONLY.split(',').map(Number)
   : Array.from({ length: MAXLV }, (_, k) => k + 1);
 let allWin = true, triedTotal = 0, revivedTotal = 0, restartTotal = 0, firstTry = 0;
 for (const lv of LVS) {
   seedRandom(lv * 7919);
-  DBG.gen(lv, { seed: lv * 7919 }); frames(6);     // 统计行与 attempt#1 用同一套布局
+  DBG.gen(lv, { seed: lv * 7919, tier: TIER }); frames(6);     // 统计行与 attempt#1 用同一套布局
   const g = DBG.G;
   const cells = g.cellCount, bots = g.bottles.length, gates = g.gates.length;
   const r = botPlay(lv, TRIES);
@@ -234,7 +235,8 @@ for (const lv of LVS) {
   triedTotal += r.attempt;
   revivedTotal += r.revives; restartTotal += r.restarts;
   if (r.attempt === 1 && r.revives === 0 && r.restarts === 0) firstTry++;
-  out.push(String(lv).padStart(4) + ' |' + String(cells).padStart(5) + ' |' + String(bots).padStart(5) + ' |'
+  const lvLabel = (TIER > 0 ? ('T' + TIER + '·') : '') + lv;
+  out.push(lvLabel.padStart(7) + ' |' + String(cells).padStart(5) + ' |' + String(bots).padStart(5) + ' |'
     + String(gates).padStart(5) + ' |' + (r.win ? ' 通关 ' : ' 未通过') + ' | '
     + String(r.steps).padStart(5) + ' | ' + String(r.attempt).padStart(3) + ' | '
     + String(r.revives).padStart(3) + ' | ' + String(r.restarts).padStart(3));

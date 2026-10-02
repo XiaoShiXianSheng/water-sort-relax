@@ -149,7 +149,8 @@ function toolX(i){return TOOL_X0+i*(TOOL_W+TOOL_GAP);}
    adUnitId 为空时（尚未在开发者中心开通广告）会自动降级为 TEST，流程绝不被卡死。 */
 
 var CFG={
-  version:'6.2.0',                         // 对外版本号：随每条埋点上报，出事时能区分线上跑的是哪一版
+  version:'6.2.3',                         // 对外版本号：随每条埋点上报，出事时能区分线上跑的是哪一版
+  maxLevel:90,                             // 关卡总数上限：完整内容就是 90 关；过关推进/选关页数/起点读取都以此为准，杜绝溢出到 91+
   env:'online',                            // 'online'(默认：真机有 tap 就真实拉广告) | 'test'(模拟完成，供开发/自动化测试)
                                            // 自动降级：无 window.tap → test(no-tap-runtime)；无 adUnitId → test(no-ad-unit-id)。
                                            // 所以本地浏览器/Node 测试环境永远是 test，真机永远走 online，不需要手动改代码。
@@ -750,7 +751,17 @@ function levelPlan(lv,tier){
      让行数「晚一档」到阶段末尾才进位后，格数变成 35 → 40 → 48，每关只涨 5~8 格。 */
   var lf=function(a){ return Math.floor(a[0]+(a[1]-a[0])*k); };
   var cols=li(seg.cols), rows=lf(seg.rows), colors=li(seg.colors), tubes=li(seg.tubes);
-  var gates=li(seg.gates), ice=li(seg.ice), slotBias=seg.slotBias;
+  var gates=li(seg.gates), ice=li(seg.ice);
+  /* ---- 台面槽难度开关：普通档方案B（2026-10-02）----
+     根因：原 slotBias 全线=0 → 开放空格=颜色数−1，难度开关 eff=开放−颜色=−1 是**固定绝对值**。
+     相对紧度=1/颜色数，颜色越多越松 → 后期(色≥7)出现「空位多+特别容易通关」的反直觉。
+     候选A（V6.2.2）：普通档 色≥7 收 1 槽（eff=−2）。用户实测「仍嫌太易」→ 方案B 再收 1 槽。
+     改法：普通档 色≥7 时 slotBias=−2（eff=−3），少2个开放槽、更紧、更不易通关；
+     色<7(前10关)保持 eff=−1 给新手舒适区。
+     挑战档在普通档基线上每档再 −1，但统一锁在 slotBias≥−2（eff≥−3 = 线上极限档难度，bot 全量复测可玩）；
+     绝不进 −4（必输区）。故色≥7 时 普通==困难==极限（都压在 −3 地板，槽相同），
+     三档难度靠 +门洞/+冰冻 维持非严格更难，属正常收敛不是 bug。 */
+  var slotBias = (colors>=7) ? -2 : 0;                 // 普通档目标（tier 0，方案B）：色≥7 收 2 槽（eff=−3）
   var phase=(lv-1)%5, peak=(phase===4), breathe=(phase===0||phase===1);
   /* 「本阶段第一关」不放水：阶段起点直接吃上一段的终点值。
      不然 L15（峰值，洞4）→ L16（阶段起点 + 放水，洞2）会掉 8 分，
@@ -776,11 +787,12 @@ function levelPlan(lv,tier){
     slotBias+=kk;                      // 热身把退路变宽
   }
   /* ---- 正档 = 玩家自选的挑战：只调约束，不动棋盘 ----
-     V6.2：slotBias 全线归 0 后，挑战档继续按「槽每档 −1」收紧（eff −1→−2→−3）。
-     这是受控实验已验收的挑战难度区间（设计测试守住 eff ≥ −3），且为玩家主动选择的硬核档；
-     普通档（绝大多数玩家）停在 eff=−1 的可解地板上。 */
-  if(tier>=1){ slotBias-=1; if(lv>=6)gates+=1; }
-  if(tier>=2){ slotBias-=1; gates+=1; ice+=1; }
+     方案B：普通档已是「色≥7 收 2 槽」基线（eff=−3）。困难/极限在此基线上每档再 −1 收紧，
+     但统一锁在 slotBias≥−2（eff≥−3 = 线上极限档难度，bot 全量复测可玩）：绝不进 −4 必输区。
+     色≥7 时普通已触地板，困难/极限 == 普通（槽相同），三档难度靠 +门洞/+冰冻 维持非严格更难；
+     色<7（前段）三档仍严格 −1/−2/−3 递进。 */
+  if(tier>=1){ slotBias=Math.max(slotBias-1,-2); if(lv>=6)gates+=1; }   // 困难 = min(普通−1, −2 地板)
+  if(tier>=2){ slotBias=Math.max(slotBias-1,-2); gates+=1; ice+=1; }    // 极限 = min(困难−1, −2)：压在 −3 地板
   /* ---- 插值之后逐项夹到合法范围（这里是唯一允许出现数字上限的地方） ---- */
   cols  = clamp(cols,3,GRID_MAX_COLS);
   rows  = clamp(rows,3,GRID_MAX_ROWS);
@@ -799,9 +811,9 @@ function levelPlan(lv,tier){
     cells=cols*rows;
   }
   cells=cols*rows;
-  /* ---- 台面槽：有效空槽 − 颜色数 = slotBias（受控实验给出的难度开关） ----
-     V6.2：slotBias 全线归 0，普通档 slots=colors（eff=−1，受控实验「可解但偏难」地板）；
-     挑战档按 tier 每档再 −1（eff −2/−3，已由设计测试守住的硬核区间）。 */
+  /* ---- 台面槽：有效空槽 − 颜色数 = slotBias（方案B 难度开关） ----
+     普通档：色≥7 时 slots=颜色−2（eff=−3，更紧更不易通关）；色<7 时 slots=颜色（eff=−1 新手舒适区）。
+     挑战档：困难/极限每档 −1 收紧，统一压在 slotBias≥−2 地板（eff≥−3，不进必输区）。 */
   var slots=clamp(colors+slotBias,5,SLOT_CAP);
   /* ---- 决策密度分：颜色 / 门洞 / 冰冻 / 水管 / 格数 / 空间压力 的加权 ---- */
   var slotPressure=Math.max(0,colors-(slots-1));
@@ -1422,7 +1434,7 @@ var LV_PANEL={
   ey:990, eh:64, ex1:100, ex2:370, ew:250,   // 广告环境切换（TEST / ONLINE）
   cX:250, cY:1078, cW:220, cH:62
 };
-var LV_PER_PAGE=30, LV_PAGES=3;
+var LV_PER_PAGE=30, LV_PAGES=Math.ceil(CFG.maxLevel/LV_PER_PAGE);   // 页数随关卡上限走，不再写死 3
 /* 广告环境切换。故意不给它任何可见入口 —— 它藏在这个「连点 5 次才开」的测试面板里，
    正式玩家碰不到，也不会给审核留下「应用内带调试开关」的话柄。
    ★ 关键：点了 ONLINE 却因为没 SDK / 没 adUnitId 被自动降级时，必须把原因说出来，
@@ -1905,6 +1917,7 @@ function toolAt(v){
 }
 function startFromTitle(){
   var lv=URL_LVL||Math.max(1,Store.get('level',1)||1);   // 有存档就从上次进度继续
+  if(lv>CFG.maxLevel)lv=CFG.maxLevel;                    // 存档越界（旧版溢出到 91+）夹回上限
   genLevel(lv);
 }
 function handleTap(cx,cy){
@@ -1933,7 +1946,9 @@ function handleTap(cx,cy){
   }
   if(G.state==='win'){
     if(inBox(WIN_UI.next,vx,vy)){
-      if(G.daily)startDaily(); else genLevel(G.level+1);
+      if(G.daily)startDaily();
+      else if(G.level<CFG.maxLevel) genLevel(G.level+1);
+      else goHome();   // 已是最后一关：不生成 91+，回首页
       return;
     }
     if(inBox(WIN_UI.challenge,vx,vy)){ G.tierPick=true; SFX.tap(); return; }
@@ -2655,7 +2670,7 @@ function drawTitle(time){
     ctx.restore();
   }
   /* 进度可见（给"回来玩"一个理由） */
-  var lv=Store.get('level',1)||1, st=totalStars();
+  var lv=Math.min(Store.get('level',1)||1,CFG.maxLevel), st=totalStars();   // 存档越界也只显示到上限
   rr(ctx,140,762,440,56,16);
   ctx.fillStyle='rgba(255,255,255,0.78)';ctx.fill();
   ctx.strokeStyle='rgba(120,170,215,0.7)';ctx.lineWidth=3;ctx.stroke();
@@ -2688,7 +2703,7 @@ function drawWinPanel(time){
   ctx.strokeStyle='rgba(96,138,178,0.9)';ctx.lineWidth=4;ctx.stroke();
   var ws=G.winStats||{stars:1,moves:0,tools:0,revive:0,tier:0,par:0};
   ctx.font='bold 54px '+FONT;ctx.textAlign='center';ctx.fillStyle='#e8a13d';
-  ctx.fillText(G.daily?'📅 今日挑战完成！':'🎉 全部收完！',VW/2,478);
+  ctx.fillText(G.daily?'📅 今日挑战完成！':(G.level>=CFG.maxLevel?'🎉 恭喜通关全部 '+CFG.maxLevel+' 关！':'🎉 全部收完！'),VW/2,478);
   ctx.font='28px '+FONT;ctx.fillStyle='#3a5570';
   ctx.fillText('第 '+G.level+' 关 · '+TIER_NAME[ws.tier||0]+' · 收了 '+G.bottles.length+' 瓶',VW/2,530);
   /* 星级（带一个小弹跳，避免"数字式"的冷感） */
@@ -2713,7 +2728,7 @@ function drawWinPanel(time){
   rr(ctx,N.x,N.y,N.w,N.h,18);
   ctx.fillStyle='#4d9be8';ctx.fill();
   ctx.font='bold 32px '+FONT;ctx.fillStyle='#fff';
-  ctx.fillText(G.daily?'重玩今日题':'下一关 →',N.x+N.w/2,N.y+54);
+  ctx.fillText(G.daily?'重玩今日题':(G.level>=CFG.maxLevel?'🎉 已通关 · 回首页':'下一关 →'),N.x+N.w/2,N.y+54);
   rr(ctx,CH.x,CH.y,CH.w,CH.h,18);
   ctx.fillStyle='#ffe9a8';ctx.fill();
   ctx.strokeStyle='#c9972f';ctx.lineWidth=3;ctx.stroke();
@@ -3185,7 +3200,7 @@ function levelDone(){
   if((rec[field]||0)<stars)rec[field]=stars;
   Store.data.stars[key]=rec;
   unlockNextTier(G.level,recTier);
-  if(!G.daily&&G.level+1>Store.data.level)Store.data.level=G.level+1;
+  if(!G.daily&&G.level+1>Store.data.level)Store.data.level=Math.min(G.level+1,CFG.maxLevel);  // 通关最后一关后不再溢出到 91+
   Store.data.wins=(Store.data.wins||0)+1;
   if(!G.daily)Store.data.maxLevel=Math.max(Store.data.maxLevel||1,G.level);
   /* ---- 热身推进：通关一次就把档位往上抬一档（热身1 → 热身2 → 正常）----

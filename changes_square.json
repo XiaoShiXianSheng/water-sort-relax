@@ -1,0 +1,9 @@
+{
+  "changes": [
+    {
+      "field_id": "square_promo_image",
+      "value": "https://img-tc.tapimg.com/market/images/e2529c7b52f8b690c10f05fa14c1e316.png",
+      "expected": []
+    }
+  ]
+}

@@ -18,10 +18,11 @@ const fs = require('fs'), path = require('path'), zlib = require('zlib'), crypto
 const ROOT = __dirname;
 const MAIN = path.join(ROOT, 'outputs', '解压水消除.html');
 const OUT = path.join(ROOT, 'outputs', process.env.ZIP_NAME || 'tap_upload_v6.2.zip');
+const GAME_DIR = 'game';   // TapTap H5 包要求：zip 根只能有一个游戏目录，所有文件放进去
 const ENTRIES = [
-  { name: 'index.html', file: MAIN },
-  { name: 'icon_512.png', file: path.join(ROOT, 'publish_taptap', 'icon_512.png') },
-  { name: 'UPLOAD_NOTES.txt', file: path.join(ROOT, 'publish_taptap', 'UPLOAD_NOTES.txt') }
+  { name: GAME_DIR + '/index.html', file: MAIN },
+  { name: GAME_DIR + '/icon_512.png', file: path.join(ROOT, 'publish_taptap', 'icon_512.png') },
+  { name: GAME_DIR + '/UPLOAD_NOTES.txt', file: path.join(ROOT, 'publish_taptap', 'UPLOAD_NOTES.txt') }
 ];
 const md5 = b => crypto.createHash('md5').update(b).digest('hex');
 
@@ -109,7 +110,7 @@ if (!noWrite) {
   fs.writeFileSync(OUT, buildZip(ENTRIES));
   console.log('已写出  ' + path.relative(ROOT, OUT) + '  ' + fs.statSync(OUT).size + 'B（' + ENTRIES.length + ' 个条目）');
 }
-const inner = readEntry(fs.readFileSync(OUT), 'index.html');
+const inner = readEntry(fs.readFileSync(OUT), GAME_DIR + '/index.html');
 console.log('包内项  ' + inner.length + 'B  md5 ' + md5(inner));
 const ok = inner.equals(main);
 console.log(ok ? '✅ 包内 index.html 与主文件逐字节一致（G8c 应通过）'
