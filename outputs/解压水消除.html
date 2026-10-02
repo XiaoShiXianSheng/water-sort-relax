@@ -75,6 +75,16 @@ var COLORS=['#ff5d6c','#3f8cff','#3ec46d','#ffb648','#9b6bf5','#ff85c2',
             '#29c7d6','#c6d92e','#ff7a1a','#8b5e3c','#00a0a0','#b0308f',
             '#f2e34c','#2b2b33','#ffffff','#7a1f1f','#0d2b6b',
             '#7f8c99','#4b2e83','#1f9d55'];
+/* 颜色集选取（V6.2.4）：从 L10 起强制黑(#2b2b33,13)+白(#ffffff,14)必在，其余从调色板前段补足；
+   低关(L1-9)保持 0..C-1 原顺序（新手用易分辨基础色）。灰(#7f8c99,17)本次不提前。 */
+function pickColorSet(C, lv){
+  if(lv>=10){
+    var s=[13,14], i=0;
+    while(s.length<C && i<COLORS.length){ if(i!==13 && i!==14) s.push(i); i++; }
+    return s;
+  }
+  var s2=[]; for(var k=0;k<C;k++) s2.push(k); return s2;
+}
 var URL_LVL=0;
 try{ var _m=((window.location&&window.location.search)||'').match(/[?&]lvl=(\d+)/); URL_LVL=_m?parseInt(_m[1],10)||0:0; }catch(e){}
 function clamp(v,a,b){return v<a?a:(v>b?b:v);}
@@ -149,7 +159,7 @@ function toolX(i){return TOOL_X0+i*(TOOL_W+TOOL_GAP);}
    adUnitId 为空时（尚未在开发者中心开通广告）会自动降级为 TEST，流程绝不被卡死。 */
 
 var CFG={
-  version:'6.2.3',                         // 对外版本号：随每条埋点上报，出事时能区分线上跑的是哪一版
+  version:'6.2.4',                         // 对外版本号：随每条埋点上报，出事时能区分线上跑的是哪一版
   maxLevel:90,                             // 关卡总数上限：完整内容就是 90 关；过关推进/选关页数/起点读取都以此为准，杜绝溢出到 91+
   env:'online',                            // 'online'(默认：真机有 tap 就真实拉广告) | 'test'(模拟完成，供开发/自动化测试)
                                            // 自动降级：无 window.tap → test(no-tap-runtime)；无 adUnitId → test(no-ad-unit-id)。
@@ -898,11 +908,12 @@ function genLevel(lv,opts){
   /* 瓶子数 = 格子数 + 门洞多塞数，再按颜色尽量均分（每色至少 2 瓶） */
   var totalBottles=cellsTarget+extraSum;
   var perBase=Math.floor(totalBottles/C), perRem=totalBottles-perBase*C;
+  var cset=pickColorSet(C,lv);   // V6.2.4：L10 起黑+白必在，其余前段补足
   for(var pc=0;pc<C;pc++){
     var pn=perBase+(pc<perRem?1:0);
     /* 每瓶固定 3 口（每口 1/3）—— 全关卡统一，绝不出现 1/4、1/2 这种分母 */
     for(var cap2=0;cap2<pn;cap2++)
-      bottles.push({col:pc,cap:3,fill:0,locked:0,gate:-1,q:0,place:'grid',cell:0,slot:-1,x:0,y:0,capT:0,wob:Math.random()*6,doneT:0});
+      bottles.push({col:cset[pc],cap:3,fill:0,locked:0,gate:-1,q:0,place:'grid',cell:0,slot:-1,x:0,y:0,capT:0,wob:Math.random()*6,doneT:0});
   }
   n0=bottles.length;
   /* 格子数直接由关卡布局表定（行数 = gridRows，每行正好 gridColsN 个 → 开局无空格） */

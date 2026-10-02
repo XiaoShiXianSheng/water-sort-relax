@@ -260,8 +260,10 @@ guard(rep, '设计', function () {
     /* --- 颜色：3~18 种且每种都有瓶子（V6.0 把调色板从 6 扩到 20，极限+ 用到 18） --- */
     if (colorSet.size < 3 || colorSet.size > CV.MAX_COLORS) bad.colors.push('L' + lv + '=' + colorSet.size);
     if (colorSet.size !== pl.colors) bad.colors.push('L' + lv + ' 实际' + colorSet.size + '≠计划' + pl.colors);
-    for (let c = 0; c < pl.colors; c++) {
-      if (!G.bottles.some(b => b.col === c)) bad.colorCover.push('L' + lv + ' 色' + c + '无瓶');
+    /* V6.2.4：颜色不再保证 0..C-1 连续（L10 起强制黑+白必在）→ 不再按索引逐色查「色c有无瓶」；
+       改为校验「每个瓶的色都是合法调色板索引」，且实际色数已等于计划色数（上一条已查）。 */
+    for (const b of G.bottles) {
+      if (b.col < 0 || b.col >= CV.PALETTE) bad.colorCover.push('L' + lv + ' 色索引越界' + b.col);
     }
 
     /* --- 水量守恒（设计期的核心不变量） --- */
