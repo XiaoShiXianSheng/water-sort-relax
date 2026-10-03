@@ -159,7 +159,7 @@ function toolX(i){return TOOL_X0+i*(TOOL_W+TOOL_GAP);}
    adUnitId 为空时（尚未在开发者中心开通广告）会自动降级为 TEST，流程绝不被卡死。 */
 
 var CFG={
-  version:'6.3.2',                         // 对外版本号：随每条埋点上报，出事时能区分线上跑的是哪一版
+  version:'6.4.0',                         // 对外版本号：随每条埋点上报，出事时能区分线上跑的是哪一版
   maxLevel:90,                             // 关卡总数上限：完整内容就是 90 关；过关推进/选关页数/起点读取都以此为准，杜绝溢出到 91+
   env:'online',                            // 'online'(默认：真机有 tap 就真实拉广告) | 'test'(模拟完成，供开发/自动化测试)
                                            // 自动降级：无 window.tap → test(no-tap-runtime)；无 adUnitId → test(no-ad-unit-id)。
@@ -170,11 +170,13 @@ var CFG={
        · 属性=测试 → 只有你在后台【测试工具】里加过的白名单设备能拉到广告，
                      其它真机拉广告**必失败**（游戏照常玩，不报错）→ 真机真实收益 = 0。
        · 属性=正式 → 全部用户能拉到广告，才会计费。
-     上面 1067564 / 1067565 目前是**测试**属性（后台明确提示「完成资质认证前只能创建测试媒体」），
-     所以这里 true = 「我知道现在挂的是测试位」。它只影响埋点与调试面板上的 src 字段，
-     **不改变任何降级逻辑** —— 拉不拉得到广告永远由后台属性决定，代码改不出钱来。
-     拿到正式位 ID 后：把上面的 ID 换成正式位 ID，再把这行改成 false。在此之前真机不会有收益。 */
-  adUnitIsTest:true,
+     V6.4.0 起这一行**不再手填**：默认 false（正式位），启动时按运行环境自动落位 ——
+       真机 TapTap 容器（有 window.tap）→ 正式位，埋点 src=formal-unit；
+       普通浏览器 / 无 SDK            → 测试位，埋点 src=test-unit（本来也拉不到广告）。
+     ?adunit=formal / ?adunit=test 可强制覆盖，供真机验收与自动化断言。
+     ⚠️ 它只影响埋点与调试面板的 src 字段，**不改变任何降级逻辑** ——
+        拉不拉得到广告永远由后台推广位属性决定，代码改不出钱来。 */
+  adUnitIsTest:false,
   rewardedSessionCap:3,                    // 单会话激励视频上限（初始实验值，不是行业真理）
   interstitialSessionCap:1,                // 单会话插屏上限
   interstitialCooldown:300,                // 插屏冷却（秒）：官方建议 ≥180s，这里取 300s 更克制
@@ -203,6 +205,12 @@ try{
   var _q=(window.location&&window.location.search)||'';
   if(/[?&](ad|env)=online/.test(_q))CFG.env='online';
   if(/[?&](ad|env)=test/.test(_q))CFG.env='test';
+  /* V6.4.0：广告位属性按运行环境自动落位（见 CFG.adUnitIsTest 处的说明）。
+     有 SDK 的真机走正式位；无 SDK 的浏览器退回测试位。URL 可强制覆盖。 */
+  var _hasTap=false; try{ _hasTap=!!(window.tap&&window.tap.createRewardedVideoAd); }catch(e2){}
+  CFG.adUnitIsTest=!_hasTap;
+  if(/[?&]adunit=formal/.test(_q))CFG.adUnitIsTest=false;
+  if(/[?&]adunit=test/.test(_q))CFG.adUnitIsTest=true;
 }catch(e){}
 
 /* ---------- 本地存档（localStorage + 校验和 + 版本迁移 + 损坏重建） ---------- */

@@ -440,4 +440,57 @@ guard(rep, '广告入口只有三类', function () {
     /adFailFallback\s*:\s*'free'/.test(html) || /adFailFallback\s*:\s*"free"/.test(html));
 });
 
+
+/* =====================================================================
+   N. 广告位属性落位（V6.4.0）：真机走正式位，无 SDK 环境退回测试位
+      以前 adUnitIsTest 是手填的 true —— 上线后真机埋点永远 test-unit，
+      出事根本看不出挂在哪个位上。现在改成启动时按运行环境自动落位。
+   ===================================================================== */
+guard(rep, '广告-正式位落位', function () {
+  /* ① 无 SDK（普通浏览器 / 网页版）→ 退回测试位，不拿正式位去空请求 */
+  removeTap();
+  let g = loadGame({ search: '' }); g.frames(3);
+  rep.ok('无 SDK 环境自动落位测试位（不拿正式位去无 SDK 的浏览器里空请求）',
+    g.DBG.CFG.adUnitIsTest === true, '实际 adUnitIsTest=' + g.DBG.CFG.adUnitIsTest);
+  rep.ok('无 SDK 环境 adUnitSrc 如实记为 test-unit',
+    g.DBG.AdService.adUnitSrc === 'test-unit', '实际 src=' + g.DBG.AdService.adUnitSrc);
+
+  /* ② 有 SDK（真机 TapTap 容器）→ 正式位 */
+  installTap({});
+  g = loadGame({ search: '' }); g.frames(3);
+  rep.ok('真机有 SDK 时自动落位正式位（正式游戏不再跑测试广告）',
+    g.DBG.CFG.adUnitIsTest === false, '实际 adUnitIsTest=' + g.DBG.CFG.adUnitIsTest);
+  rep.ok('真机 adUnitSrc 记为 formal-unit（出事能立刻看出挂在哪个位）',
+    g.DBG.AdService.adUnitSrc === 'formal-unit', '实际 src=' + g.DBG.AdService.adUnitSrc);
+
+  /* ③ URL 强制覆盖（真机验收 / 自动化断言用） */
+  removeTap();
+  g = loadGame({ search: '?adunit=formal' }); g.frames(3);
+  rep.ok('?adunit=formal 可强制正式位（即使无 SDK，供验收与断言）',
+    g.DBG.CFG.adUnitIsTest === false, '实际 ' + g.DBG.CFG.adUnitIsTest);
+  installTap({});
+  g = loadGame({ search: '?adunit=test' }); g.frames(3);
+  rep.ok('?adunit=test 可强制测试位（即使有 SDK）',
+    g.DBG.CFG.adUnitIsTest === true, '实际 ' + g.DBG.CFG.adUnitIsTest);
+
+  /* ④ 正式位下整条广告链路必须真能跑通：不降级、不卡死、发奖 */
+  installTap({});
+  g = boot(6);
+  const A = g.DBG.AdService, C = g.DBG.CFG, T = g.DBG.Track;
+  C.adUnit.rewarded = '1067564';
+  A.setEnv('online'); A.resetSession(); T.reset();
+  rep.ok('正式位 + 有 SDK 时真的进入 online（没被静默降级）',
+    A.env === 'online', '实际 ' + A.env + ' / degrade=' + (A.degradeReason || '无'));
+  rep.ok('正式位下 adUnitSrc 随环境落为 formal-unit',
+    A.adUnitSrc === 'formal-unit', '实际 ' + A.adUnitSrc);
+  let got = 0, fell = 0;
+  A.showRewarded('revive', { onReward: () => got++, onFallback: () => fell++ });
+  rep.ok('正式位：onClose 之前绝不发奖（不能"点了就发"）', got === 0);
+  rep.ok('正式位：真的调用了 tap 广告的 show()', TAP.shows === 1);
+  TAP.close({ isEnded: true });
+  rep.ok('正式位：onClose(isEnded=true) → 正常发奖（挂了正式位不会让链路哑火）',
+    got === 1 && fell === 0, '发奖 ' + got + ' 次 / 降级 ' + fell + ' 次');
+  removeTap();
+});
+
 rep.done();
