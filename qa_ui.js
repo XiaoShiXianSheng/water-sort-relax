@@ -1843,4 +1843,48 @@ guard(rep, '星级读取', function () {
     'tier−1=' + D.starsOf(9, -1) + ' tier−2=' + D.starsOf(9, -2) + ' tier5=' + D.starsOf(9, 5));
 });
 
+
+/* ============ 软提示的「重开」出口（V6.3.2：10-04 玩家实测反馈） ============
+   玩家在 L15 遇到「台面满了，但瓶子都接不到水」，第一反应是找「关闭 / 重开」，
+   但提示条的三个按钮里没有重开 —— 因为 hintOpts 里「重开本关」只在其它动作
+   **不足 3 个**时才兜底出现，动作齐全时反而被挤掉。
+   回滚验证过：把这个改动退回旧逻辑，125 条套件**一条都不红**（根本没覆盖到），
+   所以必须补这组断言。三条里最关键的是第三条：点了要真的重开，不是画着好看。 */
+guard(rep, '软提示重开出口', function () {
+  const g = fresh(); enter(g);
+  const D = g.DBG, G = D.G;
+  D.gen(15, { quiet: true }); g.frames(4);
+
+  /* ① 三个自救动作都可用 = 玩家截图那局的情况：重开仍必须在 */
+  G.undoLeft = 5; G.history.length = 1;
+  G.tools = { clear: 1, finger: 1, swap: 1 }; G.unlockLeft = 1;
+  const o1 = D.hintOpts();
+  rep.ok('软提示重开出口：撤销/互换/解锁三个动作都可用时，按钮里仍然必须有「重开本关」' +
+    '（旧逻辑只在不足 3 个时才兜底 → 动作越全越看不到重开，正是玩家反馈的那局）',
+    o1.some(x => x.id === 'restart'), '实际按钮: ' + o1.map(x => x.id).join(','));
+
+  /* ② 什么都没剩时，重开必须是最后出口（否则玩家彻底没路） */
+  G.undoLeft = 0; G.tools = { clear: 0, finger: 0, swap: 0 }; G.unlockLeft = 0;
+  const o2 = D.hintOpts();
+  rep.ok('软提示重开出口：撤销/道具/解锁全用光时「重开本关」仍在（否则玩家彻底没有出口）',
+    o2.some(x => x.id === 'restart'), '实际按钮: ' + o2.map(x => x.id).join(','));
+
+  /* ③ 端到端：立起提示条，点第 4 个按钮 → 真的重开（步数归零 + 记 restarted + 提示条清空）。
+     不能先推帧：checkStuck 每帧重算，条件不满足会把 G.hint 清掉。 */
+  G.undoLeft = 5; G.history.length = 1;
+  G.tools = { clear: 1, finger: 1, swap: 1 }; G.unlockLeft = 1;
+  G.hint = { a: '台面满了，但瓶子都接不到水', b: '退回一瓶再放能喝的上来，或点「重开」换一局' };
+  G.hint.opts = D.hintOpts();
+  const r = D.hintRects();
+  const rb = (r && r.btns || []).filter(b => b.id === 'restart')[0];
+  const lv0 = G.level;
+  G.moves = 42; G.restarted = 0;
+  if (rb) g.click(rb.x + rb.w / 2, rb.y + rb.h / 2);
+  g.frames(8);
+  rep.ok('软提示重开出口：点「重开本关」按钮 → 真的重开（步数归零 · 记 restarted · 提示条清空 · 关卡号不变）',
+    !!rb && G.moves === 0 && G.restarted === 1 && G.level === lv0 && !G.hint,
+    '按钮=' + !!rb + ' moves=' + G.moves + ' restarted=' + G.restarted
+    + ' level=' + G.level + ' hint=' + !!G.hint);
+});
+
 rep.done();

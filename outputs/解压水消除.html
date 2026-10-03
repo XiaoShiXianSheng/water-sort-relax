@@ -159,7 +159,7 @@ function toolX(i){return TOOL_X0+i*(TOOL_W+TOOL_GAP);}
    adUnitId 为空时（尚未在开发者中心开通广告）会自动降级为 TEST，流程绝不被卡死。 */
 
 var CFG={
-  version:'6.3.1',                         // 对外版本号：随每条埋点上报，出事时能区分线上跑的是哪一版
+  version:'6.3.2',                         // 对外版本号：随每条埋点上报，出事时能区分线上跑的是哪一版
   maxLevel:90,                             // 关卡总数上限：完整内容就是 90 关；过关推进/选关页数/起点读取都以此为准，杜绝溢出到 91+
   env:'online',                            // 'online'(默认：真机有 tap 就真实拉广告) | 'test'(模拟完成，供开发/自动化测试)
                                            // 自动降级：无 window.tap → test(no-tap-runtime)；无 adUnitId → test(no-ad-unit-id)。
@@ -1682,8 +1682,10 @@ function hintOpts(){
     {id:'restart',label:'重开本关', sub:'这一关从头再来',       enabled:true}
   ];
   var pick=[c[0]],i;
-  for(i=1;i<=3;i++){ if(pick.length>=3)break; if(c[i].enabled)pick.push(c[i]); }
-  if(pick.length<3)pick.push(c[4]);                  // 「重开」永远兜底
+  /* V6.3.2：上限 3 → 4。「重开本关」不再只做兜底 —— 玩家卡住时的第一反应就是找重开，
+     而它原先只在其它动作不足 3 个时才出现，动作齐全时反而被挤掉（用户 10-04 实测反馈）。 */
+  for(i=1;i<=3;i++){ if(pick.length>=4)break; if(c[i].enabled)pick.push(c[i]); }
+  if(pick.indexOf(c[4])<0)pick.push(c[4]);            // 「重开」永远在
   var any=false;
   for(i=0;i<pick.length;i++)if(pick[i].enabled)any=true;
   if(!any)pick=[c[4]];                               // 走到这儿说明算法错了：强制补一个能点的
@@ -1844,7 +1846,7 @@ function checkStuck(){
       :(G.undoLeft>0?'点「撤销」退回一瓶，再换个能喝的瓶子上来'
       :(G.unlockLeft>0&&lockedSlots().length>0)?'点台面右边「解锁」再加一个槽位，或「重开」本关'
       :'点「重开」重开本关');
-    G.hint=gridDrink?{a:'台面满了，但瓶子都接不到水',b:'点「撤销」退回一瓶，再把能喝的瓶子放上来'}
+    G.hint=gridDrink?{a:'台面满了，但瓶子都接不到水',b:'退回一瓶再放能喝的上来，或点「重开」换一局'}
                     :{a:'台面上的瓶子都接不到水了',b:fixTxt};
     G.hint.opts=hintOpts();
   }else G.hint=false;
@@ -3004,7 +3006,7 @@ function hintRects(){
   var opts=(h.opts&&h.opts.length)?h.opts:null;
   var out={x:x0,y:HINT_Y0,w:tw,h:(opts?(HINT_BTN_TOP+HINT_BTN_H+10):HINT_TXT_H),btns:[]};
   if(opts){
-    var n=Math.min(3,opts.length);
+    var n=Math.min(4,opts.length);
     var bw=(tw-HINT_BTN_PAD*2-HINT_BTN_GAP*(n-1))/n;
     for(var i=0;i<n;i++){
       out.btns.push({id:opts[i].id,enabled:!!opts[i].enabled,opt:opts[i],
@@ -3074,7 +3076,7 @@ function drawHintBtn(t){
   rr(ctx,t.x,t.y,t.w,t.h,14);
   ctx.fillStyle=on?'#fff7e6':'rgba(255,255,255,0.32)';ctx.fill();
   ctx.strokeStyle=on?'#fff':'rgba(255,255,255,0.45)';ctx.lineWidth=3;ctx.stroke();
-  var sub=(t.w>=150)?o.sub:'';                    // 挤不下就只留主标题，不糊成一团
+  var sub=(t.w>=190)?o.sub:'';                    // 挤不下就只留主标题，不糊成一团（V6.3.2：4 按钮时 w≈155，阈值 150 会让副标题溢出框外）
   ctx.font='bold 22px '+FONT;ctx.fillStyle=on?'#c9501a':'#7d5c45';
   ctx.fillText(o.label,t.x+t.w/2,t.y+(sub?23:33));
   if(sub){
