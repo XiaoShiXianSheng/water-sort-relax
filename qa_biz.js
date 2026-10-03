@@ -289,7 +289,7 @@ guard(rep, '埋点', function () {
 });
 
 /* =====================================================================
-   5. 难度档位：普通 / 困难 / 极限 真的递进
+   5. 难度档位：普通 / 极限（V6.3 两档重构）真的递进、全程分层
    ===================================================================== */
 guard(rep, '难度档位', function () {
   const g = boot(1);
@@ -297,41 +297,34 @@ guard(rep, '难度档位', function () {
 
   let badSlots = [], badDensity = [], badHarder = [];
   for (let lv = 9; lv <= 30; lv++) {
-    const t0 = P(lv, 0), t1 = P(lv, 1), t2 = P(lv, 2);
-    if (!(t0.slots >= t1.slots && t1.slots >= t2.slots)) badSlots.push('L' + lv);
-    /* V6.2.5：色≥9 时三档的**槽位旋钮已饱和**（都压在 eff=−4 地板），极限档再叠任何约束都会出事
-       （实测：多一个门洞 → L19 要 5 次才通；多一个冰冻 → L23 直接打不通）。
-       故色≥9 时极限档与困难档**收敛为同一约束**（只要求 ≥）；色<9 仍要求严格递增。
-       这是「把普通档收到 −4 地板」的固有代价，与设计套件里「高关三档收敛属正常」同一口径。 */
-    if (!(t2.density >= t1.density && t1.density > t0.density)) badDensity.push('L' + lv + '(递减)');
-    if (t0.colors < 9 && !(t2.density > t1.density)) badDensity.push('L' + lv + '(色<9 未严格递增)');
-    if (!(t2.gates >= t1.gates && t1.gates >= t0.gates)) badHarder.push('L' + lv);
+    const t0 = P(lv, 0), t1 = P(lv, 1);
+    if (!(t0.slots >= t1.slots)) badSlots.push('L' + lv);
+    /* V6.3：两档全程分层 —— 极限档决策密度必须严格 > 普通档（防后期门槛封顶撞成同一档） */
+    if (!(t1.density > t0.density)) badDensity.push('L' + lv + '(' + t0.density + '/' + t1.density + ')');
+    if (!(t1.gates >= t0.gates)) badHarder.push('L' + lv);
   }
-  rep.ok('同一关的挑战档「空间越来越紧」（普通槽位 ≥ 困难 ≥ 极限）', badSlots.length === 0, badSlots.join(' '));
-  rep.ok('同一关的挑战档「决策密度越来越难」（density 严格递增）', badDensity.length === 0, badDensity.join(' '));
+  rep.ok('同一关的挑战档「空间越来越紧」（普通槽位 ≥ 极限）', badSlots.length === 0, badSlots.join(' '));
+  rep.ok('同一关的挑战档「决策密度越来越难」（极限 density 严格 > 普通）', badDensity.length === 0, badDensity.join(' '));
   rep.ok('同一关的挑战档「干扰越来越多」（门洞数不减少）', badHarder.length === 0, badHarder.join(' '));
 
-  /* 教学关的挑战档也必须「能玩」（不能一上来就给 3 格、更不能 0 色）。
-     V6.0 教学关本来就是 9 格小盘，挑战档不许把它放大 —— 口径改成「3 档棋盘一致且 ≥9 格」。 */
-  const e0 = P(1, 0), e1 = P(1, 2);
-  rep.ok('教学关的挑战档也保证可玩（3 档同为 ' + e1.cells + ' 格、颜色 ≥3、槽 ≥5）',
+  /* 教学关的挑战档也必须「能玩」（不能一上来就给 3 格、更不能 0 色）。 */
+  const e0 = P(1, 0), e1 = P(1, 1);
+  rep.ok('教学关的极限档也保证可玩（两档同为 ' + e1.cells + ' 格、颜色 ≥3、槽 ≥5）',
     e1.cells === e0.cells && e1.cells >= 9 && e1.colors >= 3 && e1.slots >= 5);
 
   /* 极限档也不许突破棋盘上限（上限来自 CURVE，不再写死 26） */
   const CELL_CAP = g.DBG.CURVE.GRID_MAX_ROWS * g.DBG.CURVE.GRID_MAX_COLS;
   let over = [];
-  for (let lv = 1; lv <= 90; lv++) for (let t = 0; t <= 2; t++) if (P(lv, t).cells > CELL_CAP) over.push('L' + lv + 'T' + t);
+  for (let lv = 1; lv <= 90; lv++) for (let t = 0; t <= 1; t++) if (P(lv, t).cells > CELL_CAP) over.push('L' + lv + 'T' + t);
   rep.ok('任何档位都不突破棋盘硬上限 ' + CELL_CAP + ' 格（' + g.DBG.CURVE.GRID_MAX_ROWS + '×' +
     g.DBG.CURVE.GRID_MAX_COLS + '）', over.length === 0, over.slice(0, 6).join(' '));
 
-  /* 解锁关系：没打赢普通档，就不该解锁困难/极限 */
+  /* 解锁关系：没打赢普通档，就不该解锁极限档（V6.3 两档） */
   const S = g.DBG.Store;
   S.reset();
   rep.ok('默认只能玩普通档', g.DBG.tierUnlocked(9, 0) === true && g.DBG.tierUnlocked(9, 1) === false);
   S.data.tiers[9] = 1;
-  rep.ok('通关普通档后解锁困难档', g.DBG.tierUnlocked(9, 1) === true && g.DBG.tierUnlocked(9, 2) === false);
-  S.data.tiers[9] = 2;
-  rep.ok('通关困难档后解锁极限档', g.DBG.tierUnlocked(9, 2) === true);
+  rep.ok('通关普通档后解锁极限档', g.DBG.tierUnlocked(9, 1) === true);
 });
 
 /* =====================================================================

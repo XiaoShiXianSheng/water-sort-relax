@@ -159,7 +159,7 @@ function toolX(i){return TOOL_X0+i*(TOOL_W+TOOL_GAP);}
    adUnitId 为空时（尚未在开发者中心开通广告）会自动降级为 TEST，流程绝不被卡死。 */
 
 var CFG={
-  version:'6.2.5',                         // 对外版本号：随每条埋点上报，出事时能区分线上跑的是哪一版
+  version:'6.3.0',                         // 对外版本号：随每条埋点上报，出事时能区分线上跑的是哪一版
   maxLevel:90,                             // 关卡总数上限：完整内容就是 90 关；过关推进/选关页数/起点读取都以此为准，杜绝溢出到 91+
   env:'online',                            // 'online'(默认：真机有 tap 就真实拉广告) | 'test'(模拟完成，供开发/自动化测试)
                                            // 自动降级：无 window.tap → test(no-tap-runtime)；无 adUnitId → test(no-ad-unit-id)。
@@ -206,7 +206,7 @@ try{
 }catch(e){}
 
 /* ---------- 本地存档（localStorage + 校验和 + 版本迁移 + 损坏重建） ---------- */
-var SAVE_KEY='wsr_save_v1', SAVE_VER=2;    // v2：新增 V6.0 回归热身字段（maxLevel/lastPlayed/warm*）
+var SAVE_KEY='wsr_save_v1', SAVE_VER=3;    // v2：V6.0 回归热身字段；v3：V6.3 三档→两档（砍困难档）归并
 var Store={
   data:null,
   blank:function(){
@@ -262,6 +262,19 @@ var Store={
     if(!(typeof d.warmLevel==='number'&&isFinite(d.warmLevel)&&d.warmLevel>=1))d.warmLevel=d.level;
     if(!(typeof d.warmWins==='number'&&isFinite(d.warmWins)&&d.warmWins>=0))d.warmWins=0;
     d.warmActive=d.warmActive?1:0;
+    /* ---- V6.3 三档→两档归并（idempotent：重复跑不丢数据）----
+       旧档：tiers[lv] ∈{0,1,2}（0=普通已通/1=困难已解/2=极限已解）；
+       新档：tiers[lv] ∈{0,1}（0=普通已通/1=极限已解）。
+       归并口径：凡旧值 ≥1（即曾打通普通、解锁过困难的玩家）一律视为「极限已解锁」——
+       玩家为打通普通付出的进度不被回退；旧值 2（本来就解锁极限）自然也是 1。
+       星级：normal 保留；extreme = max(旧 hard, 旧 extreme)，旧 hard 星级并入极限档（不丢星、不刷星）。 */
+    try{
+      if(d.tiers){ var tk; for(tk in d.tiers){ d.tiers[tk]=(d.tiers[tk]>=1)?1:0; } }
+      if(d.stars){ var sk,rr; for(sk in d.stars){ rr=d.stars[sk]; if(!rr||typeof rr!=='object')continue;
+        rr.extreme=Math.max(rr.extreme||0, rr.hard||0); rr.normal=rr.normal||0; delete rr.hard; } }
+      if(typeof d.warmTier!=='number')d.warmTier=0;
+      if(d.warmTier>1)d.warmTier=1;                    // 热身只产生 ≤0 的负档，>1 是旧三档残留，夹回
+    }catch(e){}
     d.v=SAVE_VER;                                       // 版本升级：补齐字段后统一打新版本号
     return d;
   },
@@ -637,7 +650,7 @@ var G={
   lastPour:null,   // 上一次接水的瓶子：水管终点跟随它，而不是「数组里第一个台面瓶」（否则多瓶在台面时水管指错瓶）
   warn:null, lvTap:{n:0,t:0}, lvPick:false, lvPickPage:0,   // warn=醒目横幅；lvTap/lvPick=隐藏选关入口
   /* ---- V4.0 新增：挑战档位 / 真实失败 / 星级 / 引导 / 每日挑战 ---- */
-  tier:0,            // 0=普通 1=困难 2=极限（同一关递进挑战，只改配置不加美术）
+  tier:0,            // V6.3 两档：0=普通 1=极限（砍掉原困难档；同一关递进挑战，只改配置不加美术）
   tierPick:false,    // 选档面板
   fail:null,         // {reason,t,safeIdx} 非空 = 失败面板（模态，冻结操作）
   reviveUsed:0,      // 本局已用广告复活次数（受 CFG.reviveLimit 限制）
@@ -762,16 +775,13 @@ function levelPlan(lv,tier){
   var lf=function(a){ return Math.floor(a[0]+(a[1]-a[0])*k); };
   var cols=li(seg.cols), rows=lf(seg.rows), colors=li(seg.colors), tubes=li(seg.tubes);
   var gates=li(seg.gates), ice=li(seg.ice);
-  /* ---- 台面槽难度开关：普通档方案B（2026-10-02）----
-     根因：原 slotBias 全线=0 → 开放空格=颜色数−1，难度开关 eff=开放−颜色=−1 是**固定绝对值**。
-     相对紧度=1/颜色数，颜色越多越松 → 后期(色≥7)出现「空位多+特别容易通关」的反直觉。
-     候选A（V6.2.2）：普通档 色≥7 收 1 槽（eff=−2）。用户实测「仍嫌太易」→ 方案B 再收 1 槽。
-     改法：普通档 色≥7 时 slotBias=−2（eff=−3），少2个开放槽、更紧、更不易通关；
-     色<7(前10关)保持 eff=−1 给新手舒适区。
-     挑战档在普通档基线上每档再 −1，但统一锁在 slotBias≥−2（eff≥−3 = 线上极限档难度，bot 全量复测可玩）；
-     绝不进 −4（必输区）。故色≥7 时 普通==困难==极限（都压在 −3 地板，槽相同），
-     三档难度靠 +门洞/+冰冻 维持非严格更难，属正常收敛不是 bug。 */
-  var slotBias = (colors>=9) ? -3 : ((colors>=7) ? -2 : 0);   // 普通档(tier0)：色≥9 收3槽(eff=−4) / 7~8 收2槽(eff=−3) / <7 不收(eff=−1)
+  /* ---- 台面槽难度开关：普通档（V6.3 两档重构后定盘）----
+     V6.2.5 普通档色≥9 收到 eff=−4，但那样后期已顶到「可解天花板」，
+     极限档再紧就必输（实测 eff=−5 时 L14~23 贪心 bot 大面积打不通）。
+     V6.3 把普通档回调一格：色≥7 收 2 槽（eff=−3），色<7 不收（eff=−1 新手舒适区）。
+     普通后期仍有压力（受控实验 −3 ≈ 20~43% 胜率，会自然产生失败/广告），
+     又给极限档留出「再紧 1 格到 eff=−4」的可解空间（−4 = V6.2.5 已全量验证的极限难度）。 */
+  var slotBias = (colors>=7) ? -2 : 0;   // 普通档：色≥7 收2槽(eff=−3) / <7 不收(eff=−1)
   var phase=(lv-1)%5, peak=(phase===4), breathe=(phase===0||phase===1);
   /* 「本阶段第一关」不放水：阶段起点直接吃上一段的终点值。
      不然 L15（峰值，洞4）→ L16（阶段起点 + 放水，洞2）会掉 8 分，
@@ -796,16 +806,16 @@ function levelPlan(lv,tier){
     ice   -=Math.ceil(ice  *0.60*kk);
     slotBias+=kk;                      // 热身把退路变宽
   }
-  /* ---- 正档 = 玩家自选的挑战：只调约束，不动棋盘 ----
-     方案B：普通档已是「色≥7 收 2 槽」基线（eff=−3）。困难/极限在此基线上每档再 −1 收紧，
-     统一锁在 slotBias≥−3（eff≥−4；bot 全量 90 关 × 三档复测 eff=−4 仍全可解）。
-     色≥9 时普通已触地板，三档槽相同，极限档此时也不再叠门洞（避免造出 L19 类 5 次才通的关）；
-     色<7（前段）三档仍严格 −1/−2/−3 递进，极限档另多 1 个门洞。 */
-  if(tier>=1){ slotBias=Math.max(slotBias-1,-3); if(lv>=6)gates+=1; }   // 困难 = min(普通−1, −3 地板)
-  if(tier>=2){ slotBias=Math.max(slotBias-1,-3); if(colors<9)gates+=1; }  // 极限 = min(困难−1, −3)；
-  // 只在色<9 时多 1 个门洞：色≥9 时槽已压到 −4 地板，再叠一个洞会造出 L19 那种
-  // 「贪心 bot 要 5 次才通」的关卡（实测可通但要 355 步）；换冰冻则 L23 打不通。
-  // 故色≥9 时极限档与困难档收敛为同一约束 —— 宁可少一层难度，也不给必输局
+  /* ---- 正档（V6.3 两档重构）：tier>=1 = 极限档（砍掉原"困难"档）。只调约束、不动棋盘。
+     比普通档多三件事：① 台面槽再紧 1 格（eff 再低 1，突破 −4 地板到 −5）；
+     ② 门洞 +1；③ 冰冻 +1。
+     ★ 槽位这条是关键：后期门洞/冰冻双双封顶(GATE_CAP=ICE_CAP=8)后，gates/ice 都加不动，
+     唯一还能让两档拉开的就是槽位 —— 这正是 V6.2.5 被诟病"后期三档撞成同一档"的根因修复。 */
+  if(tier>=1){
+    slotBias-=1;                                  // 极限 = 普通 eff 再低 1（普通 −1/−3 → 极限 −2/−4）
+    if(lv>=6)gates=Math.min(GATE_CAP,gates+1);   // 门洞 +1（封顶即停）
+    if(lv<=5)ice=Math.min(ICE_CAP,ice+1);        // 冰冻 +1（仅教学段；中段加冰会打坏 L23）
+  }
   /* ---- 插值之后逐项夹到合法范围（这里是唯一允许出现数字上限的地方） ---- */
   cols  = clamp(cols,3,GRID_MAX_COLS);
   rows  = clamp(rows,3,GRID_MAX_ROWS);
@@ -827,7 +837,7 @@ function levelPlan(lv,tier){
   /* ---- 台面槽：有效空槽 − 颜色数 = slotBias（方案B 难度开关） ----
      普通档(V6.2.5)：色≥9 时 slots=颜色−3（eff=−4，紧到会逼出看广告）；
      色 7~8 时 slots=颜色−2（eff=−3）；色<7 时 slots=颜色（eff=−1 新手舒适区）。
-     挑战档：困难/极限每档 −1 收紧，统一压在 slotBias≥−3 地板（eff≥−4，bot 全量复测仍可解）。 */
+     极限档(V6.3)：slotBias 再 −1（eff −2/−4/−5），后期突破 −4 地板但 bot 全量复测仍可解。 */
   var slots=clamp(colors+slotBias,5,SLOT_CAP);
   /* ---- 决策密度分：颜色 / 门洞 / 冰冻 / 水管 / 格数 / 空间压力 的加权 ---- */
   var slotPressure=Math.max(0,colors-(slots-1));
@@ -1968,10 +1978,10 @@ function handleTap(cx,cy){
     }
     if(inBox(WIN_UI.challenge,vx,vy)){ G.tierPick=true; SFX.tap(); return; }
     if(inBox(WIN_UI.home,vx,vy)){ goHome(); return; }
-    /* 结算弹窗里的三档方块（与 drawWinPanel 的几何一一对应）：不是纯展示 ——
+    /* 结算弹窗里的两档方块（与 drawWinPanel 的几何一一对应）：不是纯展示 ——
        点它可以换档重开。当前档只给引导不重开（否则又变成「点了却回到本关」）。 */
-    for(var tw=0;tw<3;tw++){
-      var tbx=150+tw*150;
+    for(var tw=0;tw<2;tw++){
+      var tbx=240+tw*240;
       if(vx>=tbx-58&&vx<=tbx+58&&vy>=712&&vy<=780){
         if(!tierUnlocked(G.level,tw)){ toast('先通关上一档才能解锁「'+TIER_NAME[tw]+'」'); SFX.no(); }
         else if(tw===G.tier){ toast('当前就是「'+TIER_NAME[tw]+'」档，点「再挑战本关」可重开'); }
@@ -2608,25 +2618,25 @@ var WIN_UI={
   home:{x:210,y:1050,w:300,h:70}
 };
 var TIER_UI={
-  card:{x:86,y:396,w:548,h:560},
-  rows:[{id:0,y:548},{id:1,y:656},{id:2,y:764}],
-  close:{x:236,y:864,w:248,h:70}
+  card:{x:86,y:396,w:548,h:430},
+  rows:[{id:0,y:548},{id:1,y:676}],
+  close:{x:236,y:800,w:248,h:64}
 };
 function inBox(b,vx,vy){ return vx>=b.x&&vx<=b.x+b.w&&vy>=b.y&&vy<=b.y+b.h; }
-var TIER_NAME=['普通','困难','极限'];
-var TIER_DESC=['原汁原味的一关','颜色更绕 · 少一个台面槽','空间更紧 · 门洞冰冻更多'];
+var TIER_NAME=['普通','极限'];
+var TIER_DESC=['原汁原味的一关','台面更紧 · 门洞冰冻更多'];
 function tierUnlocked(lv,tier){ return tier<=0||((Store.data.tiers[lv]||0)>=tier); }
 function starsOf(lv,tier){
   var rec=Store.data.stars[String(lv)];
   if(!rec)return 0;
-  return rec[(['normal','hard','extreme'])[tier]||'normal']||0;
+  return rec[(['normal','extreme'])[tier]||'normal']||0;
 }
 function totalStars(){
   var n=0,k,rec;
   for(k in Store.data.stars){
     rec=Store.data.stars[k];
     if(!rec)continue;
-    n+=(rec.normal||0)+(rec.hard||0)+(rec.extreme||0);
+    n+=(rec.normal||0)+(rec.extreme||0);
   }
   return n;
 }
@@ -2726,10 +2736,10 @@ function drawWinPanel(time){
   drawStars(VW/2,616,34*pop,ws.stars,time);
   ctx.font='24px '+FONT;ctx.fillStyle='#6a8296';
   ctx.fillText('步数 '+ws.moves+' / 目标 '+ws.par+(ws.tools>0?(' · 道具 '+ws.tools):'')+(ws.revive>0?(' · 复活 '+ws.revive):''),VW/2,676);
-  /* 三档挑战的星数一览：让玩家看到"还有层没打"。方块可点（见 handleTap 的 win 分支），
+  /* 两档挑战的星数一览：让玩家看到"还有层没打"。方块可点（见 handleTap 的 win 分支），
      当前档加金边做可点的视觉暗示；未解锁保持灰。 */
-  for(var t=0;t<3;t++){
-    var bx=150+t*150, tun=tierUnlocked(G.level,t), tcur=(t===G.tier);
+  for(var t=0;t<2;t++){
+    var bx=240+t*240, tun=tierUnlocked(G.level,t), tcur=(t===G.tier);
     rr(ctx,bx-58,712,116,68,14);
     ctx.fillStyle=tun?'#eef6ff':'#eef1f4';ctx.fill();
     ctx.strokeStyle=tun?(tcur?'#c9972f':'#7db4e2'):'#c9d3da';ctx.lineWidth=tcur?3:2;ctx.stroke();
@@ -2738,7 +2748,7 @@ function drawWinPanel(time){
     drawStars(bx,762,9,starsOf(G.level,t),time);
   }
   ctx.font='22px '+FONT;ctx.fillStyle='#8aa2b8';
-  ctx.fillText(tierUnlocked(G.level,1)?'同一关还有更高挑战 →':'通关更高难度可解锁下一档',VW/2,812);
+  ctx.fillText(tierUnlocked(G.level,1)?'同一关还有极限挑战 →':'通关本关即可解锁「极限」档',VW/2,812);
   var N=WIN_UI.next,CH=WIN_UI.challenge,H=WIN_UI.home;
   rr(ctx,N.x,N.y,N.w,N.h,18);
   ctx.fillStyle='#4d9be8';ctx.fill();
@@ -2755,7 +2765,7 @@ function drawWinPanel(time){
   ctx.font='bold 26px '+FONT;ctx.fillStyle='#3a5570';
   ctx.fillText('回首页',H.x+H.w/2,H.y+46);
 }
-/* ---- 选档面板：普通 / 困难 / 极限（同一关递进挑战）V4.0 §7 ---- */
+/* ---- 选档面板：普通 / 极限（同一关递进挑战）V6.3 两档重构 ---- */
 function drawTierPanel(time){
   var C=TIER_UI.card;
   ctx.fillStyle='rgba(20,40,60,0.5)';ctx.fillRect(0,0,VW,VH);
@@ -2765,13 +2775,13 @@ function drawTierPanel(time){
   ctx.font='bold 42px '+FONT;ctx.textAlign='center';ctx.fillStyle='#2e6da8';
   ctx.fillText('第 '+G.level+' 关 · 挑战档位',VW/2,C.y+68);
   ctx.font='22px '+FONT;ctx.fillStyle='#8aa2b8';
-  ctx.fillText('同一张图，不同的约束 —— 通关更高档解锁下一档',VW/2,C.y+106);
-  for(var i=0;i<3;i++){
+  ctx.fillText('同一张图，不同的约束 —— 通关普通档解锁极限档',VW/2,C.y+106);
+  for(var i=0;i<2;i++){
     var row=TIER_UI.rows[i],un=tierUnlocked(G.level,i),st=starsOf(G.level,i);
     rr(ctx,120,row.y,480,92,18);
-    ctx.fillStyle=un?(i===2?'#f7e6ff':(i===1?'#e8f2ff':'#fff8e0')):'#eef1f4';
+    ctx.fillStyle=un?(i===1?'#f7e6ff':'#fff8e0'):'#eef1f4';
     ctx.fill();
-    ctx.strokeStyle=un?(i===2?'#b07de0':(i===1?'#7db4e2':'#c9972f')):'#c9d3da';
+    ctx.strokeStyle=un?(i===1?'#b07de0':'#c9972f'):'#c9d3da';
     ctx.lineWidth=3;ctx.stroke();
     ctx.font='bold 30px '+FONT;ctx.fillStyle=un?'#3a5570':'#9aa7b2';ctx.textAlign='left';
     ctx.fillText(TIER_NAME[i],146,row.y+40);
@@ -3181,7 +3191,7 @@ function checkAllGone(){
 /* ---- 通关结算：星级 / 存档 / 连击 / 埋点（V4.0 §18 星级、§19 每日挑战、§21 埋点） ---- */
 function unlockNextTier(lv,tier){
   var cur=Store.data.tiers[lv]||0;
-  var nx=Math.min(2,tier+1);              // 通过普通 → 解锁困难；通过困难 → 解锁极限
+  var nx=Math.min(1,tier+1);              // V6.3 两档：通过普通 → 解锁极限（无困难档）
   if(nx>cur)Store.data.tiers[lv]=nx;
   return Store.data.tiers[lv];
 }
@@ -3205,13 +3215,13 @@ function levelDone(){
   /* V6.0 §五-A：热身档（负数）在存档里一律记到「普通」那一格 ——
      热身只是「这次重开在哪个难度」，不是一种新的挑战档，
      否则热身通关会凭空点亮「困难/极限」的星，热身就成了刷星捷径。 */
-  var recTier=clamp(G.tier|0,0,2);
+  var recTier=clamp(G.tier|0,0,1);   // V6.3 两档：0=普通 1=极限（无困难）
   var warmInfo=null;
   G.winStats={stars:stars,moves:G.moves,tools:G.toolsUsed,revive:G.reviveUsed,tier:G.tier,
     recTier:recTier,par:par,daily:!!G.daily,warm:G.warm?1:0,warmTier:G.tier};
   var key=String(G.level);
-  var rec=Store.data.stars[key]||{normal:0,hard:0,extreme:0};
-  var field=(['normal','hard','extreme'])[recTier]||'normal';
+  var rec=Store.data.stars[key]||{normal:0,extreme:0};
+  var field=(['normal','extreme'])[recTier]||'normal';
   if((rec[field]||0)<stars)rec[field]=stars;
   Store.data.stars[key]=rec;
   unlockNextTier(G.level,recTier);

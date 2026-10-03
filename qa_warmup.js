@@ -54,10 +54,10 @@ guard(rep, '回归热身', function () {
      这样任何一次 Store.reset() 之后的残缺状态都不会被误当成"没丢进度"。 */
   const SEED_STARS = (() => {
     const o = {};
-    for (let i = 1; i <= 20; i++) o[String(i)] = { normal: 3, hard: i >= 10 ? 2 : 0, extreme: 0 };
+    for (let i = 1; i <= 20; i++) o[String(i)] = { normal: 3, extreme: i >= 10 ? 2 : 0 };
     return o;
   })();
-  const SEED_TIERS = { 9: 2, 10: 1, 14: 1, 15: 1 };
+  const SEED_TIERS = { 9: 1, 10: 1, 14: 1, 15: 1 };   // V6.3 两档：0=普通 1=极限
 
   function seedPlayer(lv, idleSec) {
     S.reset();
@@ -86,7 +86,7 @@ guard(rep, '回归热身', function () {
     const st = S.get('stars', {});
     for (let i = 1; i <= 20; i++) {
       const a = SEED_STARS[String(i)], b = st[String(i)] || {};
-      if ((b.normal || 0) !== a.normal || (b.hard || 0) !== a.hard || (b.extreme || 0) !== a.extreme) return false;
+      if ((b.normal || 0) !== a.normal || (b.extreme || 0) !== a.extreme) return false;
     }
     const ti = S.get('tiers', {});
     for (const k of Object.keys(SEED_TIERS)) if (ti[k] !== SEED_TIERS[k]) return false;
@@ -99,7 +99,7 @@ guard(rep, '回归热身', function () {
     const st = S.get('stars', {});
     for (let i = 1; i <= 20; i++) {
       const a = SEED_STARS[String(i)], b = st[String(i)] || {};
-      if ((b.normal || 0) < a.normal || (b.hard || 0) < a.hard || (b.extreme || 0) < a.extreme) return false;
+      if ((b.normal || 0) < a.normal || (b.extreme || 0) < a.extreme) return false;
     }
     const ti = S.get('tiers', {});
     for (const k of Object.keys(SEED_TIERS)) if ((ti[k] || 0) < SEED_TIERS[k]) return false;
@@ -415,12 +415,11 @@ guard(rep, '回归热身', function () {
     D.levelDone();
     const rec = (S.get('stars', {}) || {})['15'] || {};
     const before = SEED_STARS['15'];
-    if ((rec.hard || 0) !== before.hard) bad.push('热身通关动了困难星：' + before.hard + '→' + rec.hard);
-    if ((rec.extreme || 0) !== 0) bad.push('热身通关点亮了极限星：' + rec.extreme);
+    if ((rec.extreme || 0) !== before.extreme) bad.push('热身通关动了极限星：' + before.extreme + '→' + rec.extreme);
     if (!((rec.normal || 0) >= before.normal)) bad.push('普通星没被记录：' + rec.normal);
     const t = (S.get('tiers', {}) || {})['15'];
     if (t !== SEED_TIERS[15]) bad.push('热身通关改了档位解锁进度：' + SEED_TIERS[15] + '→' + t);
-    rep.ok('⑪ 热身通关只记「普通」星位，不解锁困难/极限（热身不是刷星捷径）', bad.length === 0, bad.join(' '));
+    rep.ok('⑪ 热身通关只记「普通」星位，不解锁极限（热身不是刷星捷径）', bad.length === 0, bad.join(' '));
   }
 
   /* ============================================================

@@ -637,7 +637,7 @@ guard(rep, '结算页-选档', function () {
   /* ---- Bug B：再挑战本关 → 选档面板真的能点、能切档 ---- */
   {
     const g = fresh(); enter(g);
-    const G = winOn(g, 9, 1);                                // 困难档已解锁
+    const G = winOn(g, 9, 1);                                // 极限档已解锁
     const D = g.DBG, CH = D.WIN_UI.challenge;
     g.viewClick(CH.x + CH.w / 2, CH.y + CH.h / 2); g.frames(3);
     const bt = btnOf(g.renderOnce());
@@ -647,7 +647,7 @@ guard(rep, '结算页-选档', function () {
       bt.panelTier && !bt.panelWin, JSON.stringify(bt));
     const r1 = D.TIER_UI.rows.filter(r => r.id === 1)[0];
     g.viewClick(360, r1.y + 46); g.frames(5);
-    rep.ok('Bug B：点已解锁的「困难」档 → 真的换档（tier=1）并开局（回到 play）',
+    rep.ok('Bug B：点已解锁的「极限」档 → 真的换档（tier=1）并开局（回到 play）',
       G.state === 'play' && G.tier === 1 && G.tierPick === false,
       'state=' + G.state + ' tier=' + G.tier + ' tierPick=' + G.tierPick);
     rep.ok('Bug B：换档后关卡号不变（同一关的递进挑战）', G.level === 9, 'level=' + G.level);
@@ -673,25 +673,22 @@ guard(rep, '结算页-选档', function () {
       G.tierPick === false && G.state === 'win', 'tierPick=' + G.tierPick + ' state=' + G.state);
   }
 
-  /* ---- FIX-02：结算弹窗的「三档方块」必须可点 + 每日挑战在 HUD 上可辨识 ----
-     用户原话「弹窗上加了新的难度，但那个难度我根本点不动」有两半：选档面板（Bug B）已修，
-     另一半是**结算弹窗里那三个档位方块**（drawWinPanel 只画星数、从无命中判定）——
-     它旁边还写着「同一关还有更高挑战 →」，玩家必然去点。
-     方块几何与 drawWinPanel 一致：中心 (150 + t*150, 746)，命中盒 x±58 / y∈[712,780]。 */
+  /* ---- FIX-02：结算弹窗的「两档方块」必须可点 + 每日挑战在 HUD 上可辨识 ----
+     V6.3 两档重构：方块几何与 drawWinPanel 一致：中心 (240 + t*240, 746)，命中盒 x±58 / y∈[712,780]。 */
   {
-    const box = (i) => ({ x: 150 + i * 150, y: 746 });
+    const box = (i) => ({ x: 240 + i * 240, y: 746 });
 
-    /* 02a-1：点「困难」方块 → 真的换档并开局，关卡号不变 */
+    /* 02a-1：点「极限」方块 → 真的换档并开局，关卡号不变 */
     const g = fresh(); enter(g);
-    const G = winOn(g, 9, 2);                       // 已解锁困难/极限
+    const G = winOn(g, 9, 1);                       // 已解锁极限
     g.viewClick(box(1).x, box(1).y); g.frames(5);
-    rep.ok('FIX-02a：结算弹窗点「困难」方块 → 真的换档（tier 0→1）并开局（回到 play），关卡号不变',
+    rep.ok('FIX-02a：结算弹窗点「极限」方块 → 真的换档（tier 0→1）并开局（回到 play），关卡号不变',
       G.state === 'play' && G.tier === 1 && G.level === 9,
       'state=' + G.state + ' tier=' + G.tier + ' level=' + G.level);
 
     /* 02a-2：点「当前档」方块 → 语义硬要求：不许重开 */
     const g0 = fresh(); enter(g0);
-    const G0 = winOn(g0, 9, 1);                     // 当前档 = 0（普通）
+    const G0 = winOn(g0, 9, 0);                     // 当前档 = 0（普通）
     G0.toast = null;
     g0.viewClick(box(0).x, box(0).y); g0.frames(3);
     rep.ok('FIX-02a：点「当前档」方块 → 不重开（仍停在结算页，level/tier 不变）且给 toast 引导',
@@ -703,7 +700,7 @@ guard(rep, '结算页-选档', function () {
     const g1 = fresh(); enter(g1);
     const G1 = winOn(g1, 9, 0);                     // 只解锁普通档
     G1.toast = null;
-    g1.viewClick(box(2).x, box(2).y); g1.frames(3);
+    g1.viewClick(box(1).x, box(1).y); g1.frames(3);
     rep.ok('FIX-02a：点「未解锁」方块 → 有提示、不开局、仍停在结算页',
       G1.state === 'win' && G1.tier === 0 && !!G1.toast,
       'state=' + G1.state + ' tier=' + G1.tier + ' toast=' + (G1.toast && G1.toast.msg));
@@ -1836,10 +1833,10 @@ guard(rep, '胜局判定', function () {
 guard(rep, '星级读取', function () {
   const g = fresh(); const D = g.DBG;
   enter(g);
-  D.Store.data.stars['9'] = { normal: 3, hard: 2, extreme: 1 };
-  rep.ok('星级读取 starsOf：普通/困难/极限三档各读自己那一格；没通关的关一律 0 星',
-    D.starsOf(9, 0) === 3 && D.starsOf(9, 1) === 2 && D.starsOf(9, 2) === 1 && D.starsOf(77, 0) === 0,
-    'normal=' + D.starsOf(9, 0) + ' hard=' + D.starsOf(9, 1) + ' extreme=' + D.starsOf(9, 2)
+  D.Store.data.stars['9'] = { normal: 3, extreme: 1 };
+  rep.ok('星级读取 starsOf：普通/极限两档各读自己那一格；没通关的关一律 0 星',
+    D.starsOf(9, 0) === 3 && D.starsOf(9, 1) === 1 && D.starsOf(77, 0) === 0,
+    'normal=' + D.starsOf(9, 0) + ' extreme=' + D.starsOf(9, 1)
     + ' 未通关=' + D.starsOf(77, 0));
   rep.ok('星级读取 starsOf：越界/负数档位（热身 −1/−2、脏档 5）一律落回「普通」那一格，不许点亮别的档',
     D.starsOf(9, -1) === 3 && D.starsOf(9, -2) === 3 && D.starsOf(9, 5) === 3,

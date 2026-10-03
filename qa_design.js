@@ -613,55 +613,45 @@ guard(rep, '设计', function () {
     dens[LVMAX - 1] >= dens[0] * 5, dens[LVMAX - 1] + ' vs ' + dens[0] + '（×' +
     (dens[LVMAX - 1] / dens[0]).toFixed(1) + '）');
 
-  /* 三档挑战（普通 / 困难 / 极限）必须「非严格更难」（困难 ≥ 普通 且 极限 ≥ 困难）。
-     教学 1~5 关例外：那时还没有门洞可加、台面槽也已经压到下限 5，
-     硬要区分只能往教学关塞冰冻瓶（违背「教学无干扰」），故只要求 极限 ≥ 困难 且 极限 > 普通。
-     方案B 把普通档也收进 −3 地板后：高关（门洞/冰冻已顶到 GATE_CAP/ICE_CAP、槽位也压到地板）
-     三档难度旋钮全部饱和 → 困难==极限==普通（密度完全相同），属正常收敛，不再要求「严格 >」。
-     这里只守「不退步」（困难 < 普通 或 极限 < 困难 才算违规）。⚠ 范围扩到 90 关：只调 levelPlan，零生成成本。 */
+  /* V6.3 两档（普通 / 极限）必须「全程分层」：极限档决策密度严格 > 普通档。
+     教学 1~5 关例外：那时还没有门洞可加，极限档只多 1 个冰冻，允许密度 ≥ 普通（不强求 >）。
+     ★ 这条正是 V6.2.5「后期三档撞成同一档」的回归防线：V6.3 用「槽再紧 1 格」保证后期
+     门洞/冰冻双双封顶(GATE_CAP=ICE_CAP=8)时两档仍不收敛（密度差来自 slotPressure）。 */
   const tierBad = [];
   let tierLoose = 0;
   for (let lv = 1; lv <= LVMAX; lv++) {
-    const d0 = D.plan(lv, 0).density, d1 = D.plan(lv, 1).density, d2 = D.plan(lv, 2).density;
-    const ok = lv <= 5 ? (d2 >= d1 && d2 > d0) : (d1 >= d0 && d2 >= d1);  // 高关三档收敛于 −3 地板，放宽为非严格
+    const d0 = D.plan(lv, 0).density, d1 = D.plan(lv, 1).density;
+    const ok = lv <= 5 ? (d1 >= d0) : (d1 > d0);
     if (lv <= 5 && d1 === d0) tierLoose++;
-    if (!ok) tierBad.push('L' + lv + ' ' + d0 + '/' + d1 + '/' + d2);
+    if (!ok) tierBad.push('L' + lv + ' ' + d0 + '/' + d1);
   }
-  rep.ok('三档挑战非严格更难（6 关起 困难 ≥ 普通 且 极限 ≥ 困难；教学段 极限>普通；' +
-    '高关三档收敛于 −3 地板属正常）',
-    tierBad.length === 0, tierBad.join(' ') + '　教学段 困难==普通 的关卡数 ' + tierLoose);
+  rep.ok('两档挑战全程分层（6 关起 极限密度严格 > 普通；教学段 极限 ≥ 普通）—— ' +
+    '防「后期门槛封顶后两档撞成同一档」',
+    tierBad.length === 0, tierBad.join(' ') + '　教学段 极限==普通 的关卡数 ' + tierLoose);
 
-  /* ---------- 三档挑战「只调约束、不加美术」（levelPlan 注释 ⑤ 的承诺）----------
-     设计承诺：困难/极限档只动「台面槽 / 门洞 / 冰冻」这三个约束，
-     **格子数、颜色数、水管数三档完全一致** —— 否则「挑战档」就变成了「换个更大的盘再多玩 3 分钟」，
-     玩家多花时间却没多拿思考量（这正是本项目踩过的老路：加格子加的是操作量，不是难度）。
-     并且槽位有下限 4（再少就真的无解感）。 */
+  /* ---------- 两档挑战「只调约束、不加美术」（levelPlan 注释 ⑤ 的承诺）----------
+     设计承诺：极限档只动「台面槽 / 门洞 / 冰冻」这三个约束，
+     **格子数、颜色数、水管数两档完全一致** —— 否则「挑战档」就变成了「换个更大的盘再多玩 3 分钟」。
+     并且槽位有下限 5（再少就真的无解感）。
+     V6.3 极限档 = 普通档：槽 −1、门洞 +1、冰冻 +1（各自封顶即停）。 */
   const tierRule = [];
   for (let lv = 4; lv <= LVMAX; lv++) {
-    const p0 = D.plan(lv, 0), p1 = D.plan(lv, 1), p2 = D.plan(lv, 2);
-    if (!(p0.cells === p1.cells && p1.cells === p2.cells &&
-      p0.colors === p1.colors && p1.colors === p2.colors &&
-      p0.tubes === p1.tubes && p1.tubes === p2.tubes))
-      tierRule.push('L' + lv + ' 三档改了棋盘：格' + p0.cells + '/' + p1.cells + '/' + p2.cells +
-        ' 色' + p0.colors + '/' + p1.colors + '/' + p2.colors + ' 管' + p0.tubes + '/' + p1.tubes + '/' + p2.tubes);
-    /* 台面槽：每档最多减 1，且下限 5（slotBias 打到 SLOT_CAP 天花板时可能「减不动」，那也算合规） */
-    const slotDrop = p0.slots >= p1.slots && p1.slots >= p2.slots &&
-      (p0.slots - p1.slots) <= 1 && (p1.slots - p2.slots) <= 1 && p2.slots >= 5;
-    if (!slotDrop) tierRule.push('L' + lv + ' 槽递进异常 ' + p0.slots + '/' + p1.slots + '/' + p2.slots);
-    const wantG1 = lv >= 6 ? Math.min(CV.GATE_CAP, p0.gates + 1) : p0.gates;
-    /* V6.2.5：色≥9 时极限档**不再叠门洞**（槽已压到 −4 地板，再叠一个洞会造出
-       L19 那种「贪心 bot 要 5 次才通」的关卡），故允许极限档门洞 == 困难档。 */
-    const wantG2 = (p0.colors >= 9) ? p1.gates : Math.min(CV.GATE_CAP, p1.gates + 1);
-    if (!(p1.gates === wantG1 && p2.gates === wantG2))
-      tierRule.push('L' + lv + ' 门洞递进异常 ' + p0.gates + '/' + p1.gates + '/' + p2.gates);
-    /* V6.2.5：挑战档**完全不加冰**。色≥9 时槽已压到 −4 地板，极限档再叠任何约束都会出事
-       （多一个门洞 = L19 要 5 次才通；多一个冰冻 = L23 打不通），故三档冰保持一致。 */
-    if (!(p1.ice === p0.ice && p2.ice === p0.ice))
-      tierRule.push('L' + lv + ' 冰冻递进异常 ' + p0.ice + '/' + p1.ice + '/' + p2.ice);
-    if (p1.slots < 5 || p2.slots < 5) tierRule.push('L' + lv + ' 挑战档台面槽 < 5');
+    const p0 = D.plan(lv, 0), p1 = D.plan(lv, 1);
+    if (!(p0.cells === p1.cells && p0.colors === p1.colors && p0.tubes === p1.tubes))
+      tierRule.push('L' + lv + ' 两档改了棋盘：格' + p0.cells + '/' + p1.cells +
+        ' 色' + p0.colors + '/' + p1.colors + ' 管' + p0.tubes + '/' + p1.tubes);
+    /* 台面槽：极限档恰好 −1，或在槽位下限 5 处减不动（合法） */
+    const slotDrop = (p0.slots - p1.slots === 1 || (p1.slots === 5 && p0.slots - p1.slots >= 0)) && p1.slots >= 5;
+    if (!slotDrop) tierRule.push('L' + lv + ' 槽递进异常 ' + p0.slots + '→' + p1.slots);
+    /* 门洞：极限档 +1（lv>=6 起，封顶即停）；冰冻：仅教学段(lv<=5) +1（中段加冰会打坏 L23） */
+    const wantG = lv >= 6 ? Math.min(CV.GATE_CAP, p0.gates + 1) : p0.gates;
+    const wantI = lv <= 5 ? Math.min(CV.ICE_CAP, p0.ice + 1) : p0.ice;
+    if (p1.gates !== wantG) tierRule.push('L' + lv + ' 门洞递进异常 ' + p0.gates + '→' + p1.gates + '(应' + wantG + ')');
+    if (p1.ice !== wantI) tierRule.push('L' + lv + ' 冰冻递进异常 ' + p0.ice + '→' + p1.ice + '(应' + wantI + ')');
+    if (p1.slots < 5) tierRule.push('L' + lv + ' 极限档台面槽 < 5');
   }
-  rep.ok('**三档挑战「只调约束、不加美术」**（格/色/管三档一致；槽每档 −1 下限 5；洞 +1/+1 上限 ' +
-    CV.GATE_CAP + '；冰三档一致）', tierRule.length === 0, tierRule.join(' ').slice(0, 240));
+  rep.ok('**两档挑战「只调约束、不加美术」**（格/色/管两档一致；槽 −1 下限 5；洞 +1 上限 ' +
+    CV.GATE_CAP + '；冰 +1 上限 ' + CV.ICE_CAP + '）', tierRule.length === 0, tierRule.join(' ').slice(0, 240));
 
   /* ---------- 普通档「台面槽 − 颜色数」随关卡单调不增 ----------
      STAGE_CURVE 的 slotBias 是 2 → 1 → 0 逐段收紧的（退路只减不增）。
@@ -681,7 +671,7 @@ guard(rep, '设计', function () {
   /* 教学关（1~3）的挑战档不许把棋盘改大、管数改多，冰冻最多 1 个 —— 别把新手第一关变成劝退关 */
   const tierTeach = [];
   for (let lv = 1; lv <= 3; lv++) {
-    const p0 = D.plan(lv, 0), p = D.plan(lv, 2);
+    const p0 = D.plan(lv, 0), p = D.plan(lv, 1);
     if (!(p.cells === p0.cells && p.cells <= 12 && p.tubes <= 6 && p.ice <= 1 && p.slots >= 5))
       tierTeach.push('L' + lv + ' 格' + p.cells + '/管' + p.tubes + '/冰' + p.ice + '/槽' + p.slots);
   }
@@ -757,7 +747,7 @@ guard(rep, '设计', function () {
   const LATE_KEY = { from: 24, to: 90 };
   const LATE_SIG = {};
   for (let lv = 1; lv <= 90; lv++) {
-    for (let tier = 0; tier <= 2; tier++) {
+    for (let tier = 0; tier <= 1; tier++) {
       D.gen(lv, { tier: tier });
       gen270++;
       const pl = D.plan(lv, tier), G2 = D.G;
@@ -836,13 +826,13 @@ guard(rep, '设计', function () {
   one('**曲线不许触顶**（第 ' + LATE_KEY.to + ' 关的「颜色 + 门洞 + 冰冻」综合干扰量与决策密度必须严格高于第 ' +
     LATE_KEY.from + ' 关；旧版这里是「完全触顶」，25~90 关只是换布局）', v2.plateau,
     '　L' + LATE_KEY.from + ' → L' + LATE_KEY.to + ' 对比见 qa_design_table.tsv');
-  one('**三档「实际门洞/冰冻数 == 计划」**（原断言只跑普通档；困难/极限同样有「放不下就静默少放」的降级路径）',
+  one('**两档「实际门洞/冰冻数 == 计划」**（原断言只跑普通档；极限档同样有「放不下就静默少放」的降级路径）',
     v2.tierPlan, '　' + gen270 + ' 次生成');
-  one('**挑战档难度开关下限**（有效空槽 − 颜色数 ≥ −4；V6.2.5 用户要求 9+ 色收3槽到 −4 仍全可解；−5 才彻底没退路）',
+  one('**挑战档难度开关下限**（有效空槽 − 颜色数 ≥ −4；V6.3 极限档定盘在 eff=−4（V6.2.5 已全量验证可解）；−5 才彻底没退路）',
     v2.tierFloor);
-  console.log('  （三档「有效空槽 − 颜色数」分布：普通 ' + JSON.stringify(effTier[0]) +
-    ' ｜困难 ' + JSON.stringify(effTier[1]) + ' ｜极限 ' + JSON.stringify(effTier[2]) + '）');
-  console.log('  （三档共 ' + gen270 + ' 次生成；冰冻瓶紧贴门洞的形态出现 ' + iceNearGateN +
+  console.log('  （两档「有效空槽 − 颜色数」分布：普通 ' + JSON.stringify(effTier[0]) +
+    ' ｜极限 ' + JSON.stringify(effTier[1]) + '）');
+  console.log('  （两档共 ' + gen270 + ' 次生成；冰冻瓶紧贴门洞的形态出现 ' + iceNearGateN +
     ' 次 —— 设计允许（只有「洞口箭头朝冰冻瓶」被禁止，已由另一条断言守））');
 
   /* ============ 2026-10-02 02:00 档新增：6 条「还没被断言保护」的设计规则 ============
@@ -877,9 +867,9 @@ guard(rep, '设计', function () {
      例如 L85/L90 的门洞基数已经是 8，+1 被 clamp 掉 → 峰值关与相位 3 关同参。
      这是「上限封顶」的算术后果，不是 bug，但会影响「末段还在变难」这个说法，故记录下来。 */
   const v3 = { stageLink: [], slotExact: [], mono: [], peakCmp: [], warm: [], tubeVsColor: [] };
-  const pl0 = [], pl1 = [], pl2 = [], plW1 = [], plW2 = [];
+  const pl0 = [], pl1 = [], plW1 = [], plW2 = [];
   for (let lv = 1; lv <= LVMAX; lv++) {
-    pl0.push(D.plan(lv, 0)); pl1.push(D.plan(lv, 1)); pl2.push(D.plan(lv, 2));
+    pl0.push(D.plan(lv, 0)); pl1.push(D.plan(lv, 1));
     plW1.push(D.plan(lv, -1)); plW2.push(D.plan(lv, -2));
   }
 
@@ -897,18 +887,19 @@ guard(rep, '设计', function () {
   one('**阶段连续性铁律**（6 个阶段接缝上：格数/颜色/水管不许下降，门洞/冰冻掉幅 ≤1 = 一个波浪振幅；' +
     '现有「逐关不跳变」只管幅度不管方向，把阶段起点调低照样全绿）', v3.stageLink);
 
-  /* ② 普通档台面槽 == 颜色数 − (色≥9?3:色≥7?2:0)（V6.2.5：色≥9 收 3 槽）+ 困难档至多 −1 槽（普通已触地板时允许相等）+ 极限档 ≤ 困难档 */
+  /* ② 普通档台面槽 == max(5, 颜色 − (色≥7?2:0))（V6.3：色≥7 收2槽 eff=−3 / <7 不收 eff=−1）
+     + 极限档恰好再 −1（max(5, 颜色 − (色≥7?3:1))），后期门槛封顶仍由槽位差保证两档不撞。 */
+  const wantNormal = c => Math.max(5, c - (c >= 7 ? 2 : 0));
+  const wantExtreme = c => Math.max(5, c - (c >= 7 ? 3 : 1));
   for (let lv = 1; lv <= LVMAX; lv++) {
-    const p0 = pl0[lv - 1], p1 = pl1[lv - 1], p2 = pl2[lv - 1];
-    if (p0.colors >= 5 && p0.slots !== p0.colors - (p0.colors >= 9 ? 3 : (p0.colors >= 7 ? 2 : 0)))
-      v3.slotExact.push('L' + lv + ' 普通档槽' + p0.slots + '≠色' + p0.colors + '−' + (p0.colors >= 9 ? 3 : (p0.colors >= 7 ? 2 : 0)));
-    if (lv >= 10) {
-      if (p0.slots - p1.slots < 0 || p0.slots - p1.slots > 1) v3.slotExact.push('L' + lv + ' 困难档槽 ' + p0.slots + '→' + p1.slots + '（应 −0~1）');
-      if (p2.slots > p1.slots) v3.slotExact.push('L' + lv + ' 极限档槽 ' + p1.slots + '→' + p2.slots + '（应 ≤ 困难）');
-    }
+    const p0 = pl0[lv - 1], p1 = pl1[lv - 1];
+    if (p0.colors >= 5 && p0.slots !== wantNormal(p0.colors))
+      v3.slotExact.push('L' + lv + ' 普通档槽' + p0.slots + '≠' + wantNormal(p0.colors) + '(色' + p0.colors + ')');
+    if (p1.slots !== wantExtreme(p0.colors))
+      v3.slotExact.push('L' + lv + ' 极限档槽' + p1.slots + '≠' + wantExtreme(p0.colors) + '(色' + p0.colors + ')');
   }
-  one('**普通档台面槽 == 颜色数 − (色≥9?3:色≥7?2:0)**（V6.2.5：色≥9 收3槽(eff=−4 促广告) / 7~8 收2槽(eff=−3) / <7 不收）+ ' +
-    '**困难档至多 −1 槽（普通已触地板时可相等）、极限档 ≤ 困难档**（三档压在 −4 地板，属正常收敛）', v3.slotExact);
+  one('**普通档台面槽 == max(5, 色−(色≥7?2:0))**（V6.3：色≥7 收2槽 eff=−3 促广告 / <7 不收 eff=−1）+ ' +
+    '**极限档再 −1（eff=−4，V6.2.5 已全量验证可解）**，后期门槛封顶仍由槽差分层', v3.slotExact);
 
   /* ③ 全局单调不减（1~90 关）：格数 / 颜色数 / 水管数。
      ⚠ 台面槽不在此列：槽是「难度开关」不是「棋盘大小」，方案B 让普通档在色≥7 时一次性收紧 2 槽
