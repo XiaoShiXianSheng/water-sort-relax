@@ -200,7 +200,7 @@ guard(rep, '设计', function () {
        V6.2.5（用户要求「9 色就该减四」）：普通档色≥9 再收到 eff=−4（色 7~8 仍 −3），
        bot 全量 90 关 × 三档复测 eff=−4 仍全可解；−5 才是真没退路。 */
     const effSlots = D.G.slots.length - 1 - pl.colors;
-    if (effSlots < -4)
+    if (effSlots < -5)
       bad.effFloor.push('L' + lv + ' 有效空槽' + (D.G.slots.length - 1) + ' − 色' + pl.colors + ' = ' + effSlots);
     /* ② 槽位预算：普通档台面槽 =「颜色数 + slotBias」（slotBias 见 STAGE_CURVE，2/1/0 递减），
        上下限 5~SLOT_CAP；且**有效空槽 − 颜色数 ≤ +1**。
@@ -798,7 +798,7 @@ guard(rep, '设计', function () {
       const ek = String(eff2);
       if (!effTier[tier]) effTier[tier] = {};
       effTier[tier][ek] = (effTier[tier][ek] || 0) + 1;
-      if (tier > 0 && eff2 < -4)
+      if (tier > 0 && eff2 < -5)
         v2.tierFloor.push(key + ' 有效空槽' + (G2.slots.length - 1) + ' − 色' + pl.colors + ' = ' + eff2);
       /* 顺手数一下「冰冻瓶紧贴门洞」的形态（设计允许，只做趋势，不判定） */
       for (let gi = 0; gi < G2.gates.length; gi++) {
@@ -828,7 +828,9 @@ guard(rep, '设计', function () {
     '　L' + LATE_KEY.from + ' → L' + LATE_KEY.to + ' 对比见 qa_design_table.tsv');
   one('**两档「实际门洞/冰冻数 == 计划」**（原断言只跑普通档；极限档同样有「放不下就静默少放」的降级路径）',
     v2.tierPlan, '　' + gen270 + ' 次生成');
-  one('**挑战档难度开关下限**（有效空槽 − 颜色数 ≥ −4；V6.3 极限档定盘在 eff=−4（V6.2.5 已全量验证可解）；−5 才彻底没退路）',
+  one('**挑战档难度开关下限**（有效空槽 - 颜色数 >= -5）—— V6.3.1 把普通档恢复成' +
+    '「色>=9 收3槽」后极限档落到 eff=-5；bot 全量实测 90/90 全通关（每关第 1 次布局即过），' +
+    '故 -5 已不是必输区（旧口径「-5 才彻底没退路」出自 V6.2.x 三档期，已被本次实测覆盖）',
     v2.tierFloor);
   console.log('  （两档「有效空槽 − 颜色数」分布：普通 ' + JSON.stringify(effTier[0]) +
     ' ｜极限 ' + JSON.stringify(effTier[1]) + '）');
@@ -889,8 +891,8 @@ guard(rep, '设计', function () {
 
   /* ② 普通档台面槽 == max(5, 颜色 − (色≥7?2:0))（V6.3：色≥7 收2槽 eff=−3 / <7 不收 eff=−1）
      + 极限档恰好再 −1（max(5, 颜色 − (色≥7?3:1))），后期门槛封顶仍由槽位差保证两档不撞。 */
-  const wantNormal = c => Math.max(5, c - (c >= 7 ? 2 : 0));
-  const wantExtreme = c => Math.max(5, c - (c >= 7 ? 3 : 1));
+  const wantNormal = c => Math.max(5, c - (c >= 9 ? 3 : (c >= 7 ? 2 : 0)));
+  const wantExtreme = c => Math.max(5, c - (c >= 9 ? 4 : (c >= 7 ? 3 : 1)));
   for (let lv = 1; lv <= LVMAX; lv++) {
     const p0 = pl0[lv - 1], p1 = pl1[lv - 1];
     if (p0.colors >= 5 && p0.slots !== wantNormal(p0.colors))

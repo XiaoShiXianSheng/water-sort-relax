@@ -159,7 +159,7 @@ function toolX(i){return TOOL_X0+i*(TOOL_W+TOOL_GAP);}
    adUnitId 为空时（尚未在开发者中心开通广告）会自动降级为 TEST，流程绝不被卡死。 */
 
 var CFG={
-  version:'6.3.0',                         // 对外版本号：随每条埋点上报，出事时能区分线上跑的是哪一版
+  version:'6.3.1',                         // 对外版本号：随每条埋点上报，出事时能区分线上跑的是哪一版
   maxLevel:90,                             // 关卡总数上限：完整内容就是 90 关；过关推进/选关页数/起点读取都以此为准，杜绝溢出到 91+
   env:'online',                            // 'online'(默认：真机有 tap 就真实拉广告) | 'test'(模拟完成，供开发/自动化测试)
                                            // 自动降级：无 window.tap → test(no-tap-runtime)；无 adUnitId → test(no-ad-unit-id)。
@@ -781,7 +781,7 @@ function levelPlan(lv,tier){
      V6.3 把普通档回调一格：色≥7 收 2 槽（eff=−3），色<7 不收（eff=−1 新手舒适区）。
      普通后期仍有压力（受控实验 −3 ≈ 20~43% 胜率，会自然产生失败/广告），
      又给极限档留出「再紧 1 格到 eff=−4」的可解空间（−4 = V6.2.5 已全量验证的极限难度）。 */
-  var slotBias = (colors>=7) ? -2 : 0;   // 普通档：色≥7 收2槽(eff=−3) / <7 不收(eff=−1)
+  var slotBias = (colors>=9) ? -3 : ((colors>=7) ? -2 : 0);   // 普通档：色≥9 收3槽(eff=−4 = 5可用+1广告位) / 7~8 收2槽(eff=−3) / <7 不收(eff=−1)
   var phase=(lv-1)%5, peak=(phase===4), breathe=(phase===0||phase===1);
   /* 「本阶段第一关」不放水：阶段起点直接吃上一段的终点值。
      不然 L15（峰值，洞4）→ L16（阶段起点 + 放水，洞2）会掉 8 分，

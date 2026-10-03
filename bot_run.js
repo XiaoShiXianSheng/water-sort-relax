@@ -95,6 +95,7 @@ function isStuck(G) {
 const STAT = { revives: 0, restarts: 0 };
 /* 诊断用：机器人走过的动作轨迹（只保留最近 40 步） */
 const LAST = [];
+let REVIVE_STUCK = 0;   // 「点了复活却没生效」的连续次数（触发条件见 botStep 的 fail 分支）
 function dump(level, attempt, end) {
   const G = DBG.G;
   console.log('--- 机器人未通关 L' + level + ' attempt' + attempt + ' 结束原因: ' + end + ' ---');
@@ -112,6 +113,12 @@ function dump(level, attempt, end) {
 }
 function ok_(label) {
   LAST.push(label); if (LAST.length > 40) LAST.shift();
+  /* 死循环哨兵：同一个动作连做 N 次 = 产品在静默拒绝（点了不消耗 / 状态没变），
+     bot 却在原地空转到 guard 跑满 2000 —— 既慢，又把可解关卡误报成「打不通」。
+     与其等 15 分钟，不如 30 次就喊停（V6.3 困难档 L15 就是这么定位出来的）。 */
+  let streak = 1;
+  for (let i = LAST.length - 2; i >= 0 && LAST[i] === label; i--) streak++;
+  if (streak >= 30) { console.error('   ❌ 死循环哨兵：「' + label + '」连续 ' + streak + ' 次'); return false; }
   return true;
 }
 function botStep(G) {
@@ -121,8 +128,17 @@ function botStep(G) {
        所以点下去毫无反应，机器人会一路空转到超时 —— 看起来像「关卡不可解」。） */
   if (G.fail) {
     frames(50);                                   // 面板有 0.6s 缓冲期，不等就会被吞掉点击
-    const revivesLeft = (G.reviveUsed || 0) < DBG.CFG.reviveLimit;
-    if (revivesLeft) { STAT.revives++; click(360, 514); frames(30); return ok_('revive'); }
+    const used = G.reviveUsed || 0;
+    /* ⚠️ 只看 reviveLimit 不够：广告还有 **会话级频控** rewardedSessionCap，
+       触顶后 AdService.showRewarded 直接 return false → 点了复活只弹一条 toast、
+       既不加次数也不清 fail → 机器人会在失败面板里无限点复活直到 guard 跑满。
+       所以「点了之后 reviveUsed 没变」= 这条路已经不通，立刻转重开。 */
+    if (used < DBG.CFG.reviveLimit && REVIVE_STUCK < 3) {
+      STAT.revives++; click(360, 514); frames(30);
+      if (G.fail && (G.reviveUsed || 0) === used) REVIVE_STUCK++; else REVIVE_STUCK = 0;
+      return ok_('revive');
+    }
+    REVIVE_STUCK = 0;
     STAT.restarts++; click(360, 614); frames(30); return ok_('restart');
   }
   const bs = bottoms(G);
@@ -155,13 +171,21 @@ function botStep(G) {
     const ls = G.slots.map((s, i2) => i2).filter(i2 => !G.slots[i2].open);
     if (ls.length) { click(G.slotX[ls[ls.length - 1]], DBG.SLOT_Y - 52); frames(8); return ok_('unlock'); }
   }
-  // ② 万能指：自动把一个能喝到水的瓶子放上台面（最直接解死局的工具）
-  if (G.tools.finger > 0 && G.bottles.some(b => DBG.gridPlayable(b))) {
-    click(toolCX(1), toolCY()); frames(10); return ok_('finger');
-  }
+  /* ② 万能指：自动把一个能喝到水的瓶子放上台面（最直接解死局的工具）。
+     ⚠️ 判据必须与产品 doFinger() **完全一致**（grid && !locked && 管底颜色匹配 && gridPlayable）。
+     旧版只判了 gridPlayable：点了之后会被产品拒绝、道具计数不减 →
+     两条漏判：① 少了产品的前置条件 `freeSlot()>=0`（台面满时直接 return）；
+              ② 少了「管底颜色匹配」——产品要的是「能直接喝到水的瓶子」。 bot 反复空点 finger，直到 guard 跑满 2000，
+     把明明可解的关卡误报成「打不通」（V6.3 困难档资源收紧后才踩到这条路径）。 */
+  const fbottoms = bottoms(G);
+  const fTarget = G.bottles.find(b => b.place === 'grid' && !b.locked
+    && fbottoms.indexOf(b.col) >= 0 && DBG.gridPlayable(b));
+  if (G.tools.finger > 0 && DBG.freeSlot() >= 0 && fTarget) { click(toolCX(1), toolCY()); frames(10); return ok_('finger'); }
   // ③ 魔法清除：把管底那杯倒进台面同色瓶 —— 只有真的存在补偿目标时才点（否则会被拒且白转）
+  /* 判据必须与产品 useClear()+clearJarFor() 一致，多了/少了一个条件都会被产品静默拒绝
+     → 道具计数不减 → bot 反复空点（ומן 这里漏了产品的 `!b.done`）。 */
   const clearOk = G.tubes.some(t => t.units.length &&
-    G.bottles.some(b => b.col === t.units[0] && b.place === 'counter' && b.fill < b.cap));
+    G.bottles.some(b => b.col === t.units[0] && b.place === 'counter' && !b.done && b.fill < b.cap));
   if (G.tools.clear > 0 && clearOk) {
     click(toolCX(0), toolCY()); frames(4);
     const lockedCols = new Set(G.bottles.filter(b => b.locked > 0 && b.place === 'grid').map(b => b.col));
@@ -171,12 +195,16 @@ function botStep(G) {
     click(t.x + G.tubeW / 2, tubeMidY(t)); frames(8); return ok_('clear');
   }
   // ④ 随心互换：换掉卡住的管底
-  if (G.tools.swap > 0) {
-    click(toolCX(2), toolCY()); frames(4);
+  /* ④ 随心互换：换掉卡住的管底。
+     产品的 useSwap(i,j) 要求 **两根管都非空**（`!a.units.length||!b.units.length` 就 return）——
+     旧版找不到匹配管时 fallback 成 ti=0，而 0 号管常常是空管 → 点了不消耗 → 空转。 */
+  const ne = G.tubes.map((t, idx) => idx).filter(i2 => G.tubes[i2].units.length > 0);
+  if (G.tools.swap > 0 && ne.length >= 2) {
     const freeCol = G.bottles.find(b => DBG.gridPlayable(b));
-    let ti = G.tubes.findIndex(t => t.units.length && freeCol && t.units[0] === freeCol.col);
-    if (ti < 0) ti = 0;
-    const other = (ti + 1) % G.tubes.length;
+    let ti = freeCol ? ne.find(i2 => G.tubes[i2].units[0] === freeCol.col) : undefined;
+    if (ti === undefined) ti = ne[0];
+    const other = ne.find(i2 => i2 !== ti);
+    click(toolCX(2), toolCY()); frames(4);
     click(G.tubes[ti].x + G.tubeW / 2, tubeMidY(G.tubes[ti])); frames(4);
     click(G.tubes[other].x + G.tubeW / 2, tubeMidY(G.tubes[other])); frames(8); return ok_('swap');
   }
@@ -200,13 +228,23 @@ function botPlay(level, maxTries) {
        而 flaky 的门禁等于没有门禁 —— 真出问题时反而看不出来。 */
     seedRandom(level * 7919 + attempt * 104729);
     DBG.gen(level, { seed: level * 7919 + attempt * 104729, tier: +(process.env.TIER || 0) }); frames(10); frames(5);
-    STAT.revives = 0; STAT.restarts = 0;
-    let guard = 0, ok = true, end = '';
+    STAT.revives = 0; STAT.restarts = 0; REVIVE_STUCK = 0;
+    let guard = 0, ok = true, end = '', animStreak = 0, animMax = 0;
     while (DBG.G.state !== 'win' && guard++ < 2000) {
-      if (DBG.G.anim) { frames(25); continue; }
+      /* ⚠️ 动画等待**不消耗 guard**（continue 前 guard 已自增，见上行）——
+         一旦动画不结束就是真死循环，全量跑会卡几小时且毫无输出（V6.3 调难度时踩到）。 */
+      if (DBG.G.anim) {
+        animStreak++;
+        if (animStreak > animMax) animMax = animStreak;
+        if (animStreak > 300) { ok = false; end = 'anim 连续 ' + animStreak + ' 轮不结束(=卡死)'; break; }
+        frames(25); continue;
+      }
+      animStreak = 0;
       if (!botStep(DBG.G)) { ok = false; end = 'botStep=false'; break; }
       frames(4);
     }
+    if (animMax > 5 && process.env.ANIM_LOG)
+      process.stderr.write('   [动画] L' + level + ' 单局最长连续动画 ' + animMax + ' 轮\n');
     if (DBG.G.state !== 'win' && process.env.DBG_FAIL) dump(level, attempt + 1, end || ('guard=' + guard));
     frames(60);
     if (ok && DBG.G.state === 'win')
@@ -225,6 +263,7 @@ const TIER = +(process.env.TIER || 0);
 const LVS = ONLY ? ONLY.split(',').map(Number)
   : Array.from({ length: MAXLV }, (_, k) => k + 1);
 let allWin = true, triedTotal = 0, revivedTotal = 0, restartTotal = 0, firstTry = 0;
+const T0 = Date.now();
 for (const lv of LVS) {
   seedRandom(lv * 7919);
   DBG.gen(lv, { seed: lv * 7919, tier: TIER }); frames(6);     // 统计行与 attempt#1 用同一套布局
@@ -236,6 +275,9 @@ for (const lv of LVS) {
   revivedTotal += r.revives; restartTotal += r.restarts;
   if (r.attempt === 1 && r.revives === 0 && r.restarts === 0) firstTry++;
   const lvLabel = (TIER > 0 ? ('T' + TIER + '·') : '') + lv;
+  /* 进度输出：全量跑动辄半小时，没有进度就无法判断「还在跑」还是「卡在某关」 */
+  process.stderr.write('[' + lvLabel + '] ' + (r.win ? '通关' : '未通过')
+    + ' 尝试' + r.attempt + ' 步' + r.steps + ' 用时' + ((Date.now() - T0) / 1000).toFixed(0) + 's\n');
   out.push(lvLabel.padStart(7) + ' |' + String(cells).padStart(5) + ' |' + String(bots).padStart(5) + ' |'
     + String(gates).padStart(5) + ' |' + (r.win ? ' 通关 ' : ' 未通过') + ' | '
     + String(r.steps).padStart(5) + ' | ' + String(r.attempt).padStart(3) + ' | '
@@ -246,4 +288,5 @@ out.push('关卡数 ' + LVS.length + '　总尝试 ' + triedTotal + '　复活 '
 out.push('一次到位（第 1 次尝试、且没用复活/重开）的关卡：' + firstTry + ' / ' + LVS.length);
 out.push('固定种子（可复现，不是随机抽奖）');
 out.push(allWin ? '=== 全部通关（尝试次数上限 ' + TRIES + '）===' : '=== 有关卡未通过，需要排查 ===');
-fs.writeFileSync(path.join(__dirname, '_bot.txt'), out.join('\n'));
+const OUT = process.env.OUT || '_bot.txt';
+fs.writeFileSync(path.join(__dirname, OUT), out.join('\n'));
