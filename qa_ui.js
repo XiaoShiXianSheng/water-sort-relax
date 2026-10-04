@@ -1016,6 +1016,92 @@ guard(rep, 'B 组真 bug', function () {
       G.toast && G.toast.msg);
   }
 
+  /* ---- B5：广告补次端到端（UI 层）—— 玩家亲手要验的那条链路 ----
+     此前 qa_ui 只在 AdService 层验过 showRewarded，从没验过
+     「点底部道具按钮 → 道具用光 → 再点 → 广告流程 → 次数 +1」这条 UI 链路。
+     V6.4.1 补上：三个道具各一条，外加 ?sdk=real 无 tap 时必须**不发奖**（堵假绿）。
+     ⚠ 摆局面到点击之间**不能走帧**（走帧台面瓶会把管底那口喝掉 → 底色一换清除就被拒），
+       这与 qa_ui 13 号清除用例是同一个约定。 */
+  function refillChain(id) {
+    const g = fresh(); const D = g.DBG; const G = enter(g);
+    const idx = D.consts().TOOL_IDS.indexOf(id);
+    const tc = toolCenter(D, idx);
+    /* 摆出「这个道具现在能真的用掉」的局面：
+       clear 需要台面上有个在接管底同色的瓶子；swap 只要两根非空管；finger 点一下就消耗。 */
+    if (id === 'clear') {
+      G.slots.forEach(s => { s.open = true; });
+      const col = G.tubes[0].units[0];
+      const jar = G.bottles.filter(b => b.col === col && !b.done)[0];
+      if (jar) { jar.place = 'counter'; jar.slot = 0; jar.fill = 0; }
+    }
+    const a = G.tools[id];
+    g.viewClick(tc.x, tc.y);
+    if (id === 'clear') {
+      const tm = tubeMid(D, G.tubes[0]);
+      g.viewClick(tm.x, tm.y);
+    } else if (id === 'swap') {
+      const n2 = G.tubes.length;
+      const p1 = tubeMid(D, G.tubes[0]), p2 = tubeMid(D, G.tubes[n2 > 1 ? 1 : 0]);
+      g.viewClick(p1.x, p1.y);
+      g.viewClick(p2.x, p2.y);
+    }
+    const b = G.tools[id];
+    D.Track.reset();
+    g.viewClick(tc.x, tc.y);                       // 用光后再点 → refillTool → 广告
+    const c = G.tools[id];
+    return { a: a, b: b, c: c, seq: D.Track.buf.map(e => e.e) };
+  }
+  {
+    const f = refillChain('finger');
+    rep.ok('E2E①万能指：点底部按钮把次数用光（1→0），再点一次走广告流程，次数回到 1',
+      f.a === 1 && f.b === 0 && f.c === 1,
+      'tools.finger ' + f.a + '→' + f.b + '→' + f.c);
+    rep.ok('E2E①b万能指广告链路埋点：ad_show 之后必须 reward_granted（没发奖就是卡住了）',
+      f.seq.indexOf('ad_show') >= 0 && f.seq.indexOf('reward_granted') >= 0,
+      f.seq.join(' → '));
+  }
+  {
+    const c = refillChain('clear');
+    rep.ok('E2E②魔法清除：点底部按钮把次数用光（1→0），再点一次走广告流程，次数回到 1',
+      c.a === 1 && c.b === 0 && c.c === 1,
+      'tools.clear ' + c.a + '→' + c.b + '→' + c.c);
+    rep.ok('E2E②b魔法清除广告链路埋点完整（ad_request → ad_show → reward_granted）',
+      c.seq.indexOf('ad_request') >= 0 && c.seq.indexOf('ad_show') >= 0 && c.seq.indexOf('reward_granted') >= 0,
+      c.seq.join(' → '));
+  }
+  {
+    const w = refillChain('swap');
+    rep.ok('E2E③随心互换：点底部按钮把次数用光（1→0），再点一次走广告流程，次数回到 1',
+      w.a === 1 && w.b === 0 && w.c === 1,
+      'tools.swap ' + w.a + '→' + w.b + '→' + w.c);
+    rep.ok('E2E③b随心互换广告链路埋点完整（ad_request → ad_show → reward_granted）',
+      w.seq.indexOf('ad_request') >= 0 && w.seq.indexOf('ad_show') >= 0 && w.seq.indexOf('reward_granted') >= 0,
+      w.seq.join(' → '));
+  }
+  /* ?sdk=real 且运行时没有 window.tap：必须**明确降级**且**不记 reward_granted**（堵假绿）。
+     注意：这里只断言「广告 Reward 账」不发奖（ad_no_real_sdk + 无 reward_granted）；
+     道具仍会经 adFailFallback:"free" 白送 +1，那是产品既定的兜底策略，不是广告发奖，
+     另有单独一条观测（见报告）。 */
+  {
+    const g = fresh('?sdk=real'); const D = g.DBG; const G = enter(g);
+    const idx = D.consts().TOOL_IDS.indexOf('finger');
+    const tc = toolCenter(D, idx);
+    const a = G.tools.finger;
+    g.viewClick(tc.x, tc.y);
+    const b = G.tools.finger;
+    D.Track.reset();
+    g.viewClick(tc.x, tc.y);
+    const seq = D.Track.buf.map(e => e.e);
+    const reason = D.AdService.degradeReason;
+    rep.ok('E2E④?sdk=real 无 tap：必须报 ad_no_real_sdk 且**不发广告奖**（reward_granted 计数为 0）',
+      !!reason && seq.indexOf('ad_no_real_sdk') >= 0 && seq.indexOf('reward_granted') < 0
+      && D.AdService.stats.rewarded === 0,
+      'degradeReason="' + reason + '"；埋点 ' + seq.join(' → ') + '；stats.rewarded=' + D.AdService.stats.rewarded);
+    rep.ok('E2E④b?sdk=real 无 tap：道具次数**不应**因广告回补（广告没真加载，就不该记成广告收益）',
+      b === 0,
+      'tools.finger ' + a + '→' + b + '（再点后应仍为 0；若 +1 说明走的是 fallback 白送而非广告发奖）');
+  }
+
   /* ---- B4：每日挑战中途点 HUD「重开」不能被静默降级 ---- */
   {
     const g = fresh(); const D = g.DBG; const G = enter(g);

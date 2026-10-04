@@ -86,7 +86,10 @@ function zipEntry(buf, wantName) {
   while (!found && (i = buf.indexOf(PK_CD, i)) >= 0) {
     const nlen = buf.readUInt16LE(i + 28), elen = buf.readUInt16LE(i + 30), clen = buf.readUInt16LE(i + 32);
     const name = buf.slice(i + 46, i + 46 + nlen).toString('utf8');
-    if (name === wantName) {
+    /* 条目名按「路径末段」匹配：pack_zip.js 写的是 'game/index.html'，
+       按全等找 'index.html' 会一条都读不到 → 落进 zipSkip → zipBad 恒为空 → 假 PASS。
+       上传包版本漂移是零收益级故障（旧包没广告位 ID），这条门禁不能空转。 */
+    if (name === wantName || name.split('/').pop() === wantName) {
       found = { method: buf.readUInt16LE(i + 10), csize: buf.readUInt32LE(i + 20), lho: buf.readUInt32LE(i + 42) };
     }
     i += 46 + nlen + elen + clen;
