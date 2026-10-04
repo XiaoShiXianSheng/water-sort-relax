@@ -791,7 +791,7 @@ var G={
   tubeW:92, tubeGap:32, slotStep:112, jw:76, jh:86, trayRx:50,
   undoLeft:5, unlockLeft:1,
   tools:{clear:1,finger:1,swap:1},
-  mode:null, swapFirst:-1,   // null|'clear'|'swap'
+  mode:null, swapFirst:-1, swapFirstL:-1,   // null|'clear'|'swap'
   clears:0, anim:null, history:[],
   toast:null, t:0, hint:false, stuck:false,
   lastPour:null,   // 上一次接水的瓶子：水管终点跟随它，而不是「数组里第一个台面瓶」（否则多瓶在台面时水管指错瓶）
@@ -1026,7 +1026,7 @@ function genLevel(lv,opts){
   try{
   /* 上一局没打完就离开 → 记一次 level_exit（用来回答「玩家在哪一关流失」） */
   if(G.state==='play'&&!G.winStats)Track.log('level_exit',{moves:G.moves,tools:G.toolsUsed,tier:G.tier});
-  G.level=lv; G.anim=null; G.history=[]; G.mode=null; G.swapFirst=-1;
+  G.level=lv; G.anim=null; G.history=[]; G.mode=null; G.swapFirst=-1; G.swapFirstL=-1;
   G.undoLeft=5; G.unlockLeft=1; G.tools={clear:1,finger:1,swap:1};
   /* V6.4.1 道具额度按环境口径**叠加**（不是替换上面那行）：
      strict(默认 / ?env=online) → 上面这行原样，与线上完全一致；
@@ -1599,16 +1599,18 @@ function useClear(tubeIdx){
   if(tgt.fill>=tgt.cap)completeJar(tgt);
   else toast('清掉管底 1 杯【'+colName(col)+'】，倒进了台面的'+colName(col)+'瓶，这根管就露出下一层');
 }
-function useSwap(i,j){
+function useSwap(i,j){ useSwapLayer(i,0,j,0); }
+function useSwapLayer(i,li,j,lj){
+  if(i===j&&li===lj){toast('同一格不用换');SFX.no();return;}
   var a=G.tubes[i],b=G.tubes[j];
-  if(!a.units.length||!b.units.length){toast('空管没法换：挑两根都有水的');SFX.no();return;}
+  if(!a.units.length||!b.units.length){toast('这两格得都有水才能换');SFX.no();return;}
+  if(li>=a.units.length||lj>=b.units.length){toast('最上面那一格没有水了，换下面还有水的');SFX.no();return;}
   snapshot();
-  var _s1=a.units[0],_s2=b.units[0],tmp=a.units[0];a.units[0]=b.units[0];b.units[0]=tmp;
+  var _s1=a.units[li],_s2=b.units[lj]; a.units[li]=_s2; b.units[lj]=_s1;
   a.drop=1;b.drop=1;
-  G.tools.swap--; G.mode=null; G.swapFirst=-1; SFX.magic();
-  toast('互换：白框这格【'+colName(_s1)+'】↔ 那格【'+colName(_s2)+'】，换完水就能接了');
-  G.moves++; G.toolsUsed++; Track.log('tool_use',{tool:'swap',env:AdService.env,mode:CFG.toolMode});
-}
+  G.tools.swap--; G.mode=null; G.swapFirst=-1; G.swapFirstL=-1; SFX.magic();
+  toast(i===j ? ('互换：这根管把【'+colName(_s1)+'】换到了管底，现在能接【'+colName(a.units[0])+'】') : ('互换：【'+colName(_s1)+'】↔【'+colName(_s2)+'】换了位置'));
+  G.moves++; G.toolsUsed++; Track.log('tool_use',{tool:'swap',env:AdService.env,mode:CFG.toolMode}); }
 /* ---- 隐藏选关（测试用）--------------------------------------------------
    入口：左上角「关卡 N」在 2.5 秒内连点 5 次。给测试/评审用，正式玩家基本碰不到。
    每页 30 关（5 列 × 6 行），共 3 页，够测到第 90 关。 */
@@ -2067,6 +2069,12 @@ function tubeAt(vx,vy){
   }
   return -1;
 }
+function unitAt(vx,vy){
+  var t0=tubeAt(vx,vy); if(t0<0)return null;
+  var t=G.tubes[t0],UH=G.uh||36,by=BOTT_Y-14;
+  for(var i=0;i<t.units.length;i++){ var yTop=by-(i+1)*UH, yBot=by-i*UH; if(vy>=yTop&&vy<=yBot)return{t:t0,l:i}; }
+  return{t:t0,l:0};
+}
 function bottleAtGrid(vx,vy){
   var best=null,bd=1e9;
   /* 命中盒跟着格子缩：高关卡格子只有 56px（旧版 124），
@@ -2212,7 +2220,7 @@ function handleTap(cx,cy){
       var hasJar=false;
       for(var hj=0;hj<G.bottles.length;hj++)if(G.bottles[hj].place==='counter')hasJar=true;
       if(hasJar&&G.undoLeft>0){
-        G.mode='return';G.swapFirst=-1;toast('点台面上的瓶子，把它放回格子');SFX.tap();
+        G.mode='return';G.swapFirst=-1;G.swapFirstL=-1;toast('点台面上的瓶子，把它放回格子');SFX.tap();
       }else if(G.undoLeft<=0){
         refillUndo();                                  // 撤销用尽 → 看广告补 1 次（非强制）
       }else{
@@ -2222,13 +2230,13 @@ function handleTap(cx,cy){
     }
     if(G.tools[id]<=0){ refillTool(id); return; }      // 道具用完 → 看广告补 1 次（非强制）
     if(id==='clear'){
-      if(G.mode==='clear'){G.mode=null;G.swapFirst=-1;toast('');SFX.tap();return;}
+      if(G.mode==='clear'){G.mode=null;G.swapFirst=-1;G.swapFirstL=-1;toast('');SFX.tap();return;}
       if(G.tools.clear<=0){refillTool(id);return;}
-      G.mode='clear';G.swapFirst=-1;
+      G.mode='clear';G.swapFirst=-1;G.swapFirstL=-1;
       toast(clearTargetExists()?'点上面那排【绿框】的水管':'先放一个瓶子上台面接水，管底的水才有地方倒');
       SFX.tap();return;
     }
-    else if(id==='swap'){G.mode=(G.mode==='swap')?null:'swap';G.swapFirst=-1;toast(G.mode?'依次点两根【白框】那格的水管':'');SFX.tap();}
+    else if(id==='swap'){G.mode=(G.mode==='swap')?null:'swap';G.swapFirst=-1;G.swapFirstL=-1;toast(G.mode?'依次点两格水（同一根管也行），这两格换位置':'');SFX.tap();}
     else useFinger();
     return;
   }
@@ -2251,11 +2259,11 @@ function handleTap(cx,cy){
   if(unlockBadgeAt(v)){unlockSlot();return;}
   // 交换模式：选管
   if(G.mode==='swap'){
-    var ti=tubeAt(vx,vy);
-    if(ti>=0){
-      if(G.swapFirst<0){G.swapFirst=ti;SFX.tap();toast('再点另一根水管');}
-      else if(G.swapFirst!==ti){useSwap(G.swapFirst,ti);}
-      else{G.swapFirst=-1;SFX.tap();}
+    var hit=unitAt(vx,vy);
+    if(hit){
+      if(G.swapFirst<0){G.swapFirst=hit.t;G.swapFirstL=hit.l;SFX.tap();toast('再点一格水：这两格换位置（同一根管的上、下两层也行）');}
+      else if(G.swapFirst===hit.t&&G.swapFirstL===hit.l){G.swapFirst=-1;G.swapFirstL=-1;SFX.tap();}
+      else{useSwapLayer(G.swapFirst,G.swapFirstL,hit.t,hit.l);}
       return;
     }
   }
@@ -2280,7 +2288,7 @@ function handleTap(cx,cy){
     startPlace(gb);return;
   }
   // 空点取消模式
-  if(G.mode){G.mode=null;G.swapFirst=-1;}
+  if(G.mode){G.mode=null;G.swapFirst=-1;G.swapFirstL=-1;}
 }
 
 /* ================= 门洞 / 冰冻瓶 规则 ================= */
@@ -2457,6 +2465,7 @@ function drawTube(t,idx,time){
   var drinkF=(G.anim&&G.anim.type==='drink'&&G.anim.tube===idx)?(G.anim.t/G.anim.dur):0;
   for(var i=0;i<nU;i++){
     var col=COLORS[t.units[i]];
+    if(G.mode==='swap'&&idx===G.swapFirst&&i===G.swapFirstL){ ctx.save();ctx.strokeStyle='#ffe066';ctx.lineWidth=3;rr(ctx,x+2,by-(i+1)*UH+dropOff+1,G.tubeW-4,UH-2,8);ctx.stroke();ctx.restore(); }
     var yTop=by-(i+1)*UH+dropOff;
     var hh=UH;
     if(i===0&&drinkF>0){hh=UH*(1-drinkF);yTop=by-hh;}
@@ -3232,7 +3241,7 @@ function hintTap(vx,vy){
 function hintAction(id){
   G.hint=false; G.hintHold=0;
   if(id==='undo'){ doUndo(); return; }
-  if(id==='swap'){ G.mode='swap'; G.swapFirst=-1; toast('依次点两根【白框】那格的水管'); SFX.magic(); return; }
+  if(id==='swap'){ G.mode='swap'; G.swapFirst=-1; G.swapFirstL=-1; toast('依次点两格水（同一根管也行），这两格换位置'); SFX.magic(); return; }
   if(id==='clear'){ G.mode='clear'; G.swapFirst=-1; toast('点一根水管：清掉白框那杯，倒进台面同色的瓶'); SFX.magic(); return; }
   if(id==='unlock'){ unlockSlot(); return; }
   if(id==='restart'){ genLevel(G.level,{restart:1}); SFX.tap(); return; }
