@@ -641,16 +641,16 @@ const CASES = [
        真实后果与 env='test' 那次一模一样：真机静默降级成模拟广告，零收益且不报错。 */
     name: '门禁 G11：出厂激励视频 adUnitId 被清空（真机静默降级成模拟广告 = 零收益且不报错）',
     suite: 'qa_gate.js', expect: /仍是占位符/,
-    find: "adUnit:{rewarded:'1067564',interstitial:'1067565'},",
-    repl: "adUnit:{rewarded:'',interstitial:'1067565'},   /* rollback-test: 清空一个 ID */"
+    find: "adUnit:{rewarded:'1068017',interstitial:'1068090'},",
+    repl: "adUnit:{rewarded:'',interstitial:'1068090'},   /* rollback-test: 清空一个 ID */"
   },
   {
     /* 同一条门禁的第二种形态：配置**还在**、只是被注释掉了。
        如果 G11 只在原始文本上 grep，注释掉的配置照样能骗过它 —— 所以实现里先 stripLits。 */
     name: '门禁 G11：adUnit 配置被整行注释掉（raw 文本里 grep 得到，剥掉注释后其实没生效）',
     suite: 'qa_gate.js', expect: /剥掉注释后扫不到/,
-    find: "adUnit:{rewarded:'1067564',interstitial:'1067565'},",
-    repl: "// adUnit:{rewarded:'1067564',interstitial:'1067565'},   /* rollback-test: 注释掉配置 */"
+    find: "adUnit:{rewarded:'1068017',interstitial:'1068090'},",
+    repl: "// adUnit:{rewarded:'1068017',interstitial:'1068090'},   /* rollback-test: 注释掉配置 */"
   },
   {
     /* 门禁 G6b 的独立效力：把「第 41 关之后生成出来的状态」改脏。

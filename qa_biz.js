@@ -477,7 +477,7 @@ guard(rep, '广告-正式位落位', function () {
   installTap({});
   g = boot(6);
   const A = g.DBG.AdService, C = g.DBG.CFG, T = g.DBG.Track;
-  C.adUnit.rewarded = '1067564';
+  C.adUnit.rewarded = '1068017';
   A.setEnv('online'); A.resetSession(); T.reset();
   rep.ok('正式位 + 有 SDK 时真的进入 online（没被静默降级）',
     A.env === 'online', '实际 ' + A.env + ' / degrade=' + (A.degradeReason || '无'));

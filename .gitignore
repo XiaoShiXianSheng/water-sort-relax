@@ -40,3 +40,5 @@ _*.json
 # 浏览器 profile（含 SSP/登录 token）绝不能进仓库
 _cprof2/
 _cprof*/
+!_verify_clear.js
+!_verify_swap.js

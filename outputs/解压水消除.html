@@ -75,7 +75,7 @@ var COLORS=['#ff5d6c','#3f8cff','#3ec46d','#ffb648','#9b6bf5','#ff85c2',
             '#29c7d6','#c6d92e','#ff7a1a','#8b5e3c','#00a0a0','#b0308f',
             '#f2e34c','#2b2b33','#ffffff','#7a1f1f','#0d2b6b',
             '#7f8c99','#4b2e83','#1f9d55'];
-/* V6.4.3 颜色中文名（供道具提示文案用）：只报色号玩家看不懂，必须说人话。 */
+/* V6.4.4 颜色中文名（供道具提示文案用）：只报色号玩家看不懂，必须说人话。 */
 var COLNAMES=['红','蓝','绿','橙','紫','粉','青','黄','橘棕','棕','墨绿','玫红','浅黄','黑','白','暗红','藏青','灰蓝','深紫','深绿'];
 function colName(c){try{return COLNAMES[c]||('第'+(c+1)+'色');}catch(e){return '这';}}
 /* 颜色集选取（V6.2.4）：从 L10 起强制黑(#2b2b33,13)+白(#ffffff,14)必在，其余从调色板前段补足；
@@ -162,12 +162,15 @@ function toolX(i){return TOOL_X0+i*(TOOL_W+TOOL_GAP);}
    adUnitId 为空时（尚未在开发者中心开通广告）会自动降级为 TEST，流程绝不被卡死。 */
 
 var CFG={
-  version:'6.4.2',                         // 对外版本号：随每条埋点上报，出事时能区分线上跑的是哪一版
+  version:'6.4.5',                         // 对外版本号：随每条埋点上报，出事时能区分线上跑的是哪一版
   maxLevel:90,                             // 关卡总数上限：完整内容就是 90 关；过关推进/选关页数/起点读取都以此为准，杜绝溢出到 91+
   env:'online',                            // 'online'(正式通道：真机有 tap 就真实拉广告) | 'test'(模拟完成) —— 另见 mockSdk 的第三态
                                            // 自动降级：无 window.tap → test(no-tap-runtime)；无 adUnitId → test(no-ad-unit-id)。
                                            // 所以本地浏览器/Node 测试环境永远是 test，真机永远走 online，不需要手动改代码。
-  adUnit:{rewarded:'1067564',interstitial:'1067565'},  // 广告位ID：在 Dirichlet 媒体平台 ssp.dirichlet.cn 创建（2026-09-29）；留空则自动降级 TEST
+  adUnit:{rewarded:'1068017',interstitial:'1068090'},  // 广告位ID：在 Dirichlet 媒体平台 ssp.dirichlet.cn 创建；留空则自动降级 TEST
+                                           // ★ V6.4.5：两条位都从【测试媒体 1110240】迁到【正式媒体 1110498】(MEDIA_TYPE_FORMAL)。
+                                           //   1068017 = 正式媒体下的激励视频(SCENE_TYPE_REWARD)；1068090 = 正式媒体下的插屏(SCENE_TYPE_INSERT)。
+                                           //   旧位 1067564/1067565 挂在测试媒体下 → 只有白名单设备能拉到广告，真机收益恒为 0。
   /* ★ adUnitIsTest —— 这一行决定「有没有真钱进账」，改它之前先读完这段。
      Dirichlet 后台的推广位有「测试 / 正式」两种属性，区别不是名字，是**谁能看到广告**：
        · 属性=测试 → 只有你在后台【测试工具】里加过的白名单设备能拉到广告，
@@ -180,7 +183,7 @@ var CFG={
      ⚠️ 它只影响埋点与调试面板的 src 字段，**不改变任何降级逻辑** ——
         拉不拉得到广告永远由后台推广位属性决定，代码改不出钱来。 */
   adUnitIsTest:false,
-  /* V6.4.3 契约 mock SDK 开关：测试环境要不要「模拟线上正式通道」。(默认 false，只由 ?mock=1 或面板第三格打开)
+  /* V6.4.4 契约 mock SDK 开关：测试环境要不要「模拟线上正式通道」。(默认 false，只由 ?mock=1 或面板第三格打开)
      ★ 为什么必须有（2026-10-04 用户拍的）：以前 AdService.init() 里「没 window.tap 就一刀切打回 test」，
        导致任何非 TapTap 容器环境（浏览器/微信/测试机）点 ONLINE 都被弹回 TEST ——
        正式分支的代码（adUnitId 取值 / 会话上限 / 冷却 / isEnded 判定 / 发奖 / 平台选位）**永远跑不到**，
@@ -253,10 +256,10 @@ try{
      打开后：有 window.tap → 走真实 SDK 全链路；没有 tap → **明确报 no-real-runtime 且拒绝发奖**，
      绝不走模拟发奖。这样真机验收时「没弹出来」和「弹出来了」在埋点里一眼可分，不会出现假绿。 */
   CFG.forceRealSdk=/(?:^[?&])sdk=real/.test(_q);
-  /* V6.4.3 ?mock=1 / ?sdk=mock：开契约 mock SDK，直接进 ONLINE 正式通道。
+  /* V6.4.4 ?mock=1 / ?sdk=mock：开契约 mock SDK，直接进 ONLINE 正式通道。
      只在 URL 显式开，绝不自测生效 —— 普通玩家 / 审核员不可能误触。 */
   if(/[?&](?:mock|sdk)=mock/.test(_q)){ CFG.mockSdk=true; CFG.env='online'; }
-  /* V6.4.3 ?dump=1：把埋点缓冲以纯文本铺在页面上，真机截图/复制回传，解决「线上跑出来的问题我看不见」。 */
+  /* V6.4.4 ?dump=1：把埋点缓冲以纯文本铺在页面上，真机截图/复制回传，解决「线上跑出来的问题我看不见」。 */
   if(/[?&]dump=1/.test(_q))CFG.dumpTrack=true;
   /* 道具额度环境口径：?env=test 或 ?tools=loose → 宽松；其余一律 strict（与线上同口径） */
   if(/[?&](ad|env)=test/.test(_q)||/[?&]tools=loose/.test(_q))CFG.toolMode='loose';
@@ -452,7 +455,7 @@ var Track={
       return ev;
     }catch(e){ return null; }                           // 埋点永远是"尽力而为"
   },
-  /* V6.4.3 ?dump=1：把本地埋点缓冲以纯文本渲染在页面上，可框选复制 / 截图回传。
+  /* V6.4.4 ?dump=1：把本地埋点缓冲以纯文本渲染在页面上，可框选复制 / 截图回传。
      这是「真机跑出来的问题我看不见」的最小解法 —— 不依赖 trackUrl，离线也能用。 */
   dump:function(){
     try{
@@ -503,7 +506,7 @@ var AdService={
   env:'test', inited:false, degradeReason:'', forceRealSdk:false,
   session:{rewarded:0,inter:0,lastInter:-99999,wins:0},
   stats:{request:0,loadFail:0,show:0,complete:0,cancel:0,rewarded:0,dupBlocked:0,capBlocked:0,coolBlocked:0,fallback:0},
-  /* V6.4.3 契约 mock SDK：方法签名与 window.tap 对齐（adUnitId 入参、show/load 返回 Promise-like、
+  /* V6.4.4 契约 mock SDK：方法签名与 window.tap 对齐（adUnitId 入参、show/load 返回 Promise-like、
      onLoad/onError/onClose 回调），onClose 以 isEnded:true 回调 —— 模拟「看完了」再加奖。
      它存在的唯一目的：让测试环境把正式分支整条跑通，而不是只把埋点字符串改一改（那是假绿）。
      calls 记下每次真实构造的 adUnitId，验收时一眼能看到「正式通道到底取到了哪个位」。 */
@@ -535,25 +538,25 @@ var AdService={
      有了这个字段，真机埋点里一眼就能区分「没拉到广告」和「拉的是测试位所以不计费」。 */
   adUnitSrc:'test-unit',
   now:function(){ return nowSec(); },
-  /* V6.4.3 tap 来源：开了 mock 通道就用契约 mock，否则用真运行时。
+  /* V6.4.4 tap 来源：开了 mock 通道就用契约 mock，否则用真运行时。
      这一层就是「测试环境能模拟线上环境」的全部机关 —— 下面 _tapRewarded/_tapInterstitial 只认 tapSrc()。 */
   tapSrc:function(){ try{ return AdService.mockSdk?AdService.mock:(window.tap||null); }catch(e){ return null; } },
   hasTap:function(){ try{ var _s=AdService.tapSrc(); return !!(_s&&_s.createRewardedVideoAd); }catch(e){ return false; } },
-  /* V6.4.3 修复：srcOf() 统一回答「当前挂的是正式位还是测试位」。
+  /* V6.4.4 修复：srcOf() 统一回答「当前挂的是正式位还是测试位」。
      旧写法拿 CFG.adUnitIsTest 当依据，而那个值在启动时就定死了、切档从不更新 →
      真机切到 TEST 后埋点仍报 formal-unit，验收会被彻底误导。 */
   srcOf:function(){ try{ return (AdService.mockSdk||AdService.env==='online')?'formal-unit':'test-unit'; }catch(e){ return 'test-unit'; } },
   init:function(){
-    /* ★ V6.4.3 修复：CFG.mockSdk -> AdService.mockSdk 这一步旧代码漏了，
+    /* ★ V6.4.4 修复：CFG.mockSdk -> AdService.mockSdk 这一步旧代码漏了，
        导致 ?sdk=mock 与面板「ONLINE 模拟SDK」两处的开关设了却传不到 tapSrc()，
        于是 mock SDK 永远不生效，两格都会掉回 TEST。 */
     AdService.mockSdk=!!CFG.mockSdk;
     AdService.env=CFG.env;
     AdService.degradeReason='';
     AdService.forceRealSdk=!!CFG.forceRealSdk;
-    /* V6.4.3 修复：原先这行排在降级判定【之前】，于是「切 ONLINE 却没运行时被踢回 TEST」时
+    /* V6.4.4 修复：原先这行排在降级判定【之前】，于是「切 ONLINE 却没运行时被踢回 TEST」时
        src 还停在 formal-unit，面板写 TEST、埋点写正式位，自相矛盾 → 移到下面降级之后重算。 */
-    /* ★ V6.4.3：这里不再是「没 tap 就一刀切打回 test」—— tap 来源经 tapSrc() 可能是契约 mock，
+    /* ★ V6.4.4：这里不再是「没 tap 就一刀切打回 test」—— tap 来源经 tapSrc() 可能是契约 mock，
        于是正式分支在无真机环境下也能完整跑一遍，上线前就能把正式通道的 bug 捞出来。 */
     if(AdService.env==='online'){
       if(!AdService.hasTap()){ AdService.env='test'; AdService.degradeReason='no-tap-runtime'; }
@@ -570,7 +573,7 @@ var AdService={
       unit:CFG.adUnitFor('rewarded')});
     return AdService.env;
   },
-  /* V6.4.3 三态：test(模拟看完，不碰SDK) / online(真实SDK) / mock(契约mock SDK，走完整正式通道)。
+  /* V6.4.4 三态：test(模拟看完，不碰SDK) / online(真实SDK) / mock(契约mock SDK，走完整正式通道)。
      ★ mock 是给**测试/评审环境**用的：上线前把正式通道整条跑一遍，别等线上才炸。
      切回 test 或真实 online 时顺手把 mock 关掉，防止 mock 通道被留在开着的状态带进线上。 */
   setEnv:function(e){
@@ -1599,6 +1602,29 @@ function useClear(tubeIdx){
   if(tgt.fill>=tgt.cap)completeJar(tgt);
   else toast('清掉管底 1 杯【'+colName(col)+'】，倒进了台面的'+colName(col)+'瓶，这根管就露出下一层');
 }
+function useClearAll(b){
+  if(!b||b.place!=='counter'||b.done){toast('要点台面上正在接水的瓶子');SFX.no();return;}
+  var col=b.col, room=b.cap-b.fill;                       // 这个瓶还能装几杯
+  if(room<=0){toast('这个瓶已经装满了');SFX.no();return;}
+  var pre=0;                                              // 先预演一遍：够不够吸，不够就别扣道具
+  for(var pt=0;pt<G.tubes.length;pt++){ var pu=G.tubes[pt].units; for(var pi=0;pi<pu.length;pi++) if(pu[pi]===col)pre++; }
+  if(pre<=0){toast('水管里已经没有【'+colName(col)+'】了');SFX.no();return;}
+  snapshot();
+  var got=0;
+  for(var t=0;t<G.tubes.length&&got<room;t++){
+    var u=G.tubes[t].units;
+    for(var i=0;i<u.length&&got<room;){                   // 从最底层（i=0）开始往上一格格扫
+      if(u[i]===col){
+        var cx=G.tubes[t].x+G.tubeW/2, cy=BOTT_Y-14-(i+0.5)*(G.uh||UH);
+        for(var p=0;p<10;p++)particles.push({x:cx,y:cy,vx:(Math.random()-0.5)*260,vy:(Math.random()-0.8)*260,g:480,life:0.7,age:0,col:COLORS[col],r:2+Math.random()*3});
+        u.splice(i,1); got++; G.tubes[t].drop=1;          // 抽走后上面的水自动下沉，索引不动
+      } else i++;
+    }
+  }
+  b.fill+=got; G.tools.clear--; G.mode=null; G.swapFirst=-1; G.swapFirstL=-1; SFX.magic();
+  if(b.fill>=b.cap){ completeJar(b); toast('魔法清除：全场【'+colName(col)+'】吸了 '+got+' 杯，'+colName(col)+'瓶装满飞走，空出一个台面槽'); }
+  else toast('魔法清除：全场【'+colName(col)+'】吸了 '+got+' 杯（'+b.fill+'/'+b.cap+'），压在上面的那几杯也一起抽走了');
+  G.moves++; G.toolsUsed++; Track.log('tool_use',{tool:'clear_all',env:AdService.env,mode:CFG.toolMode}); }
 function useSwap(i,j){ useSwapLayer(i,0,j,0); }
 function useSwapLayer(i,li,j,lj){
   if(i===j&&li===lj){toast('同一格不用换');SFX.no();return;}
@@ -1708,7 +1734,7 @@ function drawLvPick(time){
   ctx.fillText(eMock?'当前：ONLINE（模拟 SDK · 正式通道完整跑通，广告素材非真实）'
     :(eOn?'当前：ONLINE（真实 TapTap 广告）'
     :'当前：TEST（模拟看完）'+(AdService.degradeReason?('　·　'+AdService.degradeReason):'')),VW/2,P.ey-12);
-  /* V6.4.3 修复：本环境有没有真实 tap 运行时。
+  /* V6.4.4 修复：本环境有没有真实 tap 运行时。
      浏览器里恒为 false —— 第三格必须画成灰的并写清楚，
      否则用户点了退回 TEST 只会以为「切不了」，实际是物理上没有真实 SDK。 */
   var _noRealTap=!AdService.hasTap();
@@ -2233,7 +2259,7 @@ function handleTap(cx,cy){
       if(G.mode==='clear'){G.mode=null;G.swapFirst=-1;G.swapFirstL=-1;toast('');SFX.tap();return;}
       if(G.tools.clear<=0){refillTool(id);return;}
       G.mode='clear';G.swapFirst=-1;G.swapFirstL=-1;
-      toast(clearTargetExists()?'点上面那排【绿框】的水管':'先放一个瓶子上台面接水，管底的水才有地方倒');
+      toast(clearTargetExists()?'点台面某个颜色的瓶子：把水管里这个颜色全吸过来（点【绿框】水管则只清管底那杯）':'先放一个瓶子上台面接水，管底的水才有地方倒');
       SFX.tap();return;
     }
     else if(id==='swap'){G.mode=(G.mode==='swap')?null:'swap';G.swapFirst=-1;G.swapFirstL=-1;toast(G.mode?'依次点两格水（同一根管也行），这两格换位置':'');SFX.tap();}
@@ -2243,8 +2269,9 @@ function handleTap(cx,cy){
   // 台面上的瓶子：只有先点「撤销」进入退回模式才能拿下来
   var jb=jarAtCounter(vx,vy);
   if(jb){
-    if(G.mode==='clear'||G.mode==='swap'){
-      toast(G.mode==='clear'?'现在要点的是【上面那排水管】，不是瓶子':'现在要点的是【上面那排水管】，再点另一根');
+    if(G.mode==='clear'){useClearAll(jb);return;}
+    if(G.mode==='swap'){
+      toast('现在要点的是【上面那排水管】，再点另一根');
       SFX.no();return;
     }
     if(G.mode==='return'){
@@ -2712,6 +2739,7 @@ function drawFlying(f){
 }
 function drawJarCounter(b,time){
   var x=b.x,y=b.y;
+  if(G.mode==='clear'&&b.place==='counter'&&!b.done&&b.fill<b.cap){ var jw0=G.jw||76, jh0=G.jh||86; ctx.save();ctx.strokeStyle='#3ec46d';ctx.lineWidth=3;rr(ctx,x-6,y-6,jw0+12,jh0+12,10);ctx.stroke();ctx.restore(); }
   /* V6.0：台面瓶子尺寸必须跟着槽间距缩 —— 高关卡台面有 10~17 个槽（槽数与颜色数对齐），
      沿用写死的 jw=76 会让一排瓶子叠成一片。
      处理办法：所有写死的像素偏移统一乘 s2（= jw/76），
@@ -3242,7 +3270,7 @@ function hintAction(id){
   G.hint=false; G.hintHold=0;
   if(id==='undo'){ doUndo(); return; }
   if(id==='swap'){ G.mode='swap'; G.swapFirst=-1; G.swapFirstL=-1; toast('依次点两格水（同一根管也行），这两格换位置'); SFX.magic(); return; }
-  if(id==='clear'){ G.mode='clear'; G.swapFirst=-1; toast('点一根水管：清掉白框那杯，倒进台面同色的瓶'); SFX.magic(); return; }
+  if(id==='clear'){ G.mode='clear'; G.swapFirst=-1; G.swapFirstL=-1; toast('点台面某个颜色的瓶子：把水管里这个颜色全吸过来（点水管则只清管底那杯）'); SFX.magic(); return; }
   if(id==='unlock'){ unlockSlot(); return; }
   if(id==='restart'){ genLevel(G.level,{restart:1}); SFX.tap(); return; }
   SFX.tap();

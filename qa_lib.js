@@ -87,6 +87,7 @@ const INJECT = `window.__DBG={
   useClear:useClear, useSwap:useSwap, thawByNeighbors:thawByNeighbors, snapshot:snapshot,
   /* 2026-10-04 互换改造：任意两格换位 + 层命中，必须能从测试侧调用，否则这条新能力无法被断言 */
   useSwapLayer:useSwapLayer, unitAt:unitAt, tubeAt:tubeAt,
+  useClearAll:useClearAll,
   setView:function(w,h){ cw=w; ch=h; dpr=1;
     scale=Math.min(cw/VW,ch/VH); if(!isFinite(scale)||scale<=0)scale=1;
     offX=(cw-VW*scale)/2; offY=(ch-VH*scale)/2; },
