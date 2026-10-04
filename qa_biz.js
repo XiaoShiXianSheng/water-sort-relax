@@ -423,11 +423,15 @@ guard(rep, '广告入口只有三类', function () {
   let m2;
   while ((m2 = re.exec(html)) !== null) scenes.push(m2[1]);
   const uniq = Array.from(new Set(scenes)).sort();
-  rep.ok('激励广告场景恰好三类：revive（失败复活）/ tool_（道具补次）/ undo（撤销补次）',
-    uniq.join(',') === 'revive,tool_,undo', '实际 [' + uniq.join(',') + ']');
+  /* V6.4.6：新增第 4 类 unlock_slot（看广告解锁台面槽）。
+     旧设计 V4.0 §12 只承认 3 类，是早年针对「点击即奖励的假广告」定的；
+     解锁槽位是真实价值交换（玩家拿一个台面位置换一次观看），不是假广告 → 放开。 */
+  rep.ok('激励广告场景恰好四类：revive / tool_ / undo / unlock_slot（看广告解锁台面槽）',
+    uniq.join(',') === 'revive,tool_,undo,unlock_slot', '实际 [' + uniq.join(',') + ']');
 
   /* ④ 这些入口不许挂广告（多一个就是第四类） */
-  const noAd = ['unlockSlot', 'hintTap', 'goHome', 'startDaily', 'bootSession', 'checkStuck', 'enterFail'];
+  /* V6.4.6：unlockSlot 已从「不许挂广告」名单移除 —— 它现在**就是**第 4 类广告场景（见 ③）。 */
+  const noAd = ['hintTap', 'goHome', 'startDaily', 'bootSession', 'checkStuck', 'enterFail'];
   const dirty = noAd.filter((fn) => {
     const b = bodyOf(fn);
     return b && (b.indexOf('adReward(') >= 0 || b.indexOf('showRewarded(') >= 0 || b.indexOf('showInterstitial(') >= 0);

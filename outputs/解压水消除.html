@@ -162,7 +162,7 @@ function toolX(i){return TOOL_X0+i*(TOOL_W+TOOL_GAP);}
    adUnitId 为空时（尚未在开发者中心开通广告）会自动降级为 TEST，流程绝不被卡死。 */
 
 var CFG={
-  version:'6.4.5',                         // 对外版本号：随每条埋点上报，出事时能区分线上跑的是哪一版
+  version:'6.4.6',                         // 对外版本号：随每条埋点上报，出事时能区分线上跑的是哪一版
   maxLevel:90,                             // 关卡总数上限：完整内容就是 90 关；过关推进/选关页数/起点读取都以此为准，杜绝溢出到 91+
   env:'online',                            // 'online'(正式通道：真机有 tap 就真实拉广告) | 'test'(模拟完成) —— 另见 mockSdk 的第三态
                                            // 自动降级：无 window.tap → test(no-tap-runtime)；无 adUnitId → test(no-ad-unit-id)。
@@ -213,7 +213,8 @@ var CFG={
      所以这里只做**叠加**（R8），不替换原行。 */
   toolMode:'strict',                      // 'strict'(正式额度 1/1/1) | 'loose'(测试额度 9/9/9)
   toolQuota:{strict:{clear:1,finger:1,swap:1,undo:5},loose:{clear:9,finger:9,swap:9,undo:9}},
-  rewardedSessionCap:3,                    // 单会话激励视频上限（初始实验值，不是行业真理）
+  rewardedSessionCap:12,                   // V6.4.6：单会话激励视频上限（原 3，看满就永久哑火 → 变现被自己锁死）
+  adUnlockCap:2,                           // V6.4.6：每关「看广告解锁台面槽」的上限（免费那 1 次不算在内）
   interstitialSessionCap:1,                // 单会话插屏上限
   interstitialCooldown:300,                // 插屏冷却（秒）：官方建议 ≥180s，这里取 300s 更克制
   firstSessionProtection:15,               // 首次体验保护（秒）：进入后这段时间不主动弹插屏
@@ -255,7 +256,9 @@ try{
   /* ★ 强制真 SDK 模式 ?sdk=real —— 把「切正式环境」从改个字符串变成一条可观测、可断言的通路。
      打开后：有 window.tap → 走真实 SDK 全链路；没有 tap → **明确报 no-real-runtime 且拒绝发奖**，
      绝不走模拟发奖。这样真机验收时「没弹出来」和「弹出来了」在埋点里一眼可分，不会出现假绿。 */
-  CFG.forceRealSdk=/(?:^[?&])sdk=real/.test(_q);
+  /* C：旧写法 /(?:^[?&])sdk=real/ 只在 sdk 是第一个参数时才命中（?sdk=real 可以，
+     ?lvl=5&sdk=real 不行）—— 与上面 adunit 的 /[?&]adunit=formal/ 写法对齐。 */
+  CFG.forceRealSdk=/[?&]sdk=real/.test(_q);
   /* V6.4.4 ?mock=1 / ?sdk=mock：开契约 mock SDK，直接进 ONLINE 正式通道。
      只在 URL 显式开，绝不自测生效 —— 普通玩家 / 审核员不可能误触。 */
   if(/[?&](?:mock|sdk)=mock/.test(_q)){ CFG.mockSdk=true; CFG.env='online'; }
@@ -792,7 +795,7 @@ var G={
   gridRows:3, gridCols:3, gridY0:GRID_Y0, tile:100, cellCount:0, uh:36,
   /* V6.0：这些尺寸不再写死，由 layoutAll 按「本关有几根管 / 几个槽」反算 */
   tubeW:92, tubeGap:32, slotStep:112, jw:76, jh:86, trayRx:50,
-  undoLeft:5, unlockLeft:1,
+  undoLeft:5, unlockLeft:1, adUnlockLeft:2,
   tools:{clear:1,finger:1,swap:1},
   mode:null, swapFirst:-1, swapFirstL:-1,   // null|'clear'|'swap'
   clears:0, anim:null, history:[],
@@ -1030,7 +1033,7 @@ function genLevel(lv,opts){
   /* 上一局没打完就离开 → 记一次 level_exit（用来回答「玩家在哪一关流失」） */
   if(G.state==='play'&&!G.winStats)Track.log('level_exit',{moves:G.moves,tools:G.toolsUsed,tier:G.tier});
   G.level=lv; G.anim=null; G.history=[]; G.mode=null; G.swapFirst=-1; G.swapFirstL=-1;
-  G.undoLeft=5; G.unlockLeft=1; G.tools={clear:1,finger:1,swap:1};
+  G.undoLeft=5; G.unlockLeft=1; G.adUnlockLeft=CFG.adUnlockCap; G.tools={clear:1,finger:1,swap:1};
   /* V6.4.1 道具额度按环境口径**叠加**（不是替换上面那行）：
      strict(默认 / ?env=online) → 上面这行原样，与线上完全一致；
      loose(?env=test 或 ?tools=loose) → 放宽到 9/9/9，够 QA 连点，也能正常触发「用完→看广告补」分支。 */
@@ -1392,6 +1395,7 @@ function captureState(){
   return {tubes:G.tubes.map(function(t){return t.units.slice();}),
     bottles:G.bottles.map(function(b){return {col:b.col,cap:b.cap,fill:b.fill,locked:b.locked,place:b.place,slot:b.slot,cell:b.cell,gate:b.gate,q:b.q};}),
     slots:G.slots.map(function(x){return {open:x.open};}),clears:G.clears,unlockLeft:G.unlockLeft,
+    adUnlockLeft:G.adUnlockLeft,
     /* 步数必须进快照：撤销要把 G.moves 也退回去，否则「放错 → 撤销」这种纯试错
        会被永久记在步数账上，星级只惩罚一次失误却记了两步（见 applySnapshotObj）。 */
     moves:G.moves};
@@ -1404,16 +1408,20 @@ function applySnapshotObj(s){
     bb.gate=(d.gate===undefined?-1:d.gate);bb.q=(d.q||0);bb.shake=0;
     bb.capT=bb.place==='counter'?1:0;bb.done=false;bb.doneT=0;
   }
-  for(var sl=0;sl<G.slots.length;sl++)G.slots[sl].open=s.slots[sl].open;
+  /* V6.4.6：广告解锁会新增槽位 → 快照里的槽数可能比当前少。旧代码按当前 G.slots.length 遍历，
+     槽数变少时 s.slots[sl] 是 undefined → 「广告解锁 → 撤销」当场崩溃。槽数不同就整体换掉。 */
+  if(s.slots&&s.slots.length!==G.slots.length){ G.slots=s.slots.map(function(x){return {open:x.open};}); }
+  else for(var sl=0;sl<G.slots.length;sl++)G.slots[sl].open=s.slots[sl].open;
   G.clears=s.clears;
   /* 解锁次数必须跟着快照一起回滚：否则「解锁 → 撤销」会变成 unlockLeft 已扣、槽位又锁回去，
      这一关的免费解锁就永久消失了（玩家再也打不开那个槽）。 */
   if(s.unlockLeft!==undefined)G.unlockLeft=s.unlockLeft;
+  if(s.adUnlockLeft!==undefined)G.adUnlockLeft=s.adUnlockLeft;
   /* 步数跟着快照回滚：撤销 = 这一步没发生过，不是"又多走了一步"。
      注意 startReturn 里仍然是 G.moves++（退回一瓶也是一步操作）——
      否则 place(+1) 与 return(−1) 相消后 moves 恒等于瓶子数，星级指标当场失去意义。 */
   if(s.moves!==undefined)G.moves=s.moves;
-  layoutAll();
+  layoutAll();   // V6.4.6：槽数变了 → placeBottles() 按 b.slot 重排台面瓶
 }
 function snapshot(){
   G.history.push(JSON.stringify(captureState()));
@@ -1517,18 +1525,43 @@ function completeJar(b){
   SFX.done();
   checkAllGone();
 }
+/* ★ V6.4.6 重写：旧版只有「每关 1 次免费解锁」，用完就 return —— 于是右上角那个
+   「看广告解锁」徽章**一次广告都产生不了**，名字写着看广告、实际是死的。
+   现在两条路：① 每关送的 1 次免费，直接开；② 免费用完 → 真的走 adReward 看广告开槽。 */
 function unlockSlot(){
   if(G.anim)return;
   var target=-1;
   for(var s=0;s<G.slots.length;s++)if(!G.slots[s].open){target=s;break;}
   if(target<0){toast('台面都开完了'); SFX.no(); return;}
-  /* 每关只生成 1 个锁定槽，同时赠送 1 次免费解锁 —— 所以「免费次数用尽」时其实已经没有
-     可解锁的槽了。这里显式给一次拒绝反馈，避免出现「点了没反应」的哑点击。
-     （V4.0 §12 只承认 3 个广告场景：失败复活 / 工具补充 / 低频插屏，
-      所以不再保留「看广告开槽」这条永远走不到的分支。） */
-  if(G.unlockLeft<=0){ toast('本关的免费解锁已经用掉啦'); SFX.no(); return; }
-  snapshot(); G.slots[target].open=true; G.unlockLeft--; G.moves++;
-  toast('新台面解锁！'); SFX.cap();
+  if(G.unlockLeft>0){
+    snapshot(); G.slots[target].open=true; G.unlockLeft--; G.moves++;
+    toast('新台面解锁！'); SFX.cap(); ensureAdSlot(); return;
+  }
+  if((G.adUnlockLeft||0)<=0){ toast('本关的解锁次数都用完啦'); SFX.no(); return; }
+  unlockByAd(target);
+}
+/* 看广告解锁：走完整 adReward（看完才发奖，中途退出不发）。 */
+function unlockByAd(target){
+  var opened=function(){
+    G.slots[target].open=true; G.adUnlockLeft--; G.moves++;
+    ensureAdSlot();
+  };
+  adReward('unlock_slot',
+    function(){ snapshot(); opened(); toast('看广告解锁！台面多了一个位置'); SFX.cap(); },
+    function(){ opened(); toast('暂时没有广告，直接送你一个台面位置'); });
+}
+/* 解锁完立刻补一个新的锁定槽：这样徽章不会消失，玩家还看得见「还能再看广告加一格」。
+   没有这一步的话，槽一开完徽章就没了 → 第二次广告解锁根本没有入口。 */
+function ensureAdSlot(){
+  if((G.adUnlockLeft||0)<=0)return;
+  if(lockedSlots().length)return;
+  G.slots.push({open:false});
+  layoutAll();   // placeBottles() 会按 b.slot 把台面瓶重新落位
+}
+/* 还能不能解锁（免费那次 or 看广告）。徽章显示 / 命中 / 提示条全部以此为准，避免三处各写一套。 */
+function canUnlock(){
+  if(G.unlockLeft>0&&lockedSlots().length>0)return true;
+  return (G.adUnlockLeft||0)>0&&lockedSlots().length>0;
 }
 function addUndo(){
   if(G.undoLeft>=9){toast('撤销次数已满');SFX.no();return;}
@@ -1551,7 +1584,9 @@ function adReward(scene,grant,fallback){
   });
   /* 文案改准：频控是「单次会话」级的，resetSession 全文件无调用，
      所以「下局再来」是句谎话 —— 换一局并不会重置，得等下一次会话。 */
-  if(!ok){ G.adBusy=false; toast('本局的广告次数用完啦，换一局再来'); SFX.no(); }
+  /* B：旧文案「换一局再来」是句假话 —— 频控是单次会话级的，resetSession 全文件无调用，
+     换一局并不会重置。改成不打保票的说法。 */
+  if(!ok){ G.adBusy=false; toast('广告次数用完啦，休息一下再来看'); SFX.no(); }
   return ok;
 }
 function toolLabel(id){
@@ -1849,6 +1884,8 @@ function boardPlayable(){
   if(G.tools.clear>0&&clearTargetExists())return true;
   if(G.tools.swap>0&&G.tubes.length>1)return true;
   if(G.tools.finger>0&&gridReady)return true;
+  /* V6.4.6：这里只看**免费**解锁。广告解锁是外部资源，算进来的话 adUnlockLeft 初始=2
+     会让 boardPlayable 几乎恒为真 → 永远判不出死局 → 失败面板/复活链路全部失效。 */
   if(G.unlockLeft>0&&openSlotCount()<G.slots.length)return true;
   return false;
 }
@@ -1875,7 +1912,7 @@ function hintOpts(){
     {id:'undo',   label:'撤销一瓶', sub:'退回最后放上去的瓶子', enabled:undoOK},
     {id:'swap',   label:'随心互换', sub:'交换两根白框格',         enabled:G.tools.swap>0},
     {id:'clear',  label:'魔法清除', sub:'管底那杯倒进同色瓶',   enabled:(G.tools.clear>0&&clearTargetExists())},
-    {id:'unlock', label:'解锁台面', sub:'再加一个台面槽位',     enabled:(G.unlockLeft>0&&lockedSlots().length>0)},
+    {id:'unlock', label:'解锁台面', sub:G.unlockLeft>0?'再加一个台面槽位':'看广告再加一个槽位', enabled:canUnlock()},
     {id:'restart',label:'重开本关', sub:'这一关从头再来',       enabled:true}
   ];
   var pick=[c[0]],i;
@@ -2012,7 +2049,7 @@ function checkStuck(){
   var fs=freeSlot();
   var canAct=fs>=0                                       // 有空槽可以放
     ||(G.undoLeft>0&&counterIdle)                        // 能退回一瓶腾位置
-    ||(G.unlockLeft>0&&lockedSlots().length>0);          // 能解锁台面
+    ||(G.unlockLeft>0&&lockedSlots().length>0);          // V6.4.6：同上，死局判定只认免费解锁
 
   /* 掏门洞 / 解冻也算推进：只要能把堵着的那瓶搬上台面，后面的就露出来了。 */
   var gateWaiting=false,iceWaiting=false;
@@ -2041,7 +2078,7 @@ function checkStuck(){
   if(wantHint&&G.hintHold>=1.0){
     var fixTxt=(G.tools.swap>0)?'点「随心互换」换换管底，或点「撤销」退回一瓶'
       :(G.undoLeft>0?'点「撤销」退回一瓶，再换个能喝的瓶子上来'
-      :(G.unlockLeft>0&&lockedSlots().length>0)?'点台面右边「解锁」再加一个槽位，或「重开」本关'
+      :canUnlock()?'点台面右边「解锁」再加一个槽位（免费那次用完了可以看广告），或「重开」本关'
       :'点「重开」重开本关');
     G.hint=gridDrink?{a:'台面满了，但瓶子都接不到水',b:'退回一瓶再放能喝的上来，或点「重开」换一局'}
                     :{a:'台面上的瓶子都接不到水了',b:fixTxt};
@@ -2133,7 +2170,7 @@ function jarAtCounter(vx,vy){
 }
 function lockedSlots(){var a=[];for(var s=0;s<G.slots.length;s++)if(!G.slots[s].open)a.push(s);return a;}
 function unlockBadgeAt(v){
-  var ls=lockedSlots(); if(!ls.length||G.unlockLeft<=0)return false;
+  var ls=lockedSlots(); if(!ls.length||!canUnlock())return false;
   var sx=G.slotX[ls[ls.length-1]],dx=v.x-sx,dy=v.y-(SLOT_Y-52);
   var r=Math.min(54,(G.slotStep||112)*0.6);
   return dx*dx+dy*dy<r*r;
@@ -2834,13 +2871,14 @@ function drawSlot(s){
   ctx.fillStyle='#dcb27c';ctx.fill();
   var cy=SLOT_Y-72;
   ctx.beginPath();ctx.arc(sx,cy,30,0,7);
-  ctx.fillStyle=G.unlockLeft>0?'#ff6b5d':'#9aa7b2';ctx.fill();
+  ctx.fillStyle=canUnlock()?'#ff6b5d':'#9aa7b2';ctx.fill();
   ctx.strokeStyle='#fff';ctx.lineWidth=4;ctx.stroke();
   ctx.beginPath();ctx.moveTo(sx-9,cy-12);ctx.lineTo(sx+13,cy);ctx.lineTo(sx-9,cy+12);ctx.closePath();
   ctx.fillStyle='#fff';ctx.fill();
   ctx.font='bold 22px '+FONT;ctx.textAlign='center';
-  ctx.fillStyle=G.unlockLeft>0?'#8a5a2b':'#8aa2b8';
-  ctx.fillText(G.unlockLeft>0?'解锁':'已解锁',sx,SLOT_Y-20);
+  ctx.fillStyle=canUnlock()?'#8a5a2b':'#8aa2b8';
+  /* D：旧版只写「解锁」两个字，玩家根本不知道这里能看广告。 */
+  ctx.fillText(canUnlock()?(G.unlockLeft>0?'免费解锁':'看广告解锁'):'已解锁',sx,SLOT_Y-20);
 }
 /* ---- 面板 UI 几何：绘制与命中判定共用同一组常量（避免「画的和点的不一致」） ---- */
 var TITLE_UI={ start:{x:160,y:834,w:400,h:100}, daily:{x:160,y:960,w:400,h:90} };

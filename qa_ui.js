@@ -9,8 +9,11 @@
  *
  * 用法：node qa_ui.js
  */
+const fs = require('fs'), path = require('path');
 const { loadGame, Reporter, guard, withSeed } = require('./qa_lib.js');
 const rep = new Reporter('ui');
+/* 源码级断言用的产品路径：与 qa_lib 的解析口径一致（支持 GAME= 指向副本做反证）。 */
+const GAME_PATH = process.env.GAME || path.join(__dirname, 'outputs', '解压水消除.html');
 
 function fresh(search) {
   const g = loadGame(search ? { search: search } : {});
@@ -1011,8 +1014,10 @@ guard(rep, 'B 组真 bug', function () {
     for (let i = 0; i < C.rewardedSessionCap; i++) D.refillTool('clear');
     G.toast = null;
     D.refillTool('clear');
-    rep.ok('B3②：触顶文案写「换一局再来」（频控是会话级的，resetSession 无调用，"下局"是句谎话）',
-      !!G.toast && G.toast.msg.indexOf('换一局再来') >= 0 && G.toast.msg.indexOf('下局') < 0,
+    /* V6.4.6：文案已从「换一局再来」改成「休息一下再来看」（换局不会重置，原句是谎话）。
+       断言守住的是**不许暗示换局能重置**，不是钉死某一句文案。 */
+    rep.ok('B3②：触顶文案不许暗示「换一局就能重置」（频控会话级，resetSession 无调用）',
+      !!G.toast && G.toast.msg.indexOf('用完') >= 0 && G.toast.msg.indexOf('换一局') < 0 && G.toast.msg.indexOf('下局') < 0,
       G.toast && G.toast.msg);
   }
 
@@ -1100,6 +1105,17 @@ guard(rep, 'B 组真 bug', function () {
     rep.ok('E2E④b?sdk=real 无 tap：道具次数**不应**因广告回补（广告没真加载，就不该记成广告收益）',
       b === 0,
       'tools.finger ' + a + '→' + b + '（再点后应仍为 0；若 +1 说明走的是 fallback 白送而非广告发奖）');
+  }
+
+  /* E2E④c V6.4.6：?sdk=real 不能只在「它是第一个参数」时才生效。
+     旧正则 /(?:^[?&])sdk=real/ 用 ^ 锚住了开头，于是 ?sdk=real 能过、
+     ?lvl=9&sdk=real 直接失效 —— 验收时一旦组合参数就静默退回模拟广告（假绿）。 */
+  {
+    const g1 = fresh('?sdk=real'); const alone = g1.DBG.CFG.forceRealSdk;
+    const g2 = fresh('?lvl=9&sdk=real'); const combo = g2.DBG.CFG.forceRealSdk;
+    rep.ok('E2E④c?sdk=real 在组合参数里也必须生效（旧正则 ^ 锚定导致 ?lvl=9&sdk=real 失效）',
+      alone === true && combo === true,
+      '单独 ?sdk=real → ' + alone + '；?lvl=9&sdk=real → ' + combo);
   }
 
   /* ---- B4：每日挑战中途点 HUD「重开」不能被静默降级 ---- */
@@ -1854,21 +1870,105 @@ guard(rep, '提示条分发', function () {
       'level ' + lv0 + '→' + G.level + '，moves 7→' + G.moves + '，台面 ' + before + '→' + after);
   }
 
-  /* 29.3 解锁台面：必须真的走 unlockSlot()（开放槽 +1、免费次数 −1、锁定槽 −1） */
+  /* 29.3 解锁台面：必须真的走 unlockSlot()（开放槽 +1、免费次数 −1、总槽数 +1） */
   {
     let ok = false, detail = '未找到「有锁定槽 + 有免费解锁次数」的局面';
     for (const lv of [9, 15, 20, 25, 30]) {
       D.gen(lv, { quiet: true }); g.frames(3);
       const locked0 = D.lockedSlots().length;
       if (locked0 <= 0 || G.unlockLeft <= 0) continue;
-      const oc0 = D.openSlotCount(), ul0 = G.unlockLeft;
+      const oc0 = D.openSlotCount(), ul0 = G.unlockLeft, st0 = G.slots.length;
       D.hintAction('unlock');
-      const got = [D.openSlotCount() - oc0, ul0 - G.unlockLeft, locked0 - D.lockedSlots().length].join('/');
+      /* V6.4.6：解锁后 ensureAdSlot() 会补一个新锁槽（保证徽章还在、还能再看广告加一格），
+         所以「锁定槽 −1」不再成立 —— 正确口径是**总槽数 +1**。 */
+      const got = [D.openSlotCount() - oc0, ul0 - G.unlockLeft, G.slots.length - st0].join('/');
       ok = got === '1/1/1';
-      detail = 'L' + lv + ' 开放槽+1 / 次数−1 / 锁定槽−1 = ' + got;
+      detail = 'L' + lv + ' 开放槽+1 / 次数−1 / 总槽数+1 = ' + got;
       break;
     }
-    rep.ok('提示条「解锁台面」→ 真的走 unlockSlot()：开放槽 +1、免费解锁次数 −1、锁定槽 −1', ok, detail);
+    rep.ok('提示条「解锁台面」→ 真的走 unlockSlot()：开放槽 +1、免费次数 −1、总槽数 +1（解锁后自动补一个广告槽）', ok, detail);
+  }
+
+  /* 29.3b V6.4.6：右上角「看广告解锁」必须真的走广告（旧版一次广告都产生不了）
+     —— 免费用完后点徽章要进 adReward，看完才开槽；中途退出不开槽、不扣次数。 */
+  {
+    D.gen(9, { quiet: true }); g.frames(3);
+    let found = false, detail = '未构造出「免费次数已用完」的局面';
+    if (D.lockedSlots().length > 0) {
+      D.hintAction('unlock');                       // 用掉免费那一次
+      g.frames(3);
+      if (G.unlockLeft === 0 && G.adUnlockLeft > 0 && D.lockedSlots().length > 0) {
+        const A = g.DBG.AdService, C = g.DBG.CFG;
+        A.setEnv('test');
+        let asked = 0;
+        const realShow = A.showRewarded;
+        A.showRewarded = function (scene, opts) {   // 拦截：不真放广告，只看有没有进广告通道
+          asked++;
+          if (opts && opts.onReward) try { opts.onReward('ad'); } catch (e) { }
+          return true;
+        };
+        const st0 = G.slots.length, oc0 = D.openSlotCount(), ad0 = G.adUnlockLeft;
+        D.unlockSlot();
+        g.frames(3);
+        A.showRewarded = realShow;
+        found = asked === 1 && D.openSlotCount() === oc0 + 1
+          && G.adUnlockLeft === ad0 - 1 && G.slots.length === st0 + 1;
+        detail = '进广告通道 ' + asked + ' 次 / 开放槽 ' + oc0 + '→' + D.openSlotCount()
+          + ' / 广告解锁额度 ' + ad0 + '→' + G.adUnlockLeft + ' / 总槽 ' + st0 + '→' + G.slots.length;
+      }
+    }
+    rep.ok('右上看广告解锁：免费用完后真的走 adReward（看完才开槽、额度 −1、再补一个新锁槽）', found, detail);
+  }
+
+  /* 29.3b2 V6.4.6：徽章上的字必须写明「看广告解锁」。
+     旧版只写「解锁」两个字，玩家根本不知道这里能看广告 —— 入口等于白给。 */
+  {
+    const html = fs.readFileSync(GAME_PATH, 'utf8');
+    rep.ok('解锁徽章写明「看广告解锁」（旧版只写「解锁」，玩家不知道这里能看广告）',
+      html.indexOf("'看广告解锁'") >= 0 && html.indexOf("G.unlockLeft>0?'免费解锁':'看广告解锁'") >= 0,
+      '源码里 ' + (html.indexOf("'看广告解锁'") >= 0 ? '有' : '没有') + '「看广告解锁」字样');
+  }
+
+  /* 29.3c V6.4.6：中途退出广告不能白送（没看完 = 没奖励） */
+  {
+    D.gen(9, { quiet: true }); g.frames(3);
+    let ok = false, detail = '未构造出「免费次数已用完」的局面';
+    if (D.lockedSlots().length > 0) {
+      D.hintAction('unlock'); g.frames(3);
+      if (G.unlockLeft === 0 && G.adUnlockLeft > 0 && D.lockedSlots().length > 0) {
+        const A = g.DBG.AdService;
+        A.setEnv('test');
+        const realShow = A.showRewarded;
+        A.showRewarded = function (scene, opts) {
+          if (opts && opts.onCancel) try { opts.onCancel('cancel'); } catch (e) { }
+          return true;
+        };
+        const oc0 = D.openSlotCount(), ad0 = G.adUnlockLeft, st0 = G.slots.length;
+        D.unlockSlot(); g.frames(3);
+        A.showRewarded = realShow;
+        ok = D.openSlotCount() === oc0 && G.adUnlockLeft === ad0 && G.slots.length === st0;
+        detail = '开放槽 ' + oc0 + '→' + D.openSlotCount() + ' / 额度 ' + ad0 + '→' + G.adUnlockLeft
+          + ' / 总槽 ' + st0 + '→' + G.slots.length;
+      }
+    }
+    rep.ok('看广告解锁中途退出 → 不开槽、不扣额度（没看完就没有奖励）', ok, detail);
+  }
+
+  /* 29.3d V6.4.6：连续多次「看广告补道具」不能中途哑火。
+     旧版 rewardedSessionCap=3 且 resetSession 全文件无调用 → 第 4 次开始永远「次数用完」，
+     等于玩家一晚上只能看 3 次广告，变现上限被自己锁死。 */
+  {
+    D.gen(9, { quiet: true }); g.frames(3);
+    const A = g.DBG.AdService;
+    A.setEnv('test'); A.resetSession();
+    /* ⚠ 不能 mock 掉 showRewarded —— 那样会绕过 canShowRewarded 的频控检查，
+       cap=3 也能全过，断言变成假绿（10-05 踩过）。必须让它真实走，用 stats.show 计数。 */
+    const s0 = A.stats.show;
+    G.tools.clear = 0;
+    for (let i = 0; i < 6; i++) D.refillTool('clear');
+    const got = A.stats.show - s0;
+    rep.ok('连点 6 次「看广告补道具」次次都真的播放（旧版 cap=3 第 4 次起永久哑火）',
+      got === 6, '实际播放 ' + got + ' 次（cap=' + g.DBG.CFG.rewardedSessionCap + '）');
   }
 
   /* 29.4 撤销：必须真的走 doUndo()（撤销栈 −1、额度 −1），不是空点 */
