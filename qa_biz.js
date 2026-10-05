@@ -417,6 +417,21 @@ guard(rep, '广告入口只有三类', function () {
     count(/AdService\.showInterstitial\(/g) === 1 && html.indexOf("showInterstitial('level_complete'") >= 0,
     '调用点 ' + count(/AdService\.showInterstitial\(/g) + ' 个');
 
+  /* ②b V6.4.10：插屏只能在「结算弹窗关闭」时触发（closeWinAndInterstitial），
+    绝不能回到旧行为——在 update() 里 state==='win' 的下一帧就弹、盖在结算面板上。
+    反证：把 closeWinAndInterstitial 里那处删掉、回填 update() 旧写法，本断言必须 FAIL。 */
+  rep.ok('插屏由 closeWinAndInterstitial 统一触发（结算弹窗关闭后；不在 update 里 state===win 立即弹）',
+    count(/function closeWinAndInterstitial\(/g) === 1 &&
+    count(/G\.interPending&&G\.state==='win'/g) === 0,
+    'closeWinAndInterstitial=' + count(/function closeWinAndInterstitial\(/g) +
+    ' 旧立即弹写法=' + count(/G\.interPending&&G\.state==='win'/g));
+
+  /* ②c V6.4.10：底部道具按钮额度 0 时不得灰化（灰化会让用户以为键坏了、断掉看广告补次入口）。
+    反证：把 drawTools 里 '#e0d6c2'（灰底色）加回来，本断言必须 FAIL。 */
+  rep.ok('底部道具按钮额度 0 时不再灰化（保留彩色，看广告补次入口不被视觉阉割）',
+    html.indexOf('#e0d6c2') < 0,
+    '灰色 #e0d6c2 命中=' + (html.indexOf('#e0d6c2') >= 0 ? '是(坏)' : '否(好)'));
+
   /* ③ 场景名集合必须恰好是这三类 */
   const scenes = [];
   const re = /adReward\('([^']*)'/g;

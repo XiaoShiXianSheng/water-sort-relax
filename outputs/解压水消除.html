@@ -13,8 +13,12 @@
    2) 画布的【显示尺寸】由 CSS 的 100%×100% 决定：永远跟随 body，绝不溢出
    3) JS 只负责设置画布的【位图分辨率】(width/height 属性) 与缩放比例
    4) 仅当 CSS 尺寸完全拿不到时，才用行内像素兜底（防 body 塌陷为 0） */
-html{width:100%;height:100%;margin:0;padding:0;background:#0e1822;}
-body{margin:0;padding:0;width:100%;height:100%;background:#0e1822;overflow:hidden;
+html{width:100%;height:100%;margin:0;padding:0;background:#0e1822;
+  /* V6.4.9: iPhone 刘海/底部横条 —— 把安全区写进 CSS 变量供 JS 读取 */
+  --sat:env(safe-area-inset-top,0px);--sab:env(safe-area-inset-bottom,0px);
+  --sal:env(safe-area-inset-left,0px);--sar:env(safe-area-inset-right,0px);}
+body{margin:0;padding:0;width:100%;height:100%;min-height:100dvh;min-height:-webkit-fill-available;
+     background:#0e1822;overflow:hidden;
      touch-action:none;overscroll-behavior:none;
      -webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%;}
 #game{display:block;position:absolute;left:0;top:0;width:100%;height:100%;background:#0e1822;}
@@ -162,7 +166,7 @@ function toolX(i){return TOOL_X0+i*(TOOL_W+TOOL_GAP);}
    adUnitId 为空时（尚未在开发者中心开通广告）会自动降级为 TEST，流程绝不被卡死。 */
 
 var CFG={
-  version:'6.4.6',                         // 对外版本号：随每条埋点上报，出事时能区分线上跑的是哪一版
+  version:'6.4.10',                        // 对外版本号：随每条埋点上报，出事时能区分线上跑的是哪一版
   maxLevel:90,                             // 关卡总数上限：完整内容就是 90 关；过关推进/选关页数/起点读取都以此为准，杜绝溢出到 91+
   env:'online',                            // 'online'(正式通道：真机有 tap 就真实拉广告) | 'test'(模拟完成) —— 另见 mockSdk 的第三态
                                            // 自动降级：无 window.tap → test(no-tap-runtime)；无 adUnitId → test(no-ad-unit-id)。
@@ -212,7 +216,7 @@ var CFG={
      严格模式保持上面 adUnitIsTest 之后的原始字面，回归套件与回滚锚点那串字面必须还在，
      所以这里只做**叠加**（R8），不替换原行。 */
   toolMode:'strict',                      // 'strict'(正式额度 1/1/1) | 'loose'(测试额度 9/9/9)
-  toolQuota:{strict:{clear:1,finger:1,swap:1,undo:5},loose:{clear:9,finger:9,swap:9,undo:9}},
+  toolQuota:{strict:{clear:0,finger:0,swap:0,undo:1},loose:{clear:9,finger:9,swap:9,undo:9}},
   rewardedSessionCap:12,                   // V6.4.6：单会话激励视频上限（原 3，看满就永久哑火 → 变现被自己锁死）
   adUnlockCap:2,                           // V6.4.6：每关「看广告解锁台面槽」的上限（免费那 1 次不算在内）
   interstitialSessionCap:1,                // 单会话插屏上限
@@ -274,7 +278,7 @@ var SAVE_KEY='wsr_save_v1', SAVE_VER=3;    // v2：V6.0 回归热身字段；v3�
 var Store={
   data:null,
   blank:function(){
-    return {v:SAVE_VER,level:1,tiers:{},stars:{},tools:{clear:0,finger:0,swap:0},undo:0,
+    return {v:SAVE_VER,level:1,tiers:{},stars:{},tools:{clear:0,finger:0,swap:0},undo:1,unlockLeft:1,
             daily:{date:'',done:0,stars:0},tut:0,firstOpen:'',lastOpen:'',sessions:0,wins:0,failFallback:0,
             /* V6.0 §五-A：最高关卡 / 最近游玩时间 / 本次挑战档位 —— 三件必须分开存，
                否则「热身」与「进度」会互相污染（测试第 7、8 条就是验这个）。 */
@@ -1033,13 +1037,20 @@ function genLevel(lv,opts){
   /* 上一局没打完就离开 → 记一次 level_exit（用来回答「玩家在哪一关流失」） */
   if(G.state==='play'&&!G.winStats)Track.log('level_exit',{moves:G.moves,tools:G.toolsUsed,tier:G.tier});
   G.level=lv; G.anim=null; G.history=[]; G.mode=null; G.swapFirst=-1; G.swapFirstL=-1;
-  G.undoLeft=5; G.unlockLeft=1; G.adUnlockLeft=CFG.adUnlockCap; G.tools={clear:1,finger:1,swap:1};
-  /* V6.4.1 道具额度按环境口径**叠加**（不是替换上面那行）：
-     strict(默认 / ?env=online) → 上面这行原样，与线上完全一致；
-     loose(?env=test 或 ?tools=loose) → 放宽到 9/9/9，够 QA 连点，也能正常触发「用完→看广告补」分支。 */
-  if(CFG.toolMode==='loose'){
-    var _tq=(CFG.toolQuota&&CFG.toolQuota.loose)||null;
-    if(_tq){ G.undoLeft=_tq.undo; G.tools={clear:_tq.clear,finger:_tq.finger,swap:_tq.swap}; }
+  /* V6.4.8: carry tools across levels; adUnlockCap still per-level. */
+  G.adUnlockLeft=CFG.adUnlockCap;
+  if(!G._toolsCarry){
+    G._toolsCarry=1;
+    if(CFG.toolMode==='loose'){
+      var _tq=(CFG.toolQuota&&CFG.toolQuota.loose)||{clear:9,finger:9,swap:9,undo:9};
+      G.undoLeft=_tq.undo; G.unlockLeft=1; G.tools={clear:_tq.clear,finger:_tq.finger,swap:_tq.swap};
+    }else{
+      var _st=(Store.data)||{};
+      var _tt=_st.tools||{};
+      G.tools={clear:_tt.clear|0,finger:_tt.finger|0,swap:_tt.swap|0};
+      G.undoLeft=(typeof _st.undo==='number')?(_st.undo|0):1;
+      G.unlockLeft=(typeof _st.unlockLeft==='number')?(_st.unlockLeft|0):1;
+    }
   }
   G.clears=0; G.toast=null; particles=[]; flying=[];
   G.stuck=false; G.hint=false; G.mode=null;
@@ -1431,7 +1442,7 @@ function doUndo(){
   if(G.anim||G.state!=='play')return;
   if(!G.history.length||G.undoLeft<=0){toast('没有撤销次数了');SFX.no();return;}
   applySnapshotObj(JSON.parse(G.history.pop()));
-  G.undoLeft--;
+  G.undoLeft--; persistTools();
   SFX.undo();
 }
 function toast(msg){G.toast={msg:msg,t:0};}
@@ -1528,6 +1539,15 @@ function completeJar(b){
 /* ★ V6.4.6 重写：旧版只有「每关 1 次免费解锁」，用完就 return —— 于是右上角那个
    「看广告解锁」徽章**一次广告都产生不了**，名字写着看广告、实际是死的。
    现在两条路：① 每关送的 1 次免费，直接开；② 免费用完 → 真的走 adReward 看广告开槽。 */
+function persistTools(){
+  try{
+    if(!Store.data)return;
+    Store.data.tools={clear:G.tools.clear|0,finger:G.tools.finger|0,swap:G.tools.swap|0};
+    Store.data.undo=G.undoLeft|0;
+    Store.data.unlockLeft=G.unlockLeft|0;
+    Store.save();
+  }catch(e){}
+}
 function unlockSlot(){
   if(G.anim)return;
   var target=-1;
@@ -1535,7 +1555,7 @@ function unlockSlot(){
   if(target<0){toast('台面都开完了'); SFX.no(); return;}
   if(G.unlockLeft>0){
     snapshot(); G.slots[target].open=true; G.unlockLeft--; G.moves++;
-    toast('新台面解锁！'); SFX.cap(); ensureAdSlot(); return;
+    toast('新台面解锁！'); SFX.cap(); persistTools(); ensureAdSlot(); return;
   }
   if((G.adUnlockLeft||0)<=0){ toast('本关的解锁次数都用完啦'); SFX.no(); return; }
   unlockByAd(target);
@@ -1548,15 +1568,22 @@ function unlockByAd(target){
   };
   adReward('unlock_slot',
     function(){ snapshot(); opened(); toast('看广告解锁！台面多了一个位置'); SFX.cap(); },
-    function(){ opened(); toast('暂时没有广告，直接送你一个台面位置'); });
+    function(){ /* V6.4.7 线上广告拉取失败：绝不静默送槽。
+       旧版这里直接 opened() 白送一格 → 玩家点一下解锁一下、广告从不弹出，却以为已经看过了广告。
+       商业原则：没看成广告就不给奖励，失败只提示。 */
+      Track.log('ad_unlock_denied',{scene:'unlock_slot',reason:'ad_fail'});
+      toast('广告没加载出来，这次没解锁'); SFX.no(); });
 }
-/* 解锁完立刻补一个新的锁定槽：这样徽章不会消失，玩家还看得见「还能再看广告加一格」。
-   没有这一步的话，槽一开完徽章就没了 → 第二次广告解锁根本没有入口。 */
+/* V6.4.7：已**不再**补新锁槽（补槽会导致每解一次就多一个可点徽章 → 看起来能无限解锁）。
+   徽章在广告额度用完、或广告始终拉不到时自然消失。函数保留是为了调用点不必改。 */
 function ensureAdSlot(){
   if((G.adUnlockLeft||0)<=0)return;
   if(lockedSlots().length)return;
-  G.slots.push({open:false});
-  layoutAll();   // placeBottles() 会按 b.slot 把台面瓶重新落位
+  /* V6.4.7 旧版在这里无条件 G.slots.push({open:false}) 补一个新锁槽，动机是「让徽章不消失、
+     玩家还能继续点」。实际后果：每解锁一次就多出一个可点的广告徽章 → 点一次开一格；
+     又因为真机广告拉不到（见 unlockByAd 失败分支），看起来就是「无限白送台面槽」。
+     现在改为不再补槽：广告额度用完或广告一直失败时，徽章自然消失。
+     单关广告解锁总数由 CFG.adUnlockCap 硬限，玩家点不出无限个槽。*/
 }
 /* 还能不能解锁（免费那次 or 看广告）。徽章显示 / 命中 / 提示条全部以此为准，避免三处各写一套。 */
 function canUnlock(){
@@ -1596,16 +1623,16 @@ function toolLabel(id){
 /* 工具补次（P1 广告场景②）：玩家确实需要工具时，看广告换 1 次 —— 非强制 */
 function refillTool(id){
   adReward('tool_'+id,function(){
-    G.tools[id]=(G.tools[id]||0)+1;
-    toast('看广告补了 1 次「'+toolLabel(id)+'」！'); SFX.cap();
+    G.tools[id]=(G.tools[id]||0)+1; persistTools();
+    toast('\u770b\u5e7f\u544a\u8865\u4e86 1 \u6b21\u300c'+toolLabel(id)+'\u300d\uff01'); SFX.cap();
   },function(){
-    G.tools[id]=(G.tools[id]||0)+1;
-    toast('暂时没有广告，直接补你 1 次「'+toolLabel(id)+'」');
+    Track.log('ad_tool_denied',{tool:id,reason:'ad_fail'});
+    toast('\u5e7f\u544a\u6ca1\u52a0\u8f7d\u51fa\u6765\uff0c\u8fd9\u6b21\u6ca1\u8865\u6b21\u6570'); SFX.no();
   });
 }
 function refillUndo(){
-  adReward('undo',function(){ G.undoLeft++; toast('看广告补了 1 次撤销！'); SFX.cap(); },
-    function(){ G.undoLeft++; toast('暂时没有广告，直接补你 1 次撤销'); });
+  adReward('undo',function(){ G.undoLeft++; persistTools(); toast('\u770b\u5e7f\u544a\u8865\u4e86 1 \u6b21\u64a4\u9500\uff01'); SFX.cap(); },
+    function(){ Track.log('ad_undo_denied',{reason:'ad_fail'}); toast('\u5e7f\u544a\u6ca1\u52a0\u8f7d\u51fa\u6765\uff0c\u8fd9\u6b21\u6ca1\u8865\u64a4\u9500'); SFX.no(); });
 }
 /* 「魔法清除」的补偿目标：台面上正接着这个颜色、还没接满的瓶子。
    清除会拿掉管底那一杯，这一杯直接倒进台面同色瓶里 —— 总量不变，
@@ -1631,7 +1658,7 @@ function useClear(tubeIdx){
   t.units.splice(0,1); t.drop=1;
   var cx=t.x+G.tubeW/2, cy=BOTT_Y-14-(G.uh||UH)/2;
   for(var p=0;p<20;p++)particles.push({x:cx,y:cy,vx:(Math.random()-0.5)*320,vy:(Math.random()-0.8)*320,g:500,life:0.8,age:0,col:COLORS[col],r:3+Math.random()*4});
-  G.tools.clear--; G.mode=null; SFX.magic();
+  G.tools.clear--; persistTools(); G.mode=null; SFX.magic();
   G.moves++; G.toolsUsed++; Track.log('tool_use',{tool:'clear',env:AdService.env,mode:CFG.toolMode});
   tgt.fill++;                                  // 清掉的那杯水倒进同色瓶，一滴不浪费
   if(tgt.fill>=tgt.cap)completeJar(tgt);
@@ -1656,7 +1683,7 @@ function useClearAll(b){
       } else i++;
     }
   }
-  b.fill+=got; G.tools.clear--; G.mode=null; G.swapFirst=-1; G.swapFirstL=-1; SFX.magic();
+  b.fill+=got; G.tools.clear--; persistTools(); G.mode=null; G.swapFirst=-1; G.swapFirstL=-1; SFX.magic();
   if(b.fill>=b.cap){ completeJar(b); toast('魔法清除：全场【'+colName(col)+'】吸了 '+got+' 杯，'+colName(col)+'瓶装满飞走，空出一个台面槽'); }
   else toast('魔法清除：全场【'+colName(col)+'】吸了 '+got+' 杯（'+b.fill+'/'+b.cap+'），压在上面的那几杯也一起抽走了');
   G.moves++; G.toolsUsed++; Track.log('tool_use',{tool:'clear_all',env:AdService.env,mode:CFG.toolMode}); }
@@ -1669,7 +1696,7 @@ function useSwapLayer(i,li,j,lj){
   snapshot();
   var _s1=a.units[li],_s2=b.units[lj]; a.units[li]=_s2; b.units[lj]=_s1;
   a.drop=1;b.drop=1;
-  G.tools.swap--; G.mode=null; G.swapFirst=-1; G.swapFirstL=-1; SFX.magic();
+  G.tools.swap--; persistTools(); G.mode=null; G.swapFirst=-1; G.swapFirstL=-1; SFX.magic();
   toast(i===j ? ('互换：这根管把【'+colName(_s1)+'】换到了管底，现在能接【'+colName(a.units[0])+'】') : ('互换：【'+colName(_s1)+'】↔【'+colName(_s2)+'】换了位置'));
   G.moves++; G.toolsUsed++; Track.log('tool_use',{tool:'swap',env:AdService.env,mode:CFG.toolMode}); }
 /* ---- 隐藏选关（测试用）--------------------------------------------------
@@ -2024,6 +2051,15 @@ function goHome(){
   saveProgress();
   SFX.tap();
 }
+/* 结算弹窗关闭动作统一出口（V6.4.10）：本关要放插屏则先弹、结束再执行 after，否则直接执行。 */
+function closeWinAndInterstitial(after){
+  if(G.interPending){
+    G.interPending=false;
+    AdService.showInterstitial('level_complete',{ onDone:function(){ if(after)try{after();}catch(e){} } });
+    return;
+  }
+  if(after)try{ after(); }catch(e){}
+}
 function checkStuck(){
   if(G.state!=='play'||G.anim||G.fail||G.tierPick)return;
   var bs=[], waterTotal=0;
@@ -2117,7 +2153,7 @@ function useFinger(){
     if(bb.place==='grid'&&!bb.locked&&bottoms.indexOf(bb.col)>=0&&gridPlayable(bb)){b=bb;break;}
   }
   if(!b){toast('现在没有能直接放上台面的瓶子，等管底出现同色水再点');SFX.no();return;}
-  G.tools.finger--; SFX.magic();
+  G.tools.finger--; persistTools(); SFX.magic();
   toast('万能指：把【'+colName(b.col)+'】瓶放上台面，它马上能接到水');
   G.toolsUsed++; Track.log('tool_use',{tool:'finger',env:AdService.env,mode:CFG.toolMode});
   startPlace(b);
@@ -2214,13 +2250,15 @@ function handleTap(cx,cy){
   }
   if(G.state==='win'){
     if(inBox(WIN_UI.next,vx,vy)){
-      if(G.daily)startDaily();
-      else if(G.level<CFG.maxLevel) genLevel(G.level+1);
-      else goHome();   // 已是最后一关：不生成 91+，回首页
+      closeWinAndInterstitial(function(){
+        if(G.daily)startDaily();
+        else if(G.level<CFG.maxLevel) genLevel(G.level+1);
+        else goHome();   // 已是最后一关：不生成 91+，回首页
+      });
       return;
     }
     if(inBox(WIN_UI.challenge,vx,vy)){ G.tierPick=true; SFX.tap(); return; }
-    if(inBox(WIN_UI.home,vx,vy)){ goHome(); return; }
+    if(inBox(WIN_UI.home,vx,vy)){ closeWinAndInterstitial(goHome); return; }
     /* 结算弹窗里的两档方块（与 drawWinPanel 的几何一一对应）：不是纯展示 ——
        点它可以换档重开。当前档只给引导不重开（否则又变成「点了却回到本关」）。 */
     for(var tw=0;tw<2;tw++){
@@ -3134,36 +3172,25 @@ function drawTools(){
     var act=(tb.id==='clear'&&G.mode==='clear')||(tb.id==='swap'&&G.mode==='swap')||(tb.id==='undo'&&G.mode==='return');
     var isTool=(tb.id==='clear'||tb.id==='finger'||tb.id==='swap');
     var cnt=isTool?G.tools[tb.id]:(tb.id==='undo'?G.undoLeft:1);
-    var used=isTool&&cnt<=0;
+    var used=((isTool||tb.id==='undo')&&cnt<=0);
+    /* V6.4.10：额度 0 不再灰化按钮。旧逻辑涂灰+半透明 → 玩家当键坏了不点、自我阉割「看广告补次」。现永彩、红角标「+」提示补次。 */
     rr(ctx,x,TOOL_Y,TOOL_W,TOOL_H,18);
-    ctx.fillStyle=used?'#e0d6c2':(tb.id==='undo'?'#8fd3a6':(act?'#ffe9a8':'#ffd95e'));ctx.fill();
-    ctx.strokeStyle=used?'#a89b82':(tb.id==='undo'?'#3f8f5f':'#c9972f');ctx.lineWidth=4;ctx.stroke();
-    ctx.globalAlpha=used?0.5:1;
+    ctx.fillStyle=(tb.id==='undo'?'#8fd3a6':(act?'#ffe9a8':'#ffd95e'));ctx.fill();
+    ctx.strokeStyle=(tb.id==='undo'?'#3f8f5f':'#c9972f');ctx.lineWidth=4;ctx.stroke();
+    ctx.globalAlpha=1;
     ctx.font='30px sans-serif';ctx.textAlign='center';ctx.fillStyle='#5a4210';
     ctx.fillText(tb.icon,cx,TOOL_Y+38);
     ctx.font='bold 24px '+FONT;
-    /* 两个分支会在同一坐标、同一基线再画一次「▶ 广告补次」——
-       撤销行 used=false（alpha=1）是**全不透明硬重叠**，而 undoLeft 每局必耗尽，
-       这是最常撞上的一条。这里让位：要显示补次提示时就不画原名。 */
-    if(!((isTool&&cnt<=0)||(tb.id==='undo'&&G.undoLeft<=0)))ctx.fillText(tb.label,cx,TOOL_Y+74);
+    ctx.fillText(tb.label,cx,TOOL_Y+74);
     ctx.globalAlpha=1;
-    if(isTool){
-      if(cnt>0)drawCountBadge(x+TOOL_W-14,TOOL_Y+12,cnt);
-      else{
-        /* 用完了不是死路：清楚告诉玩家可以「看广告补 1 次」（非强制）V4.0 §12-P1 */
-        ctx.font='bold 19px '+FONT;ctx.fillStyle='#b06a1e';
-        ctx.fillText('▶ 广告补次',cx,TOOL_Y+74);
-      }
-    }else if(tb.id==='undo'){
-      drawCountBadge(x+TOOL_W-14,TOOL_Y+12,G.undoLeft);
-      if(G.undoLeft<=0){
-        ctx.font='bold 19px '+FONT;ctx.fillStyle='#3f8f5f';
-        ctx.fillText('▶ 广告补次',cx,TOOL_Y+74);
-      }
+    if(isTool||tb.id==='undo')drawCountBadge(x+TOOL_W-14,TOOL_Y+12,cnt|0);
+    /* 额度 0 → 红角标区画「+」，暗示还能看广告补次（配合小白用户的「能动、只是没次数」心智） */
+    if(used){
+      ctx.font='bold 22px '+FONT;ctx.textAlign='center';ctx.fillStyle='#ff5d6c';
+      ctx.fillText('+',cx,TOOL_Y+74);
     }
   }
 }
-/* 右上角红色圆形数字徽章（三个道具 + 撤销共用，样式统一） */
 function drawCountBadge(bx,by,cnt){
   ctx.beginPath();ctx.arc(bx,by,17,0,7);
   ctx.fillStyle=cnt>0?'#ff5d6c':'#9aa7b2';ctx.fill();
@@ -3356,7 +3383,8 @@ function drawHintBtn(t){
 }
 function render(time){
   ctx.setTransform(dpr,0,0,dpr,0,0);
-  ctx.clearRect(0,0,cw,ch);
+  /* V6.4.9: 先铺满全屏底色，letterbox / 安全区不再露黑块 */
+  ctx.fillStyle='#0e1822';ctx.fillRect(0,0,cw,ch);
   ctx.translate(offX,offY);ctx.scale(scale,scale);
   ctx.drawImage(bg,0,0);
   ctx.textAlign='center';ctx.textBaseline='alphabetic';
@@ -3622,12 +3650,7 @@ function update(dt){
     pt2.age+=dt;pt2.x+=pt2.vx*dt;pt2.y+=pt2.vy*dt;pt2.vy+=pt2.g*dt;
     if(pt2.age>=pt2.life)particles.splice(p2,1);
   }
-  /* 成功后低频插屏（P1）：必须同时满足「连续成功达标 + 冷却到点 + 会话上限内 + 过了首屏保护」，
-     任何一条不满足都只记埋点、不真的弹 —— 宁可少赚，也不把解压游戏变成广告播放器。 */
-  if(G.interPending&&G.state==='win'){
-    G.interPending=false;
-    AdService.showInterstitial('level_complete',{});
-  }
+  /* 成功后低频插屏：V6.4.10 改结算弹窗关闭时才弹。旧版 state==='win' 下一帧就弹、盖在结算面板。现由 closeWinAndInterstitial() 在关闭动作触发。 */
 }
 var lastTs=0;
 var _dumpT=-99999;
@@ -3647,6 +3670,16 @@ function loop(ts){
   }
   requestAnimationFrame(loop);
 }
+function readSafeInsets(){
+  /* V6.4.9: 从 html 上的 CSS 变量读 env(safe-area-inset-*)；宿主不支持则全 0 */
+  var o={t:0,b:0,l:0,r:0};
+  try{
+    var cs=window.getComputedStyle(document.documentElement);
+    function px(name){ var v=parseFloat(cs.getPropertyValue(name)); return (v>0&&isFinite(v))?v:0; }
+    o.t=px('--sat'); o.b=px('--sab'); o.l=px('--sal'); o.r=px('--sar');
+  }catch(e){}
+  return o;
+}
 function readViewport(){
   // 只读"视口"来源，绝不读 canvas 自身 —— 否则会被自己设的行内样式污染，形成逐帧放大的自反馈
   var w=0,h=0;
@@ -3665,8 +3698,6 @@ function resize(){
   cw=sz.w; ch=sz.h;
   dpr=Math.min(window.devicePixelRatio||1,2);
   if(!(dpr>0))dpr=1;
-  // 显示尺寸：始终用行内像素钉死（不依赖 CSS 是否生效，也不产生自反馈）
-  // 定位固定用 absolute —— 跟随文档缩放，不像 fixed 那样会相对物理视口漂移导致被裁
   if(canvas){
     canvas.style.position='absolute';
     canvas.style.left='0px';canvas.style.top='0px';
@@ -3674,9 +3705,15 @@ function resize(){
     canvas.width=Math.round(cw*dpr);
     canvas.height=Math.round(ch*dpr);
   }
-  scale=Math.min(cw/VW,ch/VH);
+  /* V6.4.9: 游戏内容缩进到安全区内，避开刘海与底部 Home 指示条；
+     外侧仍用全屏底色填充，不再出现「很高的黑条」。 */
+  var safe=readSafeInsets();
+  var aw=Math.max(80,cw-safe.l-safe.r);
+  var ah=Math.max(80,ch-safe.t-safe.b);
+  scale=Math.min(aw/VW,ah/VH);
   if(!isFinite(scale)||scale<=0)scale=1;
-  offX=(cw-VW*scale)/2;offY=(ch-VH*scale)/2;
+  offX=safe.l+(aw-VW*scale)/2;
+  offY=safe.t+(ah-VH*scale)/2;
   lastSize={cw:cw,ch:ch};
 }
 if(canvas){

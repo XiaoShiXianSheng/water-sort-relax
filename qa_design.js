@@ -779,8 +779,8 @@ guard(rep, '设计', function () {
       }
       /* ④ 开局台面为空 + 单局初始额度固定 */
       const onCounter = G2.bottles.filter(b => b.place === 'counter').length;
-      if (!(onCounter === 0 && G2.clears === 0 && G2.undoLeft === 5 && G2.unlockLeft === 1 &&
-        G2.tools.clear === 1 && G2.tools.finger === 1 && G2.tools.swap === 1))
+      /* V6.4.7：正式额度改为 0/0/0 + 撤销 1（用户 10-05 拍板：逼玩家看广告换道具）。loose 档仍 9/9/9，本断言只跑 strict。*/ if (!(onCounter === 0 && G2.clears === 0 && G2.undoLeft === 1 && G2.unlockLeft === 1 &&
+        G2.tools.clear === 0 && G2.tools.finger === 0 && G2.tools.swap === 0))
         v2.initState.push(key + ' 台面瓶' + onCounter + ' clears' + G2.clears + ' 撤销' + G2.undoLeft +
           ' 解锁' + G2.unlockLeft + ' 道具' + G2.tools.clear + '/' + G2.tools.finger + '/' + G2.tools.swap);
       /* ⑤ 不触顶：把「色 + 洞 + 冰」这条综合干扰量记下来，最后比 24 关 vs 90 关。
@@ -814,7 +814,7 @@ guard(rep, '设计', function () {
   one('**逐色水量守恒**（每种颜色的管中水量 == 该色瓶子数 × 3；比总量守恒强，能抓「总数对、结构错」）',
     v2.perColor);
   one('**不存在纯色管**（≥2 层的管至少含 2 种颜色；整根同色 = 白送一步的假难度）', v2.pureTube);
-  one('**开局台面为空 + 单局初始额度固定**（台面 0 瓶 / clears 0 / 撤销 5 / 解锁 1 / 道具各 1）', v2.initState);
+  one('**开局台面为空 + 单局初始额度固定**（台面 0 瓶 / clears 0 / 撤销 1 / 解锁 1 / 道具各 0 —— V6.4.7 起正式额度 0/0/0+撤销1，逼玩家看广告换道具）', v2.initState);
   {
     const a = LATE_SIG[LATE_KEY.from], b2 = LATE_SIG[LATE_KEY.to];
     const score = s => s ? s.colors * 10 + s.gates * 3 + s.ice * 3 : 0;

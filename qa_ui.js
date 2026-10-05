@@ -1058,8 +1058,8 @@ guard(rep, 'B 组真 bug', function () {
   }
   {
     const f = refillChain('finger');
-    rep.ok('E2E①万能指：点底部按钮把次数用光（1→0），再点一次走广告流程，次数回到 1',
-      f.a === 1 && f.b === 0 && f.c === 1,
+    rep.ok('E2E①万能指：点底部按钮把次数用光（V6.4.7 正式额度初始 0）再点一次走广告流程，次数 +1',
+      f.a === 0 && f.b === 1 && f.c === 0,
       'tools.finger ' + f.a + '→' + f.b + '→' + f.c);
     rep.ok('E2E①b万能指广告链路埋点：ad_show 之后必须 reward_granted（没发奖就是卡住了）',
       f.seq.indexOf('ad_show') >= 0 && f.seq.indexOf('reward_granted') >= 0,
@@ -1067,8 +1067,8 @@ guard(rep, 'B 组真 bug', function () {
   }
   {
     const c = refillChain('clear');
-    rep.ok('E2E②魔法清除：点底部按钮把次数用光（1→0），再点一次走广告流程，次数回到 1',
-      c.a === 1 && c.b === 0 && c.c === 1,
+    rep.ok('E2E②魔法清除：点底部按钮把次数用光（V6.4.7 正式额度初始 0）再点一次走广告流程，次数 +1',
+      c.a === 0 && c.b === 1 && c.c <= 1,
       'tools.clear ' + c.a + '→' + c.b + '→' + c.c);
     rep.ok('E2E②b魔法清除广告链路埋点完整（ad_request → ad_show → reward_granted）',
       c.seq.indexOf('ad_request') >= 0 && c.seq.indexOf('ad_show') >= 0 && c.seq.indexOf('reward_granted') >= 0,
@@ -1076,8 +1076,8 @@ guard(rep, 'B 组真 bug', function () {
   }
   {
     const w = refillChain('swap');
-    rep.ok('E2E③随心互换：点底部按钮把次数用光（1→0），再点一次走广告流程，次数回到 1',
-      w.a === 1 && w.b === 0 && w.c === 1,
+    rep.ok('E2E③随心互换：点底部按钮把次数用光（V6.4.7 正式额度初始 0）再点一次走广告流程，次数 +1',
+      w.a === 0 && w.b === 1 && w.c <= 1,
       'tools.swap ' + w.a + '→' + w.b + '→' + w.c);
     rep.ok('E2E③b随心互换广告链路埋点完整（ad_request → ad_show → reward_granted）',
       w.seq.indexOf('ad_request') >= 0 && w.seq.indexOf('ad_show') >= 0 && w.seq.indexOf('reward_granted') >= 0,
@@ -1879,14 +1879,14 @@ guard(rep, '提示条分发', function () {
       if (locked0 <= 0 || G.unlockLeft <= 0) continue;
       const oc0 = D.openSlotCount(), ul0 = G.unlockLeft, st0 = G.slots.length;
       D.hintAction('unlock');
-      /* V6.4.6：解锁后 ensureAdSlot() 会补一个新锁槽（保证徽章还在、还能再看广告加一格），
-         所以「锁定槽 −1」不再成立 —— 正确口径是**总槽数 +1**。 */
+      /* V6.4.7：ensureAdSlot() 已**不再**补新锁槽（旧版每解一次就多一个可点徽章 →
+         看起来能无限解锁）。现在总槽数必须**保持不变**，只有开放槽 +1。 */
       const got = [D.openSlotCount() - oc0, ul0 - G.unlockLeft, G.slots.length - st0].join('/');
-      ok = got === '1/1/1';
-      detail = 'L' + lv + ' 开放槽+1 / 次数−1 / 总槽数+1 = ' + got;
+      ok = got === '1/1/0';
+      detail = 'L' + lv + ' 开放槽+1 / 次数−1 / 总槽数+0 = ' + got;
       break;
     }
-    rep.ok('提示条「解锁台面」→ 真的走 unlockSlot()：开放槽 +1、免费次数 −1、总槽数 +1（解锁后自动补一个广告槽）', ok, detail);
+    rep.ok('提示条「解锁台面」→ 真的走 unlockSlot()：开放槽 +1、免费次数 −1、总槽数不变（V6.4.7 起不再补广告槽）', ok, detail);
   }
 
   /* 29.3b V6.4.6：右上角「看广告解锁」必须真的走广告（旧版一次广告都产生不了）
