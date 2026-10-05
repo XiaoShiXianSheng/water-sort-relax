@@ -166,7 +166,7 @@ function toolX(i){return TOOL_X0+i*(TOOL_W+TOOL_GAP);}
    adUnitId 为空时（尚未在开发者中心开通广告）会自动降级为 TEST，流程绝不被卡死。 */
 
 var CFG={
-  version:'6.4.12',                        // 对外版本号：随每条埋点上报，出事时能区分线上跑的是哪一版
+  version:'6.4.13',                        // 对外版本号：随每条埋点上报，出事时能区分线上跑的是哪一版
   maxLevel:90,                             // 关卡总数上限：完整内容就是 90 关；过关推进/选关页数/起点读取都以此为准，杜绝溢出到 91+
   env:'online',                            // 'online'(正式通道：真机有 tap 就真实拉广告) | 'test'(模拟完成) —— 另见 mockSdk 的第三态
                                            // 自动降级：无 window.tap → test(no-tap-runtime)；无 adUnitId → test(no-ad-unit-id)。
@@ -3666,16 +3666,8 @@ function loop(ts){
   }
   requestAnimationFrame(loop);
 }
-function readSafeInsets(){
-  /* V6.4.9: 从 html 上的 CSS 变量读 env(safe-area-inset-*)；宿主不支持则全 0 */
-  var o={t:0,b:0,l:0,r:0};
-  try{
-    var cs=window.getComputedStyle(document.documentElement);
-    function px(name){ var v=parseFloat(cs.getPropertyValue(name)); return (v>0&&isFinite(v))?v:0; }
-    o.t=px('--sat'); o.b=px('--sab'); o.l=px('--sal'); o.r=px('--sar');
-  }catch(e){}
-  return o;
-}
+function detectNotchSafeArea(){try{var u=navigator.userAgent||'',i=/iPhone|iPad|iPod/.test(u);if(!i&&!/Android/.test(u))return null;var d=window.devicePixelRatio||1,h=(screen&&screen.height&&d)?screen.height/d:0;if(h<680)return null;var t=h>=800;if(i)return t?{t:47,b:34,l:0,r:0}:{t:20,b:0,l:0,r:0};return {t:t?32:24,b:20,l:0,r:0};}catch(e){return null;}}
+function readSafeInsets(){var o={t:0,b:0,l:0,r:0};try{var cs=getComputedStyle(document.documentElement);function px(n){var v=parseFloat(cs.getPropertyValue(n));return(v>0&&isFinite(v))?v:0;}o.t=px('--sat');o.b=px('--sab');o.l=px('--sal');o.r=px('--sar');}catch(e){}if(!o.t&&!o.b&&!o.l&&!o.r){var f=detectNotchSafeArea();if(f)o=f;}return o;}
 function readViewport(){
   // 只读"视口"来源，绝不读 canvas 自身 —— 否则会被自己设的行内样式污染，形成逐帧放大的自反馈
   var w=0,h=0;
