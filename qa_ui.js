@@ -1021,45 +1021,44 @@ guard(rep, 'B 组真 bug', function () {
       G.toast && G.toast.msg);
   }
 
-  /* ---- B5：底部道具按钮「额度 0 = 点击无反应」（UI 层）----
-     V6.4.11 用户拍板：按钮永远彩色、角标显示 0，但额度 0 时点击**不做任何事**
-     （不再走 refillTool 弹广告补次）。这三条守住新行为，反证：把点击处理改回
-     `if(G.tools[id]<=0){ refillTool(id); return; }` → 次数会变、埋点会冒 → 必 FAIL。
+  /* ---- B5：广告补次端到端（UI 层）—— 玩家亲手要验的那条链路 ----
+     V6.4.12 用户口径：上来是 0/0/0/1，点了「0 次数」的道具按钮 → 看广告 → 次数 +1（然后就能用）。
+     三条各守一个道具；?sdk=real 无 tap 时必须**不发奖**（堵假绿）。
+     反证：把工具栏改回 `if(G.tools[id]<=0){ return; }`（点击无反应）→ 三条必 FAIL。
      ⚠ 摆局面到点击之间**不能走帧**（走帧台面瓶会把管底那口喝掉 → 底色一换清除就被拒），
        这与 qa_ui 13 号清除用例是同一个约定。 */
-  function zeroClick(id) {
+  function refillChain(id) {
     const g = fresh(); const D = g.DBG; const G = enter(g);
     const idx = D.consts().TOOL_IDS.indexOf(id);
     const tc = toolCenter(D, idx);
-    G.tools[id] = 0;                                  // strict 档本来就是 0，这里显式摆明
     const a = G.tools[id];
     D.Track.reset();
-    g.viewClick(tc.x, tc.y);
+    g.viewClick(tc.x, tc.y);                       // 额度 0 → 看广告补 1 次
     const b = G.tools[id];
     return { a: a, b: b, seq: D.Track.buf.map(e => e.e) };
   }
   {
-    const f = zeroClick('finger');
-    rep.ok('E2E①万能指：额度 0 时点底部按钮 → 无反应（次数仍是 0）',
-      f.a === 0 && f.b === 0, 'tools.finger ' + f.a + '→' + f.b);
-    rep.ok('E2E①b万能指：额度 0 点击不得触发任何广告（无 ad_request / ad_show）',
-      f.seq.indexOf('ad_show') < 0 && f.seq.indexOf('ad_request') < 0,
+    const f = refillChain('finger');
+    rep.ok('E2E①万能指：额度 0 → 点按钮看广告补 1 次（0→1）',
+      f.a === 0 && f.b === 1, 'tools.finger ' + f.a + '→' + f.b);
+    rep.ok('E2E①b万能指广告链路埋点：ad_show 之后必须 reward_granted（没发奖就是卡住了）',
+      f.seq.indexOf('ad_show') >= 0 && f.seq.indexOf('reward_granted') >= 0,
       f.seq.join(' → ') || '(无埋点)');
   }
   {
-    const c = zeroClick('clear');
-    rep.ok('E2E②魔法清除：额度 0 时点底部按钮 → 无反应（次数仍是 0）',
-      c.a === 0 && c.b === 0, 'tools.clear ' + c.a + '→' + c.b);
-    rep.ok('E2E②b魔法清除：额度 0 点击不得触发任何广告（无 ad_request / ad_show）',
-      c.seq.indexOf('ad_show') < 0 && c.seq.indexOf('ad_request') < 0,
+    const c = refillChain('clear');
+    rep.ok('E2E②魔法清除：额度 0 → 点按钮看广告补 1 次（0→1）',
+      c.a === 0 && c.b === 1, 'tools.clear ' + c.a + '→' + c.b);
+    rep.ok('E2E②b魔法清除广告链路埋点完整（ad_request → ad_show → reward_granted）',
+      c.seq.indexOf('ad_request') >= 0 && c.seq.indexOf('ad_show') >= 0 && c.seq.indexOf('reward_granted') >= 0,
       c.seq.join(' → ') || '(无埋点)');
   }
   {
-    const w = zeroClick('swap');
-    rep.ok('E2E③随心互换：额度 0 时点底部按钮 → 无反应（次数仍是 0）',
-      w.a === 0 && w.b === 0, 'tools.swap ' + w.a + '→' + w.b);
-    rep.ok('E2E③b随心互换：额度 0 点击不得触发任何广告（无 ad_request / ad_show）',
-      w.seq.indexOf('ad_show') < 0 && w.seq.indexOf('ad_request') < 0,
+    const w = refillChain('swap');
+    rep.ok('E2E③随心互换：额度 0 → 点按钮看广告补 1 次（0→1）',
+      w.a === 0 && w.b === 1, 'tools.swap ' + w.a + '→' + w.b);
+    rep.ok('E2E③b随心互换广告链路埋点完整（ad_request → ad_show → reward_granted）',
+      w.seq.indexOf('ad_request') >= 0 && w.seq.indexOf('ad_show') >= 0 && w.seq.indexOf('reward_granted') >= 0,
       w.seq.join(' → ') || '(无埋点)');
   }
   /* ?sdk=real 且运行时没有 window.tap：必须**明确降级**且**不记 reward_granted**（堵假绿）。
