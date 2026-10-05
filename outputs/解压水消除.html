@@ -166,7 +166,7 @@ function toolX(i){return TOOL_X0+i*(TOOL_W+TOOL_GAP);}
    adUnitId 为空时（尚未在开发者中心开通广告）会自动降级为 TEST，流程绝不被卡死。 */
 
 var CFG={
-  version:'6.4.10',                        // 对外版本号：随每条埋点上报，出事时能区分线上跑的是哪一版
+  version:'6.4.11',                        // 对外版本号：随每条埋点上报，出事时能区分线上跑的是哪一版
   maxLevel:90,                             // 关卡总数上限：完整内容就是 90 关；过关推进/选关页数/起点读取都以此为准，杜绝溢出到 91+
   env:'online',                            // 'online'(正式通道：真机有 tap 就真实拉广告) | 'test'(模拟完成) —— 另见 mockSdk 的第三态
                                            // 自动降级：无 window.tap → test(no-tap-runtime)；无 adUnitId → test(no-ad-unit-id)。
@@ -1620,7 +1620,8 @@ function toolLabel(id){
   for(var i=0;i<TOOLBS.length;i++)if(TOOLBS[i].id===id)return TOOLBS[i].label;
   return '道具';
 }
-/* 工具补次（P1 广告场景②）：玩家确实需要工具时，看广告换 1 次 —— 非强制 */
+/* 工具补次（P1 广告场景②）：看广告换 1 次道具。
+   V6.4.11 起底部按钮不再调用（额度 0 点击无反应）；保留供测试调用 / 便于将来恢复该入口。 */
 function refillTool(id){
   adReward('tool_'+id,function(){
     G.tools[id]=(G.tools[id]||0)+1; persistTools();
@@ -1630,6 +1631,7 @@ function refillTool(id){
     toast('\u5e7f\u544a\u6ca1\u52a0\u8f7d\u51fa\u6765\uff0c\u8fd9\u6b21\u6ca1\u8865\u6b21\u6570'); SFX.no();
   });
 }
+/* 撤销补次：同上，V6.4.11 起工具栏不再调用。失败面板的「看完广告退回一瓶」是独立入口 failUndo，广告保留。 */
 function refillUndo(){
   adReward('undo',function(){ G.undoLeft++; persistTools(); toast('\u770b\u5e7f\u544a\u8865\u4e86 1 \u6b21\u64a4\u9500\uff01'); SFX.cap(); },
     function(){ Track.log('ad_undo_denied',{reason:'ad_fail'}); toast('\u5e7f\u544a\u6ca1\u52a0\u8f7d\u51fa\u6765\uff0c\u8fd9\u6b21\u6ca1\u8865\u64a4\u9500'); SFX.no(); });
@@ -2322,17 +2324,17 @@ function handleTap(cx,cy){
       for(var hj=0;hj<G.bottles.length;hj++)if(G.bottles[hj].place==='counter')hasJar=true;
       if(hasJar&&G.undoLeft>0){
         G.mode='return';G.swapFirst=-1;G.swapFirstL=-1;toast('点台面上的瓶子，把它放回格子');SFX.tap();
-      }else if(G.undoLeft<=0){
-        refillUndo();                                  // 撤销用尽 → 看广告补 1 次（非强制）
-      }else{
+      }else if(G.undoLeft>0){
         doUndo();
       }
+      /* V6.4.11：undoLeft<=0 → 点击无任何反应（旧版走 refillUndo 弹广告补次）。 */
       return;
     }
-    if(G.tools[id]<=0){ refillTool(id); return; }      // 道具用完 → 看广告补 1 次（非强制）
+    /* V6.4.11：道具次数为 0 → 点击无任何反应（旧版走 refillTool 弹广告补次）。
+       按钮保持彩色、角标显示 0，只是不响应，避免「灰度=不能用」的误解。 */
+    if(G.tools[id]<=0){ return; }
     if(id==='clear'){
       if(G.mode==='clear'){G.mode=null;G.swapFirst=-1;G.swapFirstL=-1;toast('');SFX.tap();return;}
-      if(G.tools.clear<=0){refillTool(id);return;}
       G.mode='clear';G.swapFirst=-1;G.swapFirstL=-1;
       toast(clearTargetExists()?'点台面某个颜色的瓶子：把水管里这个颜色全吸过来（点【绿框】水管则只清管底那杯）':'先放一个瓶子上台面接水，管底的水才有地方倒');
       SFX.tap();return;
@@ -3172,8 +3174,7 @@ function drawTools(){
     var act=(tb.id==='clear'&&G.mode==='clear')||(tb.id==='swap'&&G.mode==='swap')||(tb.id==='undo'&&G.mode==='return');
     var isTool=(tb.id==='clear'||tb.id==='finger'||tb.id==='swap');
     var cnt=isTool?G.tools[tb.id]:(tb.id==='undo'?G.undoLeft:1);
-    var used=((isTool||tb.id==='undo')&&cnt<=0);
-    /* V6.4.10：额度 0 不再灰化按钮。旧逻辑涂灰+半透明 → 玩家当键坏了不点、自我阉割「看广告补次」。现永彩、红角标「+」提示补次。 */
+    /* V6.4.11：按钮永远彩色、角标显示真实次数（0 也显示 0）；额度 0 时点击无反应。 */
     rr(ctx,x,TOOL_Y,TOOL_W,TOOL_H,18);
     ctx.fillStyle=(tb.id==='undo'?'#8fd3a6':(act?'#ffe9a8':'#ffd95e'));ctx.fill();
     ctx.strokeStyle=(tb.id==='undo'?'#3f8f5f':'#c9972f');ctx.lineWidth=4;ctx.stroke();
@@ -3184,16 +3185,11 @@ function drawTools(){
     ctx.fillText(tb.label,cx,TOOL_Y+74);
     ctx.globalAlpha=1;
     if(isTool||tb.id==='undo')drawCountBadge(x+TOOL_W-14,TOOL_Y+12,cnt|0);
-    /* 额度 0 → 红角标区画「+」，暗示还能看广告补次（配合小白用户的「能动、只是没次数」心智） */
-    if(used){
-      ctx.font='bold 22px '+FONT;ctx.textAlign='center';ctx.fillStyle='#ff5d6c';
-      ctx.fillText('+',cx,TOOL_Y+74);
-    }
   }
 }
 function drawCountBadge(bx,by,cnt){
   ctx.beginPath();ctx.arc(bx,by,17,0,7);
-  ctx.fillStyle=cnt>0?'#ff5d6c':'#9aa7b2';ctx.fill();
+  ctx.fillStyle='#ff5d6c';ctx.fill();
   ctx.strokeStyle='rgba(255,255,255,0.85)';ctx.lineWidth=2;ctx.stroke();
   ctx.font='bold 20px '+FONT;ctx.textAlign='center';ctx.fillStyle='#fff';
   ctx.fillText(String(cnt),bx,by+7);
