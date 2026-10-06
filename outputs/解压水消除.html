@@ -166,7 +166,7 @@ function toolX(i){return TOOL_X0+i*(TOOL_W+TOOL_GAP);}
    adUnitId 为空时（尚未在开发者中心开通广告）会自动降级为 TEST，流程绝不被卡死。 */
 
 var CFG={
-  version:'6.4.13',                        // 对外版本号：随每条埋点上报，出事时能区分线上跑的是哪一版
+  version:'6.4.14',                        // 对外版本号：随每条埋点上报，出事时能区分线上跑的是哪一版
   maxLevel:90,                             // 关卡总数上限：完整内容就是 90 关；过关推进/选关页数/起点读取都以此为准，杜绝溢出到 91+
   env:'online',                            // 'online'(正式通道：真机有 tap 就真实拉广告) | 'test'(模拟完成) —— 另见 mockSdk 的第三态
                                            // 自动降级：无 window.tap → test(no-tap-runtime)；无 adUnitId → test(no-ad-unit-id)。
@@ -1037,21 +1037,12 @@ function genLevel(lv,opts){
   /* 上一局没打完就离开 → 记一次 level_exit（用来回答「玩家在哪一关流失」） */
   if(G.state==='play'&&!G.winStats)Track.log('level_exit',{moves:G.moves,tools:G.toolsUsed,tier:G.tier});
   G.level=lv; G.anim=null; G.history=[]; G.mode=null; G.swapFirst=-1; G.swapFirstL=-1;
-  /* V6.4.8: carry tools across levels; adUnlockCap still per-level. */
+  /* V6.4.14 严格模式 0-0-0-1：撤销每关补满 1（旧 bug：整局只跑一次+读存档 → 用过一次后永远 0） */
   G.adUnlockLeft=CFG.adUnlockCap;
-  if(!G._toolsCarry){
-    G._toolsCarry=1;
-    if(CFG.toolMode==='loose'){
-      var _tq=(CFG.toolQuota&&CFG.toolQuota.loose)||{clear:9,finger:9,swap:9,undo:9};
-      G.undoLeft=_tq.undo; G.unlockLeft=1; G.tools={clear:_tq.clear,finger:_tq.finger,swap:_tq.swap};
-    }else{
-      var _st=(Store.data)||{};
-      var _tt=_st.tools||{};
-      G.tools={clear:_tt.clear|0,finger:_tt.finger|0,swap:_tt.swap|0};
-      G.undoLeft=(typeof _st.undo==='number')?(_st.undo|0):1;
-      G.unlockLeft=(typeof _st.unlockLeft==='number')?(_st.unlockLeft|0):1;
-    }
-  }
+  var _st0=(Store.data)||{},_tt0=_st0.tools||{};
+  if(CFG.toolMode==='loose'){var _tq=(CFG.toolQuota&&CFG.toolQuota.loose)||{clear:9,finger:9,swap:9,undo:9};G.undoLeft=_tq.undo;G.tools={clear:_tq.clear,finger:_tq.finger,swap:_tq.swap};}
+  else{G.tools={clear:0,finger:0,swap:0};G.undoLeft=1;}
+  G.unlockLeft=(typeof _st0.unlockLeft==='number')?(_st0.unlockLeft|0):1;
   G.clears=0; G.toast=null; particles=[]; flying=[];
   G.stuck=false; G.hint=false; G.mode=null;
   G.gates=[]; G.lvPick=false; G.warn=null; G.lvTap={n:0,t:0}; G.lastPour=null;
@@ -3381,6 +3372,7 @@ function render(time){
   ctx.setTransform(dpr,0,0,dpr,0,0);
   /* V6.4.9: 先铺满全屏底色，letterbox / 安全区不再露黑块 */
   ctx.fillStyle='#0e1822';ctx.fillRect(0,0,cw,ch);
+  var _bg=Math.max(cw/VW,ch/VH);ctx.drawImage(bg,(cw-VW*_bg)/2,0,VW*_bg,VH*_bg);
   ctx.translate(offX,offY);ctx.scale(scale,scale);
   ctx.drawImage(bg,0,0);
   ctx.textAlign='center';ctx.textBaseline='alphabetic';
