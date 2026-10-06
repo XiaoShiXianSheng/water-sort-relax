@@ -166,7 +166,7 @@ function toolX(i){return TOOL_X0+i*(TOOL_W+TOOL_GAP);}
    adUnitId 为空时（尚未在开发者中心开通广告）会自动降级为 TEST，流程绝不被卡死。 */
 
 var CFG={
-  version:'6.4.16',                        // 对外版本号：随每条埋点上报，出事时能区分线上跑的是哪一版
+  version:'6.4.17',                        // 对外版本号：随每条埋点上报，出事时能区分线上跑的是哪一版
   maxLevel:90,                             // 关卡总数上限：完整内容就是 90 关；过关推进/选关页数/起点读取都以此为准，杜绝溢出到 91+
   env:'online',                            // 'online'(正式通道：真机有 tap 就真实拉广告) | 'test'(模拟完成) —— 另见 mockSdk 的第三态
                                            // 自动降级：无 window.tap → test(no-tap-runtime)；无 adUnitId → test(no-ad-unit-id)。
@@ -686,6 +686,11 @@ var AdService={
         Track.log('ad_load_fail',{type:'rewarded',env:'online',err:msg,src:AdService.adUnitSrc,
           platform:CFG.platform,unit:CFG.adUnitFor('rewarded')});
         AdService.stats.loadFail++;
+        /* V6.4.17:拉取失败也把请求收尾,以前只记日志→按钮没反应 */
+        var pend=AdService._tapOpts;
+        if(pend&&!(AdService._pending&&AdService._pending.rewarded&&AdService._pending.token===pend.token)){
+          AdService._tapOpts=null;AdService._fail(pend.scene,pend.opts);
+        }
       });
       AdService._rw.onClose(function(res){
         var pend=AdService._tapOpts;
@@ -1812,21 +1817,14 @@ function drawLvPick(time){
    ★ 复活必须真的恢复可玩状态：优先恢复失败前的安全快照（方案B），找不到就发一个
      真能解开死局的救援（方案C），最后还有一道「把接不到水的瓶子退回货架」的兜底 ——
      三段保证「复活后一定存在至少一个合法有效的决策」，杜绝「看完广告继续死」。 */
-/* 前三项的 y/h 一字未动（机器人与回归用例都点在这些坐标上），只在后面接第 4 项。
-   面板高度 470 → 538（392~930），第 4 项「撤销一瓶」是玩家反馈加的（FIX-04）：
-   真死局那一刻最容易流失，先给一次"我自己退一步"的机会；
-   撤销次数用光时它变成广告入口（把流失转成一次曝光）。 */
+/* 前三项 y/h 一字未动(机器人用例点原坐标);第4项「撤销一瓶」为 FIX-04 玩家反馈 */
 var FAIL_OPTS=[
   {id:'revive', y:470,h:88,title:'▶ 看广告复活', sub:'回到最近的安全局面，继续这一局'},
   {id:'restart',y:570,h:88,title:'重新开始本关',  sub:'这一关从头再来'},
   {id:'home',   y:670,h:88,title:'回首页',        sub:'先休息一下，稍后再来'},
   {id:'undo',   y:770,h:88,title:'↩ 撤销一瓶',    sub:'退回最后放上去的瓶子，接着玩'}
 ];
-/* ---- 失败面板上的「撤销一瓶」：弹窗后 1.5 秒才淡入（FIX-04）------------------
-   为什么是 1.5 秒：弹窗刚出来的 0~1.5 秒是玩家的情绪缓冲期，这时候把「再试一次」
-   怼到脸上等于逼他立刻做决定；1.5 秒后他开始找办法，这个按钮才出现。
-   淡入 0.35 秒，避免"凭空多一块"的突兀感。计时直接复用 G.fail.t（enterFail 起 0，
-   update 里逐帧累加），不再另起一个字段 —— 两个计时器必然有一天对不上。 */
+/* 「撤销一瓶」弹窗后 1.5s 才淡入（FIX-04）：先给情绪缓冲;计时复用 G.fail.t */
 function failUndoShow(){ return !!(G.fail&&G.history.length>0); }
 function failUndoAlpha(){
   if(!failUndoShow())return 0;
@@ -1844,7 +1842,7 @@ function failUndo(){
        「看完广告不该还是三星」（与 reviveUsed 那条口径一致）。
        用普通撤销次数退的那一步不记账 —— 玩家花的是每关 5 次的撤销额度，不是广告。 */
     var grant=function(){ G.undoLeft++; G.adUndo++; failUndoCommit(); };   // 广告发的就是那 1 次撤销额度
-    adReward('undo',grant,grant);
+    adReward('undo',grant);
     return;
   }
   failUndoCommit();
@@ -2025,10 +2023,7 @@ function failAction(id){
   if(id==='undo'){ failUndo(); return; }
   if(id==='revive'){
     if(G.reviveUsed>=CFG.reviveLimit){ toast('本局复活次数用完啦，重开或回首页吧'); SFX.no(); return; }
-    adReward('revive',function(){ doRevive(); },function(){
-      /* 广告拉取失败 → 友好降级：不卡住流程，放行一次复活（可配置成 'none' 关闭） */
-      doRevive();
-    });
+    adReward('revive',function(){ doRevive(); });
   }
 }
 function goHome(){
@@ -3106,15 +3101,14 @@ function drawFailPanel(time){
   rr(ctx,60,392,600,538,26);
   ctx.fillStyle='rgba(255,255,255,0.97)';ctx.fill();
   ctx.strokeStyle='rgba(96,138,178,0.9)';ctx.lineWidth=4;ctx.stroke();
+  /* V6.4.17:标题/原因上移,原被首颗按钮盖住;按钮坐标不动;复活次数挪页脚 */
   ctx.font='bold 44px '+FONT;ctx.textAlign='center';ctx.fillStyle='#e8734d';
-  ctx.fillText('这一局走不动了',VW/2,470);
-  ctx.font='24px '+FONT;ctx.fillStyle='#4a6a88';
+  ctx.fillText('这一局走不动了',VW/2,440);
+  ctx.font='22px '+FONT;ctx.fillStyle='#4a6a88';
   var why=(f.reason==='no-water')?'水都喝完了，还有瓶子没收回'
     :(f.reason==='unsolvable')?'货架上的瓶子已经掏不出来了'
     :'没有可以继续的操作了';
-  ctx.fillText(why+' · 换个方式继续',VW/2,512);
-  ctx.font='22px '+FONT;ctx.fillStyle='#8aa2b8';
-  ctx.fillText('本局剩余复活次数：'+Math.max(0,CFG.reviveLimit-G.reviveUsed)+' / '+CFG.reviveLimit,VW/2,548);
+  ctx.fillText(why+' · 换个方式继续',VW/2,464);
   var clickable=f.t>0.6;                            // 缓冲期内不接受点击，避免误触
   var ua=failUndoAlpha();
   for(var i=0;i<FAIL_OPTS.length;i++){
@@ -3135,8 +3129,10 @@ function drawFailPanel(time){
     ctx.fillText(sub,VW/2,so.y+66);
     ctx.globalAlpha=a;
   }
-  ctx.font='19px '+FONT;ctx.fillStyle='#a8b6c2';
-  ctx.fillText('广告只看你主动点的那些；看完一定回到「能继续玩」的局面',VW/2,892);
+  ctx.font='19px '+FONT;ctx.fillStyle='#8aa2b8';
+  ctx.fillText('本局剩余复活次数：'+Math.max(0,CFG.reviveLimit-G.reviveUsed)+' / '+CFG.reviveLimit,VW/2,886);
+  ctx.font='17px '+FONT;ctx.fillStyle='#a8b6c2';
+  ctx.fillText('广告只看你主动点的那些；看完一定回到「能继续玩」的局面',VW/2,910);
   ctx.restore();
 }
 /* ---- 新手引导气泡（前 3 关各一条，看过就不再出现）V4.0 §17 ---- */
@@ -3620,7 +3616,8 @@ function update(dt){
   if(G.warn){G.warn.t+=dt; if(G.warn.t>1.8)G.warn=null;}
   for(var b=0;b<G.bottles.length;b++){
     var bb=G.bottles[b];
-    if(bb.capT>0&&bb.capT<1)bb.capT=Math.min(1,bb.capT+dt*3.2);
+    /* V6.4.17:台面瓶capT涨;货架瓶capT回落(撤销回货架后盖子画回来) */
+    if(bb.capT>0){if(bb.place==='counter'){if(bb.capT<1)bb.capT=Math.min(1,bb.capT+dt*3.2);}else bb.capT=Math.max(0,bb.capT-dt*3.2);}
     if(bb.done)bb.doneT=(bb.doneT||0)+dt;
     if(bb.shake>0)bb.shake=Math.max(0,bb.shake-dt*2.6);
   }
@@ -3670,10 +3667,12 @@ function readViewport(){
 }
 function resize(){
   var sz=readViewport();
-  /* V6.4.16: screen兜底+fixed防裁剪 → canvas≥真屏，背景cover铺满全屏（黑块根治） */
+  /* V6.4.17:screen兜底仅限WebView/独立模式;普通浏览器用视口,防canvas高于可视区挡住工具栏 */
   var _sw=(window.screen&&window.screen.width)||0, _sh=(window.screen&&window.screen.height)||0;
-  cw=Math.min(4000,Math.max(80,Math.max(sz.w,_sw)));
-  ch=Math.min(4000,Math.max(80,Math.max(sz.h,_sh)));
+  var _ua=navigator.userAgent||'';
+  var _wv=(navigator.standalone===true)||/;\s*wv\)/.test(_ua)||/TapTap/i.test(_ua)||!/Safari\//.test(_ua);
+  cw=Math.min(4000,Math.max(80,_wv?Math.max(sz.w,_sw):sz.w));
+  ch=Math.min(4000,Math.max(80,_wv?Math.max(sz.h,_sh):sz.h));
   dpr=Math.min(window.devicePixelRatio||1,2);
   if(!(dpr>0))dpr=1;
   if(canvas){
