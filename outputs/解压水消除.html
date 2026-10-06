@@ -166,7 +166,7 @@ function toolX(i){return TOOL_X0+i*(TOOL_W+TOOL_GAP);}
    adUnitId 为空时（尚未在开发者中心开通广告）会自动降级为 TEST，流程绝不被卡死。 */
 
 var CFG={
-  version:'6.4.15',                        // 对外版本号：随每条埋点上报，出事时能区分线上跑的是哪一版
+  version:'6.4.16',                        // 对外版本号：随每条埋点上报，出事时能区分线上跑的是哪一版
   maxLevel:90,                             // 关卡总数上限：完整内容就是 90 关；过关推进/选关页数/起点读取都以此为准，杜绝溢出到 91+
   env:'online',                            // 'online'(正式通道：真机有 tap 就真实拉广告) | 'test'(模拟完成) —— 另见 mockSdk 的第三态
                                            // 自动降级：无 window.tap → test(no-tap-runtime)；无 adUnitId → test(no-ad-unit-id)。
@@ -3367,7 +3367,7 @@ function render(time){
   ctx.setTransform(dpr,0,0,dpr,0,0);
   /* V6.4.9: 先铺满全屏底色，letterbox / 安全区不再露黑块 */
   ctx.fillStyle='#0e1822';ctx.fillRect(0,0,cw,ch);
-  var _bg=Math.max(cw/VW,ch/VH);ctx.drawImage(bg,(cw-VW*_bg)/2,0,VW*_bg,VH*_bg);
+  var _bg=Math.max(cw/VW,ch/VH);ctx.drawImage(bg,(cw-VW*_bg)/2,(ch-VH*_bg)/2,VW*_bg,VH*_bg);
   ctx.translate(offX,offY);ctx.scale(scale,scale);
   ctx.drawImage(bg,0,0);
   ctx.textAlign='center';ctx.textBaseline='alphabetic';
@@ -3670,18 +3670,20 @@ function readViewport(){
 }
 function resize(){
   var sz=readViewport();
-  cw=sz.w; ch=sz.h;
+  /* V6.4.16: screen兜底+fixed防裁剪 → canvas≥真屏，背景cover铺满全屏（黑块根治） */
+  var _sw=(window.screen&&window.screen.width)||0, _sh=(window.screen&&window.screen.height)||0;
+  cw=Math.min(4000,Math.max(80,Math.max(sz.w,_sw)));
+  ch=Math.min(4000,Math.max(80,Math.max(sz.h,_sh)));
   dpr=Math.min(window.devicePixelRatio||1,2);
   if(!(dpr>0))dpr=1;
   if(canvas){
-    canvas.style.position='absolute';
+    canvas.style.position='fixed';
     canvas.style.left='0px';canvas.style.top='0px';
     canvas.style.width=cw+'px';canvas.style.height=ch+'px';
     canvas.width=Math.round(cw*dpr);
     canvas.height=Math.round(ch*dpr);
   }
-  /* V6.4.9: 游戏内容缩进到安全区内，避开刘海与底部 Home 指示条；
-     外侧仍用全屏底色填充，不再出现「很高的黑条」。 */
+  /* V6.4.9: 内容缩进安全区；背景已全屏铺满（V6.4.16） */
   var safe=readSafeInsets();
   var aw=Math.max(80,cw-safe.l-safe.r);
   var ah=Math.max(80,ch-safe.t-safe.b);
