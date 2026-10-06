@@ -13,15 +13,15 @@
    2) 画布的【显示尺寸】由 CSS 的 100%×100% 决定：永远跟随 body，绝不溢出
    3) JS 只负责设置画布的【位图分辨率】(width/height 属性) 与缩放比例
    4) 仅当 CSS 尺寸完全拿不到时，才用行内像素兜底（防 body 塌陷为 0） */
-html{width:100%;height:100%;margin:0;padding:0;background:#0e1822;
+html{width:100%;height:100%;margin:0;padding:0;background:linear-gradient(180deg,#dbeefb,#7d5633);
   /* V6.4.9: iPhone 刘海/底部横条 —— 把安全区写进 CSS 变量供 JS 读取 */
   --sat:env(safe-area-inset-top,0px);--sab:env(safe-area-inset-bottom,0px);
   --sal:env(safe-area-inset-left,0px);--sar:env(safe-area-inset-right,0px);}
 body{margin:0;padding:0;width:100%;height:100%;min-height:100dvh;min-height:-webkit-fill-available;
-     background:#0e1822;overflow:hidden;
+     background:linear-gradient(180deg,#dbeefb,#7d5633);overflow:hidden;
      touch-action:none;overscroll-behavior:none;
      -webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%;}
-#game{display:block;position:absolute;left:0;top:0;width:100%;height:100%;background:#0e1822;}
+#game{display:block;position:absolute;left:0;top:0;width:100%;height:100%;background:linear-gradient(180deg,#dbeefb,#7d5633);}
 </style>
 </head>
 <body>
@@ -166,7 +166,7 @@ function toolX(i){return TOOL_X0+i*(TOOL_W+TOOL_GAP);}
    adUnitId 为空时（尚未在开发者中心开通广告）会自动降级为 TEST，流程绝不被卡死。 */
 
 var CFG={
-  version:'6.4.14',                        // 对外版本号：随每条埋点上报，出事时能区分线上跑的是哪一版
+  version:'6.4.15',                        // 对外版本号：随每条埋点上报，出事时能区分线上跑的是哪一版
   maxLevel:90,                             // 关卡总数上限：完整内容就是 90 关；过关推进/选关页数/起点读取都以此为准，杜绝溢出到 91+
   env:'online',                            // 'online'(正式通道：真机有 tap 就真实拉广告) | 'test'(模拟完成) —— 另见 mockSdk 的第三态
                                            // 自动降级：无 window.tap → test(no-tap-runtime)；无 adUnitId → test(no-ad-unit-id)。
@@ -217,6 +217,7 @@ var CFG={
      所以这里只做**叠加**（R8），不替换原行。 */
   toolMode:'strict',                      // 'strict'(正式额度 1/1/1) | 'loose'(测试额度 9/9/9)
   toolQuota:{strict:{clear:0,finger:0,swap:0,undo:1},loose:{clear:9,finger:9,swap:9,undo:9}},
+  toolResetEach:false,  // 连点面板可切：true=每关补满0-0-0-1；false=额度跨关持久(用完看广告补)
   rewardedSessionCap:12,                   // V6.4.6：单会话激励视频上限（原 3，看满就永久哑火 → 变现被自己锁死）
   adUnlockCap:2,                           // V6.4.6：每关「看广告解锁台面槽」的上限（免费那 1 次不算在内）
   interstitialSessionCap:1,                // 单会话插屏上限
@@ -1041,18 +1042,12 @@ function genLevel(lv,opts){
   G.adUnlockLeft=CFG.adUnlockCap;
   var _st0=(Store.data)||{},_tt0=_st0.tools||{};
   if(CFG.toolMode==='loose'){var _tq=(CFG.toolQuota&&CFG.toolQuota.loose)||{clear:9,finger:9,swap:9,undo:9};G.undoLeft=_tq.undo;G.tools={clear:_tq.clear,finger:_tq.finger,swap:_tq.swap};}
-  else{G.tools={clear:0,finger:0,swap:0};G.undoLeft=1;}
+  else{if(CFG.toolResetEach){G.tools={clear:0,finger:0,swap:0};G.undoLeft=1;}else{G.tools={clear:_tt0.clear|0,finger:_tt0.finger|0,swap:_tt0.swap|0};G.undoLeft=(typeof _st0.undo==='number')?(_st0.undo|0):1;}}
   G.unlockLeft=(typeof _st0.unlockLeft==='number')?(_st0.unlockLeft|0):1;
   G.clears=0; G.toast=null; particles=[]; flying=[];
   G.stuck=false; G.hint=false; G.mode=null;
   G.gates=[]; G.lvPick=false; G.warn=null; G.lvTap={n:0,t:0}; G.lastPour=null;
-  /* ---- 本次挑战档位的来源（V6.0 §五-A）----
-     优先级：显式传入的 opts.tier > 每日挑战(固定种子，恒 0) > 回归热身档 > 0（正常）。
-     注意热身档**只影响这一局怎么生成**，碰不到 Store.level / maxLevel ——
-     「我已经打到第 15 关」这件事不会因为热身而改变。
-     ★ G.warm 必须与「这一局实际用了哪个档」一致：玩家在热身期间从结算页主动选了
-       困难/极限（opts.tier），或者去打了每日挑战，这一局就不算热身 ——
-       否则通关时会走 advanceWarmup()，把热身进度白白推进一档，而玩家根本没在热身。 */
+  /* 档位来源：opts.tier > 每日挑战 > 热身档 > 0；G.warm 必须与实际档一致，否则热身被误推进。 */
   if(opts.tier!==undefined){ G.tier=opts.tier|0; G.warm=0; }
   else if(opts.daily){ G.tier=0; G.warm=0; }
   else { G.tier=resolveChallengeTier(lv); G.warm=inWarmup(lv)?1:0; }
@@ -1691,21 +1686,17 @@ function useSwapLayer(i,li,j,lj){
   G.tools.swap--; persistTools(); G.mode=null; G.swapFirst=-1; G.swapFirstL=-1; SFX.magic();
   toast(i===j ? ('互换：这根管把【'+colName(_s1)+'】换到了管底，现在能接【'+colName(a.units[0])+'】') : ('互换：【'+colName(_s1)+'】↔【'+colName(_s2)+'】换了位置'));
   G.moves++; G.toolsUsed++; Track.log('tool_use',{tool:'swap',env:AdService.env,mode:CFG.toolMode}); }
-/* ---- 隐藏选关（测试用）--------------------------------------------------
-   入口：左上角「关卡 N」在 2.5 秒内连点 5 次。给测试/评审用，正式玩家基本碰不到。
-   每页 30 关（5 列 × 6 行），共 3 页，够测到第 90 关。 */
+/* ---- 隐藏选关（测试用）：入口=左上角「关卡 N」2.5 秒内连点 5 次。 ---- */
 var LV_PANEL={
   px:50, py0:265, pw:620, ph:900,
   bx:84, by:382, bw:104, bh:76, gap:8,
   pgy:898, pgh:62, bbx:84, bbw:164, nbx:472, nbw:164,
-  ey:990, eh:64, ex1:84, ex2:282, ex3:480, ew:190,   // 广告环境切换（TEST / ONLINE-模拟SDK / ONLINE-真实SDK）
-  cX:250, cY:1078, cW:220, cH:62
+  ry:966, rh:54, rw:586,
+  ey:1028, eh:56, ex1:84, ex2:282, ex3:480, ew:190,
+  cX:250, cY:1092, cW:220, cH:56
 };
 var LV_PER_PAGE=30, LV_PAGES=Math.ceil(CFG.maxLevel/LV_PER_PAGE);   // 页数随关卡上限走，不再写死 3
-/* 广告环境切换。故意不给它任何可见入口 —— 它藏在这个「连点 5 次才开」的测试面板里，
-   正式玩家碰不到，也不会给审核留下「应用内带调试开关」的话柄。
-   ★ 关键：点了 ONLINE 却因为没 SDK / 没 adUnitId 被自动降级时，必须把原因说出来，
-     否则测试会误以为「真实广告已经接通了」。 */
+/* 广告环境切换：藏在本面板（连点5次才开），玩家碰不到；降级时必须说出原因。 */
 var ENV_DEGRADE_TXT={'no-tap-runtime':'没检测到 TapTap SDK（不在 TapTap 容器内）',
                      'no-ad-unit-id':'还没填 adUnitId（尚未开通广告位）',
                      'no-real-runtime':'强制真 SDK 模式但环境里没有真实 tap 运行时（不在 TapTap 容器内）'};
@@ -1737,6 +1728,7 @@ function lvPickTap(vx,vy){
   }
   /* 广告环境切换（TEST 模拟看完 / ONLINE 真实 SDK）。坐标与下方绘制共用 LV_PANEL，
      画的和点的必须是同一套，否则又是一个「看得见点不到」。 */
+  if(vy>=P.ry&&vy<=P.ry+P.rh&&vx>=P.ex1&&vx<=P.ex1+P.rw){CFG.toolResetEach=!CFG.toolResetEach;SFX.tap();toast('每关重置(下一关生效)：'+(CFG.toolResetEach?'开 · 撤销每关补满1':'关 · 额度跨关持久'));return;}
   if(vy>=P.ey&&vy<=P.ey+P.eh){
     if(vx>=P.ex1&&vx<=P.ex1+P.ew){setEnvUI('test');return;}
     if(vx>=P.ex2&&vx<=P.ex2+P.ew){setEnvUI('mock');return;}
@@ -1781,8 +1773,11 @@ function drawLvPick(time){
   ctx.font='bold 25px '+FONT;ctx.fillStyle='#5a7488';
   ctx.fillText((pg+1)+' / '+LV_PAGES,VW/2,P.pgy+40);
 
-  /* 广告环境切换：TEST=模拟看完（可自动化测试） / ONLINE=真实 TapTap SDK。
-     当前档高亮成蓝色；被降级时把原因写在上一行，避免误判成「真实广告已接通」。 */
+  rr(ctx,P.ex1,P.ry,P.rw,P.rh,14);
+  ctx.fillStyle=CFG.toolResetEach?'#4d9be8':'rgba(238,246,253,0.98)';ctx.fill();
+  ctx.strokeStyle='rgba(150,180,210,0.9)';ctx.lineWidth=3;ctx.stroke();
+  ctx.font='bold 22px '+FONT;ctx.fillStyle=CFG.toolResetEach?'#fff':'#3a5570';
+  ctx.fillText('每关重置道具：'+(CFG.toolResetEach?'开（撤销每关补满1）':'关（额度跨关持久）'),P.ex1+P.rw/2,P.ry+35);
   var eTest=(AdService.env!=='online'&&!AdService.mockSdk), eMock=!!AdService.mockSdk, eOn=(AdService.env==='online'&&!AdService.mockSdk);
   ctx.font='20px '+FONT;ctx.fillStyle='#7d93a8';
   ctx.fillText(eMock?'当前：ONLINE（模拟 SDK · 正式通道完整跑通，广告素材非真实）'
