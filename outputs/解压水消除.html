@@ -166,12 +166,12 @@ function toolX(i){return TOOL_X0+i*(TOOL_W+TOOL_GAP);}
    adUnitId 为空时（尚未在开发者中心开通广告）会自动降级为 TEST，流程绝不被卡死。 */
 
 var CFG={
-  version:'6.4.17',                        // 对外版本号：随每条埋点上报，出事时能区分线上跑的是哪一版
+  version:'6.4.20',                        // 对外版本号：随每条埋点上报，出事时能区分线上跑的是哪一版
   maxLevel:90,                             // 关卡总数上限：完整内容就是 90 关；过关推进/选关页数/起点读取都以此为准，杜绝溢出到 91+
   env:'online',                            // 'online'(正式通道：真机有 tap 就真实拉广告) | 'test'(模拟完成) —— 另见 mockSdk 的第三态
                                            // 自动降级：无 window.tap → test(no-tap-runtime)；无 adUnitId → test(no-ad-unit-id)。
                                            // 所以本地浏览器/Node 测试环境永远是 test，真机永远走 online，不需要手动改代码。
-  adUnit:{rewarded:'1068017',interstitial:'1068090'},  // 广告位ID：在 Dirichlet 媒体平台 ssp.dirichlet.cn 创建；留空则自动降级 TEST
+  adUnit:{rewarded:'1054324',interstitial:''},  // V6.4.18：创意工坊 H5 只用官方激励 space_id（check_ads_status / MCP），禁止 Dirichlet 自建位；插屏不支持故留空
                                            // ★ V6.4.5：两条位都从【测试媒体 1110240】迁到【正式媒体 1110498】(MEDIA_TYPE_FORMAL)。
                                            //   1068017 = 正式媒体下的激励视频(SCENE_TYPE_REWARD)；1068090 = 正式媒体下的插屏(SCENE_TYPE_INSERT)。
                                            //   旧位 1067564/1067565 挂在测试媒体下 → 只有白名单设备能拉到广告，真机收益恒为 0。
@@ -220,10 +220,10 @@ var CFG={
   toolResetEach:false,  // 连点面板可切：true=每关补满0-0-0-1；false=额度跨关持久(用完看广告补)
   rewardedSessionCap:12,                   // V6.4.6：单会话激励视频上限（原 3，看满就永久哑火 → 变现被自己锁死）
   adUnlockCap:2,                           // V6.4.6：每关「看广告解锁台面槽」的上限（免费那 1 次不算在内）
-  interstitialSessionCap:1,                // 单会话插屏上限
+  interstitialSessionCap:0,                // V6.4.18：H5 创意工坊不支持插屏，关闭
   interstitialCooldown:300,                // 插屏冷却（秒）：官方建议 ≥180s，这里取 300s 更克制
   firstSessionProtection:15,               // 首次体验保护（秒）：进入后这段时间不主动弹插屏
-  interstitialAfterWins:3,                 // 连续成功 3 次后才允许一次插屏（低频、可关闭）
+  interstitialAfterWins:999999,                 // 连续成功 3 次后才允许一次插屏（低频、可关闭）
   reviveLimit:2,                           // 每局广告复活次数上限
   adFailFallback:'free',                   // 广告拉取失败降级：'free'(放行一次救援，不卡流程) | 'none'(只提示)
   trackUrl:'',                             // 埋点上报地址（留空 = 只写本地缓冲，便于离线核对）
@@ -576,6 +576,10 @@ var AdService={
     AdService.adUnitSrc=AdService.srcOf();           // 降级之后才算 src，保证面板与埋点说的是同一件事
     AdService._t0=AdService.now();
     AdService.inited=true;
+    /* V6.4.20: 启动即预加载激励广告，使首次 show() 秒出、消除「点广告→加载慢→游戏已推进」的竞态 */
+    if(AdService.hasTap()){
+      try{ var _pr=AdService._tapRewarded(); if(_pr&&_pr.load)try{_pr.load();}catch(e){} }catch(e){}
+    }
     Track.log('ad_env_init',{env:AdService.env,src:AdService.adUnitSrc,reason:AdService.degradeReason,
       platform:CFG.platform,forceReal:AdService.forceRealSdk,mock:!!AdService.mockSdk,sdk:(AdService.mockSdk?'mock':'real'),
       unit:CFG.adUnitFor('rewarded')});
@@ -703,6 +707,8 @@ var AdService={
           Track.log('ad_cancel',{scene:pend.scene,type:'rewarded',env:'online'});
           if(pend.opts&&pend.opts.onCancel)try{ pend.opts.onCancel('cancel'); }catch(e){}
         }
+        /* V6.4.20: 关闭后立刻预热下一次，保证后续 show() 也秒出 */
+        try{ if(AdService._rw&&AdService._rw.load)AdService._rw.load(); }catch(e){}
       });
     }catch(e){ return null; }
     return AdService._rw;
@@ -2208,6 +2214,7 @@ function startFromTitle(){
 }
 function handleTap(cx,cy){
   ac();
+  if(G.adBusy)return;   // V6.4.20: 广告加载/展示中冻结点击，防止游戏在广告弹出前推进
   var v=toVirtual(cx,cy),vx=v.x,vy=v.y;
   /* 选档面板：模态，最高优先级 —— 必须排在 G.state 的所有分支之前。
      ⚠ 它由结算页的「再挑战本关」打开，而那一刻 G.state 仍是 'win'；
@@ -3459,6 +3466,16 @@ function render(time){
   if(G.tierPick)drawTierPanel(time);
   else if(G.state==='win')drawWinPanel(time);
   if(G.lvPick)drawLvPick(time);        // 隐藏选关面板永远在最上层
+  if(G.adBusy){
+    /* V6.4.20: 广告加载/展示中画半透明遮罩 + 提示，给明确反馈（原生广告弹窗接管前的空隙） */
+    ctx.save();
+    ctx.fillStyle='rgba(20,30,45,0.55)';ctx.fillRect(0,0,VW,VH);
+    ctx.fillStyle='#fff';ctx.textAlign='center';
+    ctx.font='bold 36px '+FONT;ctx.fillText('广告加载中…',VW/2,VH/2-8);
+    ctx.font='22px '+FONT;ctx.fillStyle='rgba(255,255,255,0.82)';
+    ctx.fillText('请稍候，马上就好',VW/2,VH/2+32);
+    ctx.textAlign='left';ctx.restore();
+  }
 }
 
 function checkAllGone(){
@@ -3570,6 +3587,17 @@ function update(dt){
   G.t+=dt;
   G.dt=dt;
   if(G.toast)G.toast.t+=dt;
+  if(G.adBusy){
+    /* V6.4.20: 看广告期间冻结棋盘自动推进与点击。
+       根因：广告首条需联网加载，show() 到真正弹窗有空隙；此前 update() 照常 tryDrinks()
+       自动接水把关卡打通、win 面板弹出、按钮解锁 —— 等广告终于弹出来游戏已推进。
+       现在广告加载/展示全程冻结，广告回调结束(done)才解冻。 */
+    for(var _fp=particles.length-1;_fp>=0;_fp--){
+      var _fpt=particles[_fp];_fpt.age+=dt;_fpt.x+=_fpt.vx*dt;_fpt.y+=_fpt.vy*dt;_fpt.vy+=_fpt.g*dt;
+      if(_fpt.age>=_fpt.life)particles.splice(_fp,1);
+    }
+    return;
+  }
   if(G.fail){
     /* 失败面板期间：冻结所有游戏逻辑（只留粒子收尾 + 面板自己的入场动画） */
     G.fail.t+=dt;
